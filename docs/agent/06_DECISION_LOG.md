@@ -1603,3 +1603,7 @@ No open questions remain.
 - Alternatives: 「拒绝白名单、维持硬编码单基线」被否——会挡住短局/小资金的合理用例，且服务端校验比硬编码更能防篡改；「要求按新白名单重跑全部基线」被否——默认配置未变，重跑无信息增量；「后端直接输出负值 max_drawdown」被否——回撤幅度作为统计量恒非负，符号属展示层职责，后端翻符号会与 SaaS 结果页/审计脚本口径冲突。
 - Impact: 下游（SaaS 结果页、审计脚本、旧快照 JSON）对三键一律缺键不抛错、按可选读取；主仓当前 grep 无 `return_pct`/`max_drawdown`，三键与白名单均只存在于 Windows `game/windows-dev` 检出，属契约预告，cherry-pick 进 master 时才生效。T5（3–5 只脱敏真实快照，每只 1500 根 = warmup 250 + game 1250，同 SampleGameStore 六方法接口）与两项 tests 待办（6 项测试对齐入库 `tests/test_game_windows_fixes.py`、既有 tests 的 `read_text()` 补 `encoding="utf-8"`）归 WSL 主 Agent，不派回 Windows。
 - Owner: KIMI_CODE（用户 2026-11-12 指示裁定 Windows 第二轮回传）
+
+### 2026-11-14: 回测原始输入改为 jobs 级不可变快照
+
+`jobs` 新增 `input_snapshot JSONB`：`entry_mode / nl_text / wizard_state / yaml`。提交时冻结，不再仅依赖同名 strategies upsert 后的当前值；旧任务读取时回退 strategies。这样同名策略后续修改不会改写历史回测的原始输入。`params` 端点与结果页共用该快照，生产 job 358 已备份后回填原始 NL。

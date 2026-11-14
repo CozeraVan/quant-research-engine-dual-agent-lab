@@ -845,3 +845,39 @@
   .auth-step span { display: none; }
   .member-badges { gap: 6px; }
 }
+
+
+/* ---- QRE-UNSLOP-ACCOUNT：登录是工作区，不是营销落地页 ---- */
+.auth-kicker {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  font-weight: 500;
+  letter-spacing: normal;
+}
+.auth-hero h1 {
+  margin: 12px 0 16px;
+  font-size: clamp(32px, 3.2vw, 44px);
+  line-height: 1.22;
+  font-weight: 700;
+  letter-spacing: normal;
+}
+.auth-points {
+  margin-top: 24px;
+  gap: 10px;
+}
+.auth-points i {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  box-shadow: none;
+}
+.auth-card {
+  background-color: #FFFFFF;
+  background-image: none;
+  border-color: var(--line);
+  box-shadow: 0 1px 2px rgba(36,31,46,.07);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     status        TEXT NOT NULL DEFAULT 'queued'
                   CHECK (status IN ('queued','leased','running','done','failed','cancelled')),
     params        JSONB NOT NULL DEFAULT '{}',    -- 回测区间/资金/成本/股票池等覆盖参数
+    input_snapshot JSONB,                          -- 原始入口、NL 原文/向导状态与最终 YAML（任务级不可变）
     weight_class  TEXT NOT NULL DEFAULT 'heavy',  -- R2 任务分级：light=小范围 / heavy=全市场
     priority      INT NOT NULL DEFAULT 0,         -- 未来付费用户优先队列预留
     attempts      INT NOT NULL DEFAULT 0,

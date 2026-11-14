@@ -4648,3 +4648,18 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
 - unslop 在 `.agents/skills/unslop/`，CC BY 4.0 署名保留；设计基线已写 12 号 §3.19。
 - 真实浏览器验收脚本 `.tmp/unslop_audit.py`，证据 `.tmp/unslop-audit/`；测试 `test_saas_table_sorting.py`、`test_unslop_ui.py`。
 - 子代理因平台凭证失败未运行，主 Agent 完成。未 commit/push。
+
+
+## 2026-11-14 经典分页 + 输入快照交接
+
+- 经典：`showcase.html` scState 增 page/pageSize=20，scRenderPager；表格 max-height=720px。
+- 快照：`jobs.input_snapshot`，创建 job 时冻结四键；`api_get_job_params` 优先任务快照；`job.html::loadParamsSnapshot` 调 renderStrategyInfo。
+- 测试：`test_saas_job_params.py::test_job_input_snapshot_is_immutable_after_strategy_reuse` 防同名策略覆盖历史。
+- 生产 job 358 已回填并实测；未 commit/push。
+
+
+## 2026-11-14 主 Agent unslop 第二轮
+
+- 仅改 `account.css` 与 `tests/test_unslop_ui.py`；help 无代码改动。
+- 生产四组合截图 `.tmp/unslop-audit/main-after-*.png`；复用 `.tmp/unslop_audit.py`。
+- 3 个 ProfileShareJs 失败属既有测试/布局合同问题，未擅自扩大切片修改。

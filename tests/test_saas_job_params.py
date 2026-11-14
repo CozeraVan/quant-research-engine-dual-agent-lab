@@ -104,7 +104,7 @@ def test_owner_gets_full_params_snapshot(client):
     # 完整参数一个不漏（含 profile_overrides 的费用项）
     assert data["params"] == JOB_PARAMS
     assert data["params"]["profile_overrides"]["commission_rate"] == 0.0003
-    assert data["strategy"]["yaml"] == VALID_YAML
+    assert data["strategy"]["yaml"].strip() == VALID_YAML.strip()
     assert data["strategy"]["entry_mode"] == "yaml"
     assert data["strategy"]["name"] == "bo09e 通道回踩突破"
 
@@ -121,3 +121,43 @@ def test_guest_without_matching_guest_key_gets_401(client):
     resp = client.get(f"/api/saas/jobs/{job_id}/params")
     assert resp.status_code == 401
     assert resp.get_json()["ok"] is False
+
+
+def test_job_input_snapshot_is_immutable_after_strategy_reuse(client):
+    payload = {
+        "name": "不可变输入快照",
+        "yaml": VALID_YAML,
+        "nl_text": "价格突破过去 20 日最高价买入，跌破过去 10 日最低价卖出",
+        "entry_mode": "nl",
+        "params": {"start": "2024-01-01", "end": "2024-02-01", "codes": ["000001.SZ"]},
+        "idempotency_key": "snapshot-immutable-v1",
+    }
+    created = client.post("/api/saas/jobs", json=payload, headers={"X-User-Id": "1"})
+    assert created.status_code == 200, created.get_json()
+    job_id = created.get_json()["job_id"]
+    from quant_research_engine.gui.saas.app import _get_engine
+
+    with _get_engine(client.application).begin() as conn:
+        snapshot = conn.execute(
+            text("SELECT input_snapshot FROM jobs WHERE id = :id"), {"id": job_id}
+        ).scalar_one()
+        assert snapshot["entry_mode"] == "nl"
+        assert snapshot["nl_text"] == payload["nl_text"]
+        assert snapshot["yaml"].strip() == VALID_YAML.strip()
+        conn.execute(text("UPDATE strategies SET nl_text = '同名策略后来已被改写'"))
+        params = conn.execute(text("SELECT params FROM jobs WHERE id = :id"), {"id": job_id}).scalar_one()
+        assert "_input_snapshot" not in params
+
+    resp = client.get(f"/api/saas/jobs/{job_id}/params", headers={"X-User-Id": "1"})
+    assert resp.status_code == 200
+    strategy = resp.get_json()["strategy"]
+    assert strategy["entry_mode"] == "nl"
+    assert strategy["nl_text"] == payload["nl_text"]
+    assert strategy["yaml"].strip() == VALID_YAML.strip()
+
+
+def test_job_template_renders_original_snapshot_from_params_endpoint():
+    from pathlib import Path
+
+    template = Path("src/quant_research_engine/gui/saas/templates/job.html").read_text(encoding="utf-8")
+    assert "renderStrategyInfo(Object.assign({}, d.strategy, {created_at: d.created_at}))" in template

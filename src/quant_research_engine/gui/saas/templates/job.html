@@ -1031,6 +1031,7 @@ async function loadParamsSnapshot(){
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || '参数加载失败');
     PARAMS_SNAPSHOT = d;
+    renderStrategyInfo(Object.assign({}, d.strategy, {created_at: d.created_at}));
     const p = d.params || {};
     const scope = p.random_n ? '随机 ' + p.random_n + ' 只' : (p.whole_market ? '全 A 股' : (Array.isArray(p.codes) ? p.codes.length + ' 只' : '—'));
     document.getElementById('params-summary').textContent =

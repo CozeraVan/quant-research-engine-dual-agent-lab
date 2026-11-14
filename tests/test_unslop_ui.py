@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 THEME = (ROOT / "src/quant_research_engine/gui/static/lab-theme.css").read_text(encoding="utf-8")
 CARDS = (ROOT / "src/quant_research_engine/gui/static/card-class.css").read_text(encoding="utf-8")
 BASE = (ROOT / "src/quant_research_engine/gui/saas/templates/base.html").read_text(encoding="utf-8")
+ACCOUNT = (ROOT / "src/quant_research_engine/gui/static/account.css").read_text(encoding="utf-8")
 SKILL = ROOT / ".agents/skills/unslop/SKILL.md"
 
 
@@ -25,3 +26,11 @@ def test_quiet_chrome_contract():
     assert "backdrop-filter:none" in CARDS.replace(" ", "")
     assert "/static/card-fx.js" not in BASE
     assert ".btn-primary::after{display:none}" in THEME
+
+
+
+def test_auth_workspace_avoids_marketing_hero_slop():
+    assert "QRE-UNSLOP-ACCOUNT" in ACCOUNT
+    assert "font-size: clamp(32px, 3.2vw, 44px)" in ACCOUNT
+    assert "font-weight: 700" in ACCOUNT
+    assert "box-shadow: none" in ACCOUNT

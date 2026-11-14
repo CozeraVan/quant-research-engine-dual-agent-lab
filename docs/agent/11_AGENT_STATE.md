@@ -2463,3 +2463,15 @@ PC 崩溃 interrupted 了 DeepSeek 第四轮（2.5 进行中）。恢复后核�
 
 - 表头排序和 quiet chrome 均已 ECS 部署并实测；设计规范更新为 12 号 §3.19。
 - 未 commit/push。提交边界：相关 6 个模板/静态文件、排序与 unslop 测试、card-fx/邻接测试更新、`.agents/skills/unslop` 和本轮文档。
+
+
+### 2026-11-14 分页与任务快照：已部署待验收
+
+- 经典分页与任务级 input_snapshot 已上生产，job 358 原始输入已恢复。
+- 未 commit/push；提交边界为 showcase/app/job/cloud_schema、快照测试和本轮文档。
+
+
+### 2026-11-14 主 Agent unslop 第二轮：已部署待验收
+
+- help/login 已完成主 Agent 直接实施；无子代理。
+- 待提交：account.css、unslop 测试和本轮文档；可与分页/输入快照同批。

@@ -2881,3 +2881,22 @@ exit:  (macd_hist < macd_hist.shift(1)) or (kdj_k < 70)
 - 改动：`lab-theme.css`、`card-class.css`、`base.html`、`showcase.html`、两份记录 partial 与 `_records_scripts.html`；新增排序/unslop 合同测试，既有 card-fx 加载断言更新为停用。
 - 验证：排序与 UI 邻接 119 passed；综合 88 passed + 13 skipped；生产经典/新建策略桌面 1280 与移动 375 四组合 HTTP 200、无 pageerror、无 console error、无横向溢出。前后截图 `.tmp/unslop-audit/{before,after}-*.png`。
 - ECS 三次部署均 active；最终回滚点 `/tmp/qre-deploy-20261114T043400Z.bak`。未 commit/push，待用户验收。
+
+
+### 2026-11-14 经典分页 + 任务级原始输入快照
+
+- 经典策略表格可视高度 360→720px，每页 20 条，支持数字页码/上下页，排序后回第一页。生产实测共 119 条、6 页，首页/第二页均 20 条。
+- 根因：旧「策略信息/参数快照」读 strategies 当前行，同名策略复用会覆盖历史；job 358 提交时又以 yaml 入口漏传 NL 原文，所以用户看不到最初输入。
+- 新合同：`jobs.input_snapshot JSONB` 冻结 entry_mode/nl_text/wizard_state/yaml；`/api/saas/jobs/<id>/params` 优先读任务快照、旧任务回退 strategies；job.html 用该端点重绘策略信息。cloud_schema 同步，懒迁移已上生产。
+- 回归：不可变快照与权限 5 passed；SaaS/模板/静默失败 228 passed + 13 skipped。
+- job 358 已按生产纪律先 count=1、事务备份 `job_input_snapshot_backup_358_jobs`，再 UPDATE 1 回填原始 NL；公网展开实测「自然语言描述 + 原文 + 编译后 YAML」完整可见。最终回滚点 `/tmp/qre-deploy-20261114T050529Z.bak`。
+- 后台 unslop 子代理再次因 invalid_iam_token 未启动，未产生改动。当前任务未 commit/push。
+
+
+### 2026-11-14 主 Agent 继续 unslop（help/login）
+
+- 用户明确改由主 Agent 执行，不再派子代理。help 审计为 light slop，保持现有信息架构与内容；login 将模板化营销 hero 收敛为登录工作区。
+- `account.css` 新增 `QRE-UNSLOP-ACCOUNT`：kicker 去胶囊、H1 最大 62→44px/900→700、特性点去光晕、登录卡白底细边无玻璃。未改表单、认证流程或文案。
+- 验证：unslop/会员/模板 52 passed + 13 skipped；生产 help/login × 1280/375 四组合全 200、无 pageerror、无 console error、无横溢。截图 `.tmp/unslop-audit/main-after-{help,login}-*.png`。
+- 另跑 `test_saas_access_hardening.py` 时有 3 个 ProfileShareJs 用例失败（document.querySelector harness 不含新布局），与本次 CSS 无关，单列不混入通过数。
+- ECS 已部署，回滚点 `/tmp/qre-deploy-20261114T051209Z.bak`；未 commit/push。

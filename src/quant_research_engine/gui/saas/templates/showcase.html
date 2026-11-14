@@ -8,7 +8,7 @@
     <!-- 公开 verified 判断只在服务端执行，页面不展示结果合同与验证标签。 -->
   </div>
   <div class="card">
-    <div class="table-wrap">
+    <div class="table-wrap" style="max-height:720px;overflow:auto">
     <table class="tbl" id="sc-table">
       <thead><tr>
         <th aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="title">策略</button></th>
@@ -22,6 +22,12 @@
       </tr></thead>
       <tbody id="sc-tbody"><tr><td colspan="8" class="muted">加载中…</td></tr></tbody>
     </table>
+    </div>
+    <div class="profile-pager">
+      <button class="btn-sm" id="sc-prev" type="button">← 上一页</button>
+      <span class="profile-pager-pages" id="sc-pages"></span>
+      <span class="profile-pager-info" id="sc-info"></span>
+      <button class="btn-sm" id="sc-next" type="button">下一页 →</button>
     </div>
   </div>
 
@@ -40,7 +46,7 @@ function pct(v, digits){
   return v > 0 ? '+' + p : p;
 }
 function cls(v){ return v == null ? 'flat' : (v > 0 ? 'pos' : (v < 0 ? 'neg' : 'flat')); }
-const scState = {items: [], sort: null, order: 'desc'};
+const scState = {items: [], sort: null, order: 'desc', page: 1, pageSize: 20};
 const SC_TEXT_KEYS = new Set(['title', 'date_start', 'data_until']);
 function scSortItems(items){
   if (!scState.sort) return items.slice();
@@ -55,9 +61,33 @@ function scSortItems(items){
     return (Number(av) - Number(bv)) * direction;
   });
 }
+function scRenderPager(total){
+  const pages = Math.max(1, Math.ceil(total / scState.pageSize));
+  scState.page = Math.min(Math.max(1, scState.page), pages);
+  document.getElementById('sc-info').textContent = `第 ${scState.page} / ${pages} 页 · 共 ${total} 条`;
+  document.getElementById('sc-prev').disabled = scState.page <= 1;
+  document.getElementById('sc-next').disabled = scState.page >= pages;
+  const box = document.getElementById('sc-pages');
+  box.replaceChildren();
+  const start = Math.max(1, Math.min(scState.page - 2, pages - 4));
+  const end = Math.min(pages, start + 4);
+  for (let page = start; page <= end; page++){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-sm profile-page-btn' + (page === scState.page ? ' is-on' : '');
+    btn.textContent = String(page);
+    btn.disabled = page === scState.page;
+    btn.addEventListener('click', () => { scState.page = page; renderShowcase(); });
+    box.appendChild(btn);
+  }
+}
 function renderShowcase(){
+  const sorted = scSortItems(scState.items);
+  scRenderPager(sorted.length);
+  const start = (scState.page - 1) * scState.pageSize;
+  const visible = sorted.slice(start, start + scState.pageSize);
   const tbody = document.getElementById('sc-tbody');
-  tbody.innerHTML = scSortItems(scState.items).map(it => {
+  tbody.innerHTML = visible.map(it => {
     const range = (it.date_start || '—') + ' ~ ' + (it.date_end || '—');
     const sub = it.subtitle ? '<div class="opt" style="font-size:14px;margin-top:6px">' + esc(it.subtitle) + '</div>' : '';
     return '<tr style="cursor:pointer" onclick="location.href=\'/saas/jobs/' + it.job_id + '\'">' +
@@ -85,8 +115,16 @@ document.querySelectorAll('[data-sc-sort]').forEach(btn => btn.addEventListener(
   const key = btn.dataset.scSort;
   if (scState.sort === key) scState.order = scState.order === 'desc' ? 'asc' : 'desc';
   else { scState.sort = key; scState.order = 'desc'; }
+  scState.page = 1;
   renderShowcase();
 }));
+document.getElementById('sc-prev').addEventListener('click', () => {
+  if (scState.page > 1){ scState.page--; renderShowcase(); }
+});
+document.getElementById('sc-next').addEventListener('click', () => {
+  scState.page++;
+  renderShowcase();
+});
 async function loadShowcase(){
   const tbody = document.getElementById('sc-tbody');
   try {

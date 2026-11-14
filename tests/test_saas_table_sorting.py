@@ -30,6 +30,15 @@ def test_showcase_all_data_columns_have_header_sort_controls():
     assert "aria-sort" in SHOWCASE
 
 
+def test_showcase_has_large_viewport_and_pagination():
+    assert "max-height:720px" in SHOWCASE
+    assert "pageSize: 20" in SHOWCASE
+    assert "scState.page = 1" in SHOWCASE
+    for element_id in ("sc-prev", "sc-next", "sc-pages", "sc-info"):
+        assert f'id="{element_id}"' in SHOWCASE
+    assert "slice(start, start + scState.pageSize)" in SHOWCASE
+
+
 def test_records_sort_controls_live_in_jobs_table_header():
     header = re.search(r'<table class="tbl" id="jobs-table">(.*?)</thead>', RECORDS_BODY, re.S)
     assert header is not None

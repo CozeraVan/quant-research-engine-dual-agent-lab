@@ -3245,3 +3245,44 @@ UI 邻接 → 119 passed
 经典生产排序 desc/asc 数值顺序正确；个人中心超额收益 aria-sort=descending
 经典/新建 × 1280/375 → 全 200，pageerror=0，console error=0，横溢=0
 ```
+
+
+## 2026-11-14 经典分页 + 输入快照自审
+
+### Review Status
+
+PASS（生产验收，待用户验收；未 commit/push）
+
+### Findings
+
+- 快照保存提交时最终 YAML 与原始入口内容，不回写 params、不改变 worker 输入；旧任务回退 strategies 保持兼容。
+- job 358 回填使用事务和备份表，首次因懒迁移未触发而回滚，触发迁移后重试 UPDATE 1 成功，未掩盖错误。
+- Required Fixes：无。
+
+### Validation Evidence
+
+```text
+快照/权限 → 5 passed
+SaaS/模板/静默失败 → 228 passed, 13 skipped
+经典生产：119 条 / 6 页 / 每页 20；height=720px
+job 358：entry_mode=nl，公网展开原始 NL + 编译 YAML 实测通过
+```
+
+
+## 2026-11-14 主 Agent unslop 第二轮自审
+
+### Review Status
+
+PASS（生产双视口验收，未 commit/push）
+
+### Findings
+
+- 仅呈现层修改，登录/注册/找回密码逻辑不变；help 审计后不乱改。
+- Required Fixes：无。另列 3 个 ProfileShareJs 既有测试失败，非本切片引入，后续应单独修测试 harness。
+
+### Validation Evidence
+
+```text
+unslop/会员/模板 → 52 passed, 13 skipped
+help/login × 1280/375 → 全 200，pageerror=0，console error=0，横溢=0
+```
