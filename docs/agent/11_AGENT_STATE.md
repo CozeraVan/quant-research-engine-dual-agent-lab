@@ -2450,4 +2450,4 @@ PC 崩溃 interrupted 了 DeepSeek 第四轮（2.5 进行中）。恢复后核�
 ### 2026-11-14 抖音挂账号：DONE
 
 - job 358 已完成并归 uid=6；短信登录 hotfix 已部署且生产实测通过。
-- 待 Git：仅本 hotfix、测试与文档；app.py 工作树还有其他历史改动，提交时只暂存本条件分支。
+- 已提交并推送 `fa285eb fix: support sms login for password accounts`；app.py 其他历史改动未混入。
