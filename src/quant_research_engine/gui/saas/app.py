@@ -647,6 +647,19 @@ def _ensure_share_links(engine: Engine) -> bool:
     return ok
 
 
+# QRE-JOB-INPUT-SNAPSHOT：每次回测冻结原始入口与输入，避免同名策略复用覆盖历史。
+_JOB_INPUT_SNAPSHOT_ENSURED: set[int] = set()
+
+
+def _ensure_job_input_snapshot_column(engine: Engine) -> None:
+    key = id(engine)
+    if key in _JOB_INPUT_SNAPSHOT_ENSURED:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS input_snapshot JSONB"))
+    _JOB_INPUT_SNAPSHOT_ENSURED.add(key)
+
+
 # CR-2026-10-04 模块一：策略资产化——strategies 加 entry_mode/wizard_state
 _STRATEGY_ASSET_ENSURED: set[int] = set()
 
@@ -3104,7 +3117,14 @@ def create_saas_app() -> Flask:
         # CR-2026-10-04 模块一：提交链路落创建入口模式与向导快照（游客不入策略库）
         entry_mode = _infer_entry_mode(data.get("entry_mode"), nl_text)
         wizard_state = _norm_wizard_state(data.get("wizard_state"))
+        input_snapshot = {
+            "entry_mode": entry_mode,
+            "nl_text": nl_text,
+            "wizard_state": json.loads(wizard_state) if wizard_state else None,
+            "yaml": yaml_text,
+        }
         _ensure_strategy_asset_columns(engine)
+        _ensure_job_input_snapshot_column(engine)
         weight_class = classify_job_weight(kind, params)
 
         with engine.begin() as conn:
@@ -3169,11 +3189,14 @@ def create_saas_app() -> Flask:
                 ).scalar_one()
             job_id = conn.execute(
                 text(
-                    "INSERT INTO jobs (user_id, strategy_id, kind, params, idempotency_key, guest_key, weight_class) "
-                    "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), :idem, :gk, :wc) RETURNING id"
+                    "INSERT INTO jobs (user_id, strategy_id, kind, params, input_snapshot, "
+                    "idempotency_key, guest_key, weight_class) "
+                    "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), CAST(:snapshot AS jsonb), "
+                    ":idem, :gk, :wc) RETURNING id"
                 ),
                 {"uid": uid, "sid": strategy_id, "kind": kind,
-                 "params": json.dumps(params), "idem": idem, "gk": guest_key, "wc": weight_class},
+                 "params": json.dumps(params), "snapshot": json.dumps(input_snapshot, ensure_ascii=False),
+                 "idem": idem, "gk": guest_key, "wc": weight_class},
             ).scalar_one()
         resp: dict[str, Any] = {"ok": True, "job_id": job_id, "strategy_id": strategy_id,
                                 "status": "queued", "weight_class": weight_class}
@@ -3221,13 +3244,15 @@ def create_saas_app() -> Flask:
         """
         engine = _get_engine(app)
         uid = _current_user_id(app, engine)
+        _ensure_job_input_snapshot_column(engine)
         with engine.connect() as conn:
             row = conn.execute(
                 text(
                     "SELECT j.id, j.user_id, j.guest_key, j.params, j.idempotency_key, "
-                    "j.kind, j.status, j.created_at, j.strategy_id, "
+                    "j.kind, j.status, j.created_at, j.strategy_id, j.input_snapshot, "
                     "s.name AS strategy_name, s.yaml AS strategy_yaml, "
-                    "s.nl_text AS strategy_nl_text, s.entry_mode AS strategy_entry_mode "
+                    "s.nl_text AS strategy_nl_text, s.entry_mode AS strategy_entry_mode, "
+                    "s.wizard_state AS strategy_wizard_state "
                     "FROM jobs j LEFT JOIN strategies s ON s.id = j.strategy_id "
                     "WHERE j.id = :id"
                 ),
@@ -3243,6 +3268,7 @@ def create_saas_app() -> Flask:
                     app, (jsonify({"ok": False, "error": "未登录"}), 401), guest_sid)
         elif row["user_id"] != uid:
             return jsonify({"ok": False, "error": "任务不存在"}), 404
+        snapshot = row["input_snapshot"] or {}
         return jsonify({
             "ok": True,
             "job_id": row["id"],
@@ -3254,9 +3280,10 @@ def create_saas_app() -> Flask:
             "strategy": {
                 "id": row["strategy_id"],
                 "name": row["strategy_name"],
-                "yaml": row["strategy_yaml"],
-                "nl_text": row["strategy_nl_text"],
-                "entry_mode": row["strategy_entry_mode"],
+                "yaml": snapshot.get("yaml", row["strategy_yaml"]),
+                "nl_text": snapshot.get("nl_text", row["strategy_nl_text"]),
+                "entry_mode": snapshot.get("entry_mode", row["strategy_entry_mode"]),
+                "wizard_state": snapshot.get("wizard_state", row["strategy_wizard_state"]),
             },
         })
 

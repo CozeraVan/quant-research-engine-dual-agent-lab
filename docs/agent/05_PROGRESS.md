@@ -2900,3 +2900,8 @@ exit:  (macd_hist < macd_hist.shift(1)) or (kdj_k < 70)
 - 验证：unslop/会员/模板 52 passed + 13 skipped；生产 help/login × 1280/375 四组合全 200、无 pageerror、无 console error、无横溢。截图 `.tmp/unslop-audit/main-after-{help,login}-*.png`。
 - 另跑 `test_saas_access_hardening.py` 时有 3 个 ProfileShareJs 用例失败（document.querySelector harness 不含新布局），与本次 CSS 无关，单列不混入通过数。
 - ECS 已部署，回滚点 `/tmp/qre-deploy-20261114T051209Z.bak`；未 commit/push。
+
+
+### 2026-11-14 Git finalize 补充
+
+- 主提交 `f997ef7` 已推送；app.py 快照实现因重复锚点未进入该提交，随后单独整理为 `feat: freeze original input per backtest job`，不把其他历史 app.py 改动混入。
