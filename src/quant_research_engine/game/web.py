@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 from dataclasses import dataclass
+from datetime import timedelta
+from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
@@ -43,6 +46,62 @@ class GameSessionRegistry:
         if game is None or game.owner_id != owner_id:
             return None
         return game
+
+
+# 终局揭示的数据来源（只读，零 DB）：快照脱敏元数据 manifest.json 的日期偏移，
+# 以及可选的真实身份映射 identity.json（匿名代码 → {name, code}）。
+# identity.json 由 WSL 侧提供（真实名称只在终局揭示，游戏中全程匿名）；缺失时真实名称留空，
+# 前端显示「待揭示」占位——这是「需要 WSL 补充的接口」，Windows 不伪造真实证券名称。
+_SNAPSHOT_DIR = Path(__file__).resolve().parents[3] / "data" / "game_snapshots"
+
+
+def _reveal_meta() -> tuple[int, dict]:
+    offset = 0
+    identity: dict = {}
+    try:
+        manifest = json.loads((_SNAPSHOT_DIR / "manifest.json").read_text(encoding="utf-8"))
+        offset = int(manifest.get("date_offset_days", 0))
+    except (OSError, ValueError, TypeError):
+        offset = 0
+    try:
+        loaded = json.loads((_SNAPSHOT_DIR / "identity.json").read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            identity = loaded
+    except (OSError, ValueError, TypeError):
+        identity = {}
+    return offset, identity
+
+
+def _reveal(game: GameSession) -> dict:
+    """仅终局随 _state 下发：真实名称/代码 + 真实时间区间 + 总结统计。
+
+    真实日期 = 快照日期 − 脱敏偏移（manifest.date_offset_days）；游戏中 K 线只用匿名 turn，
+    真实日期与名称只在 finished 后揭示。equity_curve / trade_marks 供总结页收益曲线与买卖点。
+    """
+    offset, identity = _reveal_meta()
+    ident = identity.get(game.symbol, {}) if isinstance(identity, dict) else {}
+    if not isinstance(ident, dict):
+        ident = {}
+    first_idx = game.start_index + game.warmup_bars
+    last_idx = game.cursor
+    shift = timedelta(days=offset)
+    turn_of = {bar.trade_date: idx - game.start_index + 1 for idx, bar in enumerate(game.bars)}
+    return {
+        "real_name": ident.get("name"),
+        "real_code": ident.get("code"),
+        "start_date": (game.bars[first_idx].trade_date - shift).isoformat(),
+        "end_date": (game.bars[last_idx].trade_date - shift).isoformat(),
+        "selected_bars": game.game_bars,
+        "played_bars": last_idx - first_idx + 1,
+        "date_offset_days": offset,
+        "equity_curve": [float(value) for value in game.equity_curve],
+        "trade_marks": [
+            {"t": turn_of.get(fill.trade_date), "side": fill.side.value,
+             "price": fill.price, "quantity": fill.quantity, "cost": fill.cost,
+             "date": (fill.trade_date - shift).isoformat()}
+            for fill in game.trades
+        ],
+    }
 
 
 def _state(game: GameSession) -> dict:
@@ -90,6 +149,8 @@ def _state(game: GameSession) -> dict:
              "quantity": fill.quantity, "cost": fill.cost}
             for fill in game.trades
         ],
+        # 终局揭示（additive，仅 finished 下发；游戏中为 None，不泄露真实身份/日期）。
+        "reveal": _reveal(game) if game.finished else None,
     }
 
 

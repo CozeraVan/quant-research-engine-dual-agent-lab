@@ -51,9 +51,13 @@ html,body{height:100%}
 .game-shell .btn-ghost:disabled:hover{background:#fff;border-color:var(--line)}
 #order-form input:disabled,#order-form select:disabled{opacity:.55;cursor:not-allowed}
 #factor-dialog input:disabled{opacity:.5;cursor:not-allowed}
-#round-info{margin-top:6px}
-#order-pending{font-size:13px;margin-top:6px;min-height:16px;font-variant-numeric:tabular-nums}
-#order-error{color:var(--up);font-size:13px;min-height:16px}
+/* 回合卡固定高度：决策6行/结算7~8行/预热2行统一占位（最高8行≈200px），
+   倍速连播 open↔closed 切换时右侧不再上下跳动；短内容顶对齐，底部留白属正常占位。 */
+#round-info{margin-top:6px;min-height:200px}
+#round-info .kv-grid{align-content:start}
+#round-info .kv-grid span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#order-pending{font-size:13px;margin-top:6px;min-height:22px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#order-error{color:var(--up);font-size:13px;min-height:22px}
 .kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
 .side-card .kv-grid{grid-template-columns:1fr 1fr;gap:4px 10px;font-size:13px}
 .kv-grid span:nth-child(odd){color:var(--grey)}
@@ -82,6 +86,40 @@ html,body{height:100%}
 .factor-item input{accent-color:var(--lav);flex:none}.factor-item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fd-foot{display:flex;align-items:center;gap:10px}
 #factor-status{flex:1;color:var(--lav-deep);font-size:13px;min-height:18px}
+/* 终局总结弹窗（参考 QRE 个股回测页：揭示横幅 + 指标条 + 收益曲线 + 日K买卖点 + 磨损 + 明细） */
+#summary-dialog{width:min(960px,96vw);max-height:90vh;padding:0;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-2);background:var(--panel);color:var(--ink)}
+#summary-dialog::backdrop{background:rgba(36,31,46,.46)}
+.sd-wrap{display:flex;flex-direction:column;max-height:90vh}
+.sd-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.sd-head h2{font-size:16px;font-weight:700;color:var(--lav-deep);font-family:var(--serif)}
+.sd-scroll{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 18px;display:flex;flex-direction:column;gap:14px}
+.sd-block{margin:0}
+.sd-block h3{font-size:13.5px;font-weight:600;color:var(--lav-deep);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.sd-block h3 .tip-trigger{width:20px;height:20px}
+.sd-chart{width:100%;height:240px}
+.sd-chart-k{height:320px}
+.sd-range-note{font-size:12.5px;color:var(--lav-deep);margin-bottom:6px;font-variant-numeric:tabular-nums}
+/* 终局揭示横幅：游戏中全程匿名，终局才揭示真实标的与时间区间（区别于 QRE 回测页的核心差异） */
+.reveal-card{background:var(--lav-deep);color:#fff;border-radius:12px;padding:16px 18px;box-shadow:var(--shadow-1)}
+.reveal-eyebrow{font-size:12px;letter-spacing:.08em;color:#D8CFEA;margin-bottom:6px}
+.reveal-name{font-family:var(--serif);font-size:26px;font-weight:700;line-height:1.2}
+.reveal-code{font-size:13px;color:#D8CFEA;margin-top:2px;font-variant-numeric:tabular-nums}
+.reveal-range{font-size:13.5px;margin-top:10px;color:#EFEAF7;font-variant-numeric:tabular-nums}
+.reveal-pending{display:inline-flex;align-items:center;gap:8px}
+.reveal-pending .tip-trigger{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.32)}
+.reveal-note{font-size:12.5px;color:#D8CFEA;margin-top:6px}
+#sd-metrics,#sd-wear{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+#sd-metrics .metric-card,#sd-wear .metric-card{padding:6px 9px}
+#sd-metrics .m-value,#sd-wear .m-value{font-size:16px;margin-top:0}
+#sd-metrics .m-label,#sd-wear .m-label{font-size:11.5px}
+#summary-dialog .m-value.up{color:var(--up)}
+#summary-dialog .m-value.down{color:var(--down)}
+.sd-table-wrap{max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:8px}
+.sd-table{font-size:12.5px;table-layout:auto}
+.sd-table th,.sd-table td{padding:6px 10px;white-space:nowrap}
+.sd-table th{position:sticky;top:0;background:var(--tint);font-size:12px;z-index:1}
+.sd-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.sd-empty{padding:14px;color:var(--grey);font-size:13px;text-align:center}
 .hidden{display:none!important}
 @media(max-width:980px){.term-body{grid-template-columns:minmax(0,1fr) 300px}}
 @media(max-width:860px){
@@ -100,6 +138,10 @@ html,body{height:100%}
   .side-card .kv-grid{font-size:12.5px}
   #factor-dialog{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0}
   .fd-wrap{max-height:100dvh;height:100dvh}
+  #summary-dialog{width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0}
+  .sd-wrap{max-height:100dvh;height:100dvh}
+  .reveal-name{font-size:22px}
+  .sd-chart{height:200px}.sd-chart-k{height:260px}
 }
 </style>
 </head>
@@ -121,13 +163,14 @@ html,body{height:100%}
       <div class="spacer"></div>
       <div id="finish-note" class="hidden"></div>
       <div class="term-tools">
-        <label class="anim-speed">倍速<select id="anim-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+        <label class="anim-speed">倍速<select id="anim-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="8">8×</option></select></label>
         <button class="btn btn-ghost btn-sm" id="btn-autoplay" type="button" aria-pressed="false">▶ 连播</button>
         <button type="button" class="tip-trigger" data-tip="连播：自动逐日推进（每天仍正常结算）。有待成交委托、发生成交或终局时自动暂停；倍速决定节奏。" aria-label="连播规则">?</button>
         <button class="btn btn-ghost btn-sm" id="btn-anim-pause" type="button" disabled>暂停</button>
         <button class="btn btn-ghost btn-sm" id="btn-anim-skip" type="button" disabled>跳过</button>
         <button class="btn btn-ghost" id="btn-factors" type="button">指标</button>
-        <button type="button" class="tip-trigger" data-tip="均线与布林带叠加在主图，MACD 等指标进入下方副图。决策时主图显示委托区间、次日开盘与委托价；拖动下方滑块缩放，双击返回默认视口。" aria-label="图表规则">?</button>
+        <button type="button" class="tip-trigger" data-tip="均线与布林带叠加在主图，MACD 等指标进入下方副图。持仓时主图常驻琥珀色成本价线；决策时另显委托区间、次日开盘与委托价。拖动下方滑块缩放，双击返回默认视口。" aria-label="图表规则">?</button>
+        <button class="btn btn-primary hidden" id="btn-summary" type="button">对局总结</button>
       </div>
     </div>
     <div class="term-body game-layout">
@@ -191,6 +234,43 @@ html,body{height:100%}
     <div class="fd-foot"><div id="factor-status" role="status"></div></div>
   </div>
 </dialog>
+<dialog id="summary-dialog" aria-label="对局总结">
+  <div class="sd-wrap">
+    <div class="sd-head">
+      <h2>对局总结</h2>
+      <button class="btn btn-ghost" id="sd-close" type="button">关闭</button>
+    </div>
+    <div class="sd-scroll">
+      <section class="sd-reveal" id="sd-reveal"></section>
+      <section class="metric-strip" id="sd-metrics"></section>
+      <section class="sd-block">
+        <h3>收益曲线 <button type="button" class="tip-trigger" data-tip="策略净值＝逐日权益÷初始资金；买入持有＝期初开盘买入并持有到期末，即该股票在本区间的自然涨幅。两者同口径前复权，策略超出自然涨幅即为择时增益。" aria-label="收益曲线说明">?</button></h3>
+        <div id="sd-range" class="sd-range-note"></div>
+        <div id="sd-equity" class="sd-chart"></div>
+      </section>
+      <section class="sd-block">
+        <h3>日K与买卖点 <button type="button" class="tip-trigger" data-tip="仅游戏窗口（不含预热）。红▲买入、绿▼卖出，按真实成交回合标注；下方为成交量。拖动缩放查看局部。" aria-label="买卖点说明">?</button></h3>
+        <div id="sd-kline" class="sd-chart sd-chart-k"></div>
+      </section>
+      <section class="sd-block">
+        <h3>交易磨损 <button type="button" class="tip-trigger" data-tip="佣金、印花税、过户费合计为总磨损；磨损率＝总磨损÷初始资金。净收益已扣除全部磨损。" aria-label="交易磨损说明">?</button></h3>
+        <div id="sd-wear" class="metric-strip"></div>
+      </section>
+      <section class="sd-block">
+        <h3>回合配对盈亏 <button type="button" class="tip-trigger" data-tip="按先进先出把买入与卖出配对成回合，净盈亏已分摊买卖费用；胜率与平均每笔净收益只统计已平仓回合。" aria-label="配对盈亏说明">?</button></h3>
+        <div class="sd-table-wrap">
+          <table class="tbl sd-table"><thead><tr><th>买入回合</th><th>卖出回合</th><th class="num">买入价</th><th class="num">卖出价</th><th class="num">数量</th><th class="num">净盈亏</th><th class="num">收益率</th></tr></thead><tbody id="sd-roundtrips"></tbody></table>
+        </div>
+      </section>
+      <section class="sd-block">
+        <h3>成交明细</h3>
+        <div class="sd-table-wrap">
+          <table class="tbl sd-table"><thead><tr><th>回合</th><th>日期</th><th>方向</th><th class="num">成交价</th><th class="num">数量</th><th class="num">费用</th></tr></thead><tbody id="sd-trades"></tbody></table>
+        </div>
+      </section>
+    </div>
+  </div>
+</dialog>
 <script src="/static/echarts.min.js"></script>
 {# QRE-KLINE-PANE-OPTION（T1）：因子 pane → ECharts option 的共享出口，
    索引由 QREFactorLayout 内部生成，避免三处副本各写一份 2+i 而错位 #}
@@ -206,6 +286,7 @@ html,body{height:100%}
   ];
   let state = null, chart = null, catalog = new Map(), catalogGroups = [];
   let busy = false, lastCursor = null, lastPhase = null, resizeFrame = 0;
+  let lastFinished = false, sdEquityChart = null, sdKChart = null;
   const money = v => Number(v).toLocaleString('zh-CN', {maximumFractionDigits: 2});
   const price = v => Number(v).toFixed(2);
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -229,6 +310,9 @@ html,body{height:100%}
     $('start-status').textContent = '';
     renderControls(); renderRound(); renderAccount(); renderTrades(); renderChart(); syncFactorChecks();
     lastCursor = state.cursor; lastPhase = state.phase;
+    // 终局一次性弹出总结（含恢复已终局会话）；lastFinished 守卫避免连播末步重复弹出。
+    if (state.finished && !lastFinished) openSummary();
+    lastFinished = state.finished;
   }
   async function withBusy(work){
     if (busy) return;
@@ -252,6 +336,7 @@ html,body{height:100%}
     document.querySelectorAll('#factor-groups input').forEach(input => { input.disabled = busy; });
     $('finish-note').classList.toggle('hidden', !state.finished);
     $('finish-note').textContent = state.finished ? '本局结束 · 最终权益 ' + money(state.account.equity) : '';
+    $('btn-summary').classList.toggle('hidden', !state.finished);
     const pending = state.pending_order;
     $('order-pending').textContent = pending
       ? '待成交 ' + (pending.side === 'buy' ? '买入' : '卖出') + ' ' + pending.quantity + ' 股 @ ' + price(pending.price)
@@ -264,7 +349,7 @@ html,body{height:100%}
     }
     renderAutoplayControls();
   }
-  function kv(label, value){ return '<span>' + esc(label) + '</span><span>' + esc(value) + '</span>'; }
+  function kv(label, value){ return '<span>' + esc(label) + '</span><span title="' + esc(value) + '">' + esc(value) + '</span>'; }
   function renderRound(){
     const body = $('round-info');
     if (state.phase === 'open'){
@@ -382,6 +467,17 @@ html,body{height:100%}
     });
     return lines.join('<br/>');
   }
+  // 持仓成本价（移动加权平均，纯前端由权威成交 state.trades 推算，零后端改动）：
+  // 买入把 qty*price+费用 计入成本基数；卖出按当前均价扣减基数（均价不变）。空仓返回 null。
+  function holdingCost(){
+    if (!state || !state.account.quantity) return null;
+    let qty = 0, basis = 0;
+    for (const t of state.trades){
+      if (t.side === 'buy'){ basis += t.quantity * t.price + t.cost; qty += t.quantity; }
+      else { const avg = qty ? basis / qty : 0; basis -= avg * t.quantity; qty -= t.quantity; }
+    }
+    return qty > 0 ? basis / qty : null;
+  }
   function renderChart(){
     if (!chart) chart = echarts.init($('kline'));
     const history = state.history || [];
@@ -425,10 +521,20 @@ html,body{height:100%}
       xAxisIndex: 0, yAxisIndex: 0, showSymbol: false, lineStyle: {width: 1.4}, color: ['#6750A4', '#B7A6E8', '#4A3A78', '#9A93A6'][index % 4]}));
     _gpo.series.forEach(s => series.push(s));
     const d = state.decision || {};
+    // 成本价线常驻：任意阶段只要持仓即显示（amber 实线，区别于决策虚线）；
+    // 决策阶段再叠加委托区间 / 前收 / 次日开盘 / 委托价。空仓时不显示成本线。
+    const lines = [];
+    const cost = holdingCost();
+    if (cost != null){
+      lines.push({yAxis: cost, name: '成本 ' + price(cost),
+        lineStyle: {color: '#E8A33D', type: 'solid', width: 1.5}, label: {color: '#E8A33D'}});
+    }
     if (state.phase === 'open' && d.next_open != null){
       series[0].markArea = {silent: true, itemStyle: {color: 'rgba(103,80,164,.08)'}, data: [[{yAxis: d.limit_lower}, {yAxis: d.limit_upper}]]};
-      const lines = [{yAxis: d.previous_close, name: '前收'}, {yAxis: d.next_open, name: '次日开盘'}];
+      lines.push({yAxis: d.previous_close, name: '前收'}, {yAxis: d.next_open, name: '次日开盘'});
       if (state.pending_order) lines.push({yAxis: state.pending_order.price, name: '委托价'});
+    }
+    if (lines.length){
       series[0].markLine = {silent: true, symbol: 'none', lineStyle: {type: 'dashed', width: 1}, label: {fontSize: 10, formatter: p => p.name || ''}, data: lines};
     }
     chart.clear();
@@ -596,6 +702,183 @@ html,body{height:100%}
     if (typeof dialog.close === 'function') dialog.close();
     else dialog.removeAttribute('open');
   }
+  // ===== 终局总结（参考 QRE 个股回测页 lab_symbol.html；纯前端渲染 state.reveal，零后端架构改动）=====
+  // 先进先出把成交配对成回合，净盈亏分摊买卖费用；胜率/平均净收益只统计已平仓回合。
+  function roundTrips(marks){
+    const lots = [], trips = [];
+    for (const tr of marks){
+      if (tr.side === 'buy'){
+        lots.push({qty: tr.quantity, price: tr.price, fee: tr.cost / tr.quantity, t: tr.t});
+      } else {
+        let remain = tr.quantity;
+        const sellFee = tr.cost / tr.quantity;
+        let pnl = 0, matched = 0, buyCost = 0, entryT = null;
+        while (remain > 0 && lots.length){
+          const lot = lots[0];
+          const take = Math.min(remain, lot.qty);
+          pnl += (tr.price - lot.price) * take - (lot.fee + sellFee) * take;
+          buyCost += lot.price * take; matched += take;
+          if (entryT == null) entryT = lot.t;
+          lot.qty -= take; remain -= take;
+          if (lot.qty === 0) lots.shift();
+        }
+        if (matched > 0) trips.push({entryT, exitT: tr.t, qty: matched, buyPrice: buyCost / matched, sellPrice: tr.price, pnl, ret: buyCost ? pnl / buyCost : 0});
+      }
+    }
+    return trips;
+  }
+  function gameRows(){ return (state.history || []).filter(r => r.t > state.warmup_bars && r.close != null); }
+  function buyHoldReturn(){
+    const rows = gameRows();
+    if (!rows.length || !rows[0].open) return 0;
+    return rows[rows.length - 1].close / rows[0].open - 1;
+  }
+  function metricMoneySigned(label, v){
+    const n = Number(v), cls = n > 0 ? ' up' : n < 0 ? ' down' : '';
+    return '<div class="metric-card"><div class="m-label">' + esc(label) + '</div><div class="m-value' + cls + '">' + esc((n > 0 ? '+' : '') + money(n)) + '</div></div>';
+  }
+  function summaryEquityOption(){
+    const rv = state.reveal, base = state.initial_cash || 1;
+    const strat = (rv.equity_curve || []).map(v => v / base);
+    const rows = gameRows(), baseOpen = rows.length ? rows[0].open : null;
+    const hold = [1];
+    rows.forEach(r => hold.push(baseOpen ? r.close / baseOpen : 1));
+    const n = Math.min(strat.length, hold.length);
+    const x = []; for (let i = 0; i < n; i++) x.push(i === 0 ? '期初' : 'T' + i);
+    return {
+      animation: false,
+      tooltip: {trigger: 'axis', formatter: ps => {
+        const lines = [esc(ps[0].axisValueLabel || ps[0].name || '')];
+        ps.forEach(p => lines.push((p.marker || '') + esc(p.seriesName) + ' ' + Number(p.value).toFixed(3)));
+        return lines.join('<br/>');
+      }},
+      legend: {top: 0, textStyle: {fontSize: 11}},
+      grid: {left: 48, right: 16, top: 30, bottom: 24},
+      xAxis: {type: 'category', data: x, axisLabel: {fontSize: 10}, boundaryGap: false},
+      yAxis: {type: 'value', scale: true, axisLabel: {fontSize: 10, formatter: v => Number(v).toFixed(2)}},
+      series: [
+        {name: '策略净值', type: 'line', data: strat.slice(0, n), showSymbol: false, lineStyle: {width: 1.8, color: '#6750A4'}, color: '#6750A4'},
+        {name: '买入持有', type: 'line', data: hold.slice(0, n), showSymbol: false, lineStyle: {width: 1.4, type: 'dashed', color: '#9A93A6'}, color: '#9A93A6'}
+      ]
+    };
+  }
+  function summaryKlineOption(){
+    const rv = state.reveal;
+    const rows = (state.history || []).filter(r => r.t > state.warmup_bars && [r.open, r.close, r.low, r.high].every(v => v != null));
+    const dates = rows.map((r, i) => 'T' + (i + 1));
+    const candles = rows.map(r => ({value: [r.open, r.close, r.low, r.high],
+      itemStyle: {color: r.close >= r.open ? '#C93A3A' : '#1E8E5A', color0: r.close >= r.open ? '#1E8E5A' : '#C93A3A',
+        borderColor: r.close >= r.open ? '#C93A3A' : '#1E8E5A', borderColor0: r.close >= r.open ? '#1E8E5A' : '#C93A3A'}}));
+    const volumes = rows.map(r => ({value: r.volume, itemStyle: {color: r.close >= r.open ? '#C93A3A' : '#1E8E5A'}}));
+    const buys = [], sells = [];
+    (rv.trade_marks || []).forEach(m => {
+      const gi = m.t - state.warmup_bars - 1;
+      if (gi < 0 || gi >= rows.length) return;
+      const row = rows[gi];
+      const point = {value: [gi, m.side === 'buy' ? row.low * 0.99 : row.high * 1.01], price: m.price, qty: m.quantity, date: m.date};
+      (m.side === 'buy' ? buys : sells).push(point);
+    });
+    return {
+      animation: false,
+      tooltip: {trigger: 'axis', formatter: ps => {
+        const lines = [esc(ps[0].axisValueLabel || ps[0].name || '')];
+        ps.forEach(p => {
+          if (p.seriesType === 'candlestick'){
+            const v = (p.data && p.data.value) || p.value || [];
+            lines.push('开 ' + price(v[0]) + ' 收 ' + price(v[1]) + ' 低 ' + price(v[2]) + ' 高 ' + price(v[3]));
+          } else if (p.seriesName === '成交量'){
+            lines.push((p.marker || '') + '成交量 ' + money(Array.isArray(p.value) ? p.value[1] : p.value));
+          } else if (p.seriesName === '买入' || p.seriesName === '卖出'){
+            const d = p.data || {};
+            lines.push((p.marker || '') + p.seriesName + ' ' + d.qty + ' 股 @ ' + price(d.price) + (d.date ? '（' + d.date + '）' : ''));
+          }
+        });
+        return lines.join('<br/>');
+      }},
+      legend: {top: 0, textStyle: {fontSize: 11}},
+      grid: [{left: 48, right: 16, top: 30, height: '56%'}, {left: 48, right: 16, top: '74%', height: '16%'}],
+      xAxis: [{type: 'category', data: dates, gridIndex: 0, axisLabel: {show: false}, axisTick: {show: false}},
+        {type: 'category', data: dates, gridIndex: 1, axisLabel: {fontSize: 10}}],
+      yAxis: [{type: 'value', gridIndex: 0, scale: true, splitNumber: 4, axisLabel: {fontSize: 10, formatter: v => Number(v).toFixed(2)}},
+        {type: 'value', gridIndex: 1, scale: true, splitNumber: 2, axisLabel: {fontSize: 10}}],
+      series: [
+        {name: 'K线', type: 'candlestick', data: candles, xAxisIndex: 0, yAxisIndex: 0},
+        {name: '买入', type: 'scatter', data: buys, xAxisIndex: 0, yAxisIndex: 0, symbol: 'triangle', symbolSize: 12, itemStyle: {color: '#C93A3A'}, z: 5},
+        {name: '卖出', type: 'scatter', data: sells, xAxisIndex: 0, yAxisIndex: 0, symbol: 'triangle', symbolRotate: 180, symbolSize: 12, itemStyle: {color: '#1E8E5A'}, z: 5},
+        {name: '成交量', type: 'bar', data: volumes, xAxisIndex: 1, yAxisIndex: 1, itemStyle: {color: '#B7A6E8'}}
+      ],
+      dataZoom: [{type: 'inside', xAxisIndex: [0, 1]}, {type: 'slider', xAxisIndex: [0, 1], bottom: 0, height: 14, showDetail: false}]
+    };
+  }
+  function renderSummary(){
+    const rv = state.reveal, a = state.account;
+    // 区间自然收益数据：该股票在游戏区间的自然涨幅（期初开盘→期末收盘）及其价格 basis。
+    const rows = gameRows();
+    const baseOpen = rows.length ? rows[0].open : null;
+    const endClose = rows.length ? rows[rows.length - 1].close : null;
+    $('sd-range').innerHTML = (baseOpen != null && endClose != null)
+      ? '区间自然涨幅 <b>' + esc(fmtPct(buyHoldReturn())) + '</b> · 期初开盘 ' + price(baseOpen) + ' → 期末收盘 ' + price(endClose) + ' · ' + rows.length + ' 个交易日'
+      : '';
+    // 揭示横幅（区别于 QRE 回测页的核心差异）：真实名称/代码 + 真实时间区间。
+    // 名称缺失时占位并提示需 WSL 补充映射——不伪造真实证券名称。
+    const nameHtml = rv.real_name
+      ? '<div class="reveal-name">' + esc(rv.real_name) + '</div>'
+      : '<div class="reveal-name reveal-pending">真实名称待揭示<button type="button" class="tip-trigger" data-tip="快照已脱敏（匿名代码＋日期偏移）。真实证券名称映射 identity.json 由 WSL 侧提供后即在终局揭示；当前不伪造名称。" aria-label="真实名称说明">?</button></div>';
+    const codeHtml = rv.real_code ? '<div class="reveal-code">' + esc(rv.real_code) + '</div>' : '';
+    const noteHtml = rv.real_name ? '' : '<div class="reveal-note">匿名代码 ' + esc(state.display_code) + ' · 真实名称待 WSL 补充映射</div>';
+    $('sd-reveal').innerHTML = '<div class="reveal-card">' +
+      '<div class="reveal-eyebrow">终局揭示 · 你交易的是</div>' + nameHtml + codeHtml +
+      '<div class="reveal-range">' + esc(rv.start_date) + ' → ' + esc(rv.end_date) + ' · 选取 ' + rv.selected_bars + ' 回合 / 实际 ' + rv.played_bars + ' 回合</div>' +
+      noteHtml + '</div>';
+    const trips = roundTrips(rv.trade_marks || []);
+    const wins = trips.filter(t => t.pnl > 0).length;
+    const winRate = trips.length ? wins / trips.length : 0;
+    const avgNet = trips.length ? trips.reduce((s, t) => s + t.pnl, 0) / trips.length : 0;
+    $('sd-metrics').innerHTML =
+      metric('最终权益', money(a.equity)) +
+      metricSigned('区间收益率', state.return_pct) +
+      metricSigned('区间自然涨幅', buyHoldReturn()) +
+      metricSigned('最大回撤', -Math.abs(state.max_drawdown)) +
+      metric('交易笔数', state.trades.length + ' 笔') +
+      metric('胜率', trips.length ? (winRate * 100).toFixed(1) + '%' : '—') +
+      metricMoneySigned('平均每笔净收益', avgNet);
+    const cb = a.cost_breakdown || {};
+    const wearRate = state.initial_cash ? (cb.total || 0) / state.initial_cash : 0;
+    $('sd-wear').innerHTML =
+      metric('佣金', money(cb.commission || 0)) +
+      metric('印花税', money(cb.stamp_tax || 0)) +
+      metric('过户费', money(cb.transfer_fee || 0)) +
+      metric('总磨损', money(cb.total || 0)) +
+      metric('磨损率', (wearRate * 100).toFixed(2) + '%') +
+      metricMoneySigned('净收益额', a.equity - state.initial_cash);
+    const gt = t => 'T' + (t - state.warmup_bars);  // 全局 turn → 游戏窗口回合（与总结 K 线横轴一致）
+    $('sd-roundtrips').innerHTML = trips.length ? trips.map(t =>
+      '<tr><td>' + gt(t.entryT) + '</td><td>' + gt(t.exitT) + '</td><td class="num">' + price(t.buyPrice) + '</td><td class="num">' + price(t.sellPrice) + '</td><td class="num">' + t.qty + '</td><td class="num ' + (t.pnl > 0 ? 'pos' : t.pnl < 0 ? 'neg' : 'flat') + '">' + money(t.pnl) + '</td><td class="num ' + (t.ret > 0 ? 'pos' : t.ret < 0 ? 'neg' : 'flat') + '">' + fmtPct(t.ret) + '</td></tr>'
+    ).join('') : '<tr><td colspan="7" class="sd-empty">本局无已平仓回合</td></tr>';
+    const marks = rv.trade_marks || [];
+    $('sd-trades').innerHTML = marks.length ? marks.map(m =>
+      '<tr><td>' + gt(m.t) + '</td><td>' + esc(m.date || '') + '</td><td class="' + (m.side === 'buy' ? 'pos' : 'neg') + '">' + (m.side === 'buy' ? '买入' : '卖出') + '</td><td class="num">' + price(m.price) + '</td><td class="num">' + m.quantity + '</td><td class="num">' + money(m.cost) + '</td></tr>'
+    ).join('') : '<tr><td colspan="6" class="sd-empty">本局无成交</td></tr>';
+    if (window.LabUI && LabUI.helpTips) LabUI.helpTips();
+  }
+  function openSummary(){
+    if (!state || !state.finished || !state.reveal) return;
+    renderSummary();
+    const dialog = $('summary-dialog');
+    if (typeof dialog.showModal === 'function'){ if (!dialog.open) dialog.showModal(); }
+    else dialog.setAttribute('open', '');
+    requestAnimationFrame(() => {
+      if (!sdEquityChart) sdEquityChart = echarts.init($('sd-equity'));
+      if (!sdKChart) sdKChart = echarts.init($('sd-kline'));
+      sdEquityChart.setOption(summaryEquityOption()); sdEquityChart.resize();
+      sdKChart.setOption(summaryKlineOption()); sdKChart.resize();
+    });
+  }
+  function closeSummary(){
+    const dialog = $('summary-dialog');
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.removeAttribute('open');
+  }
   async function startGame(){
     clearTimeout(ff.timer); ff.active = false;
     $('start-status').textContent = '正在抽取随机股票与历史窗口…';
@@ -661,6 +944,8 @@ html,body{height:100%}
   $('btn-settle').addEventListener('click', closeDay);
   $('btn-factors').addEventListener('click', openFactors);
   $('fd-close').addEventListener('click', closeFactors);
+  $('btn-summary').addEventListener('click', openSummary);
+  $('sd-close').addEventListener('click', closeSummary);
   $('btn-cancel').addEventListener('click', async () => {
     try { await withBusy(async () => setState(await api(sessionUrl('/cancel'), {method: 'POST'}))); }
     catch (error) { $('order-error').textContent = error.message; }
@@ -691,7 +976,10 @@ html,body{height:100%}
   window.addEventListener('resize', () => {
     if (!state) return;
     cancelAnimationFrame(resizeFrame);
-    resizeFrame = requestAnimationFrame(() => { if (chart) renderChart(); });
+    resizeFrame = requestAnimationFrame(() => {
+      if (chart) renderChart();
+      if ($('summary-dialog').open){ if (sdEquityChart) sdEquityChart.resize(); if (sdKChart) sdKChart.resize(); }
+    });
   });
   if (window.LabUI && LabUI.helpTips) LabUI.helpTips();
   animDataset('idle'); renderAnimControls();
