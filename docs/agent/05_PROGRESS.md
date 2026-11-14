@@ -2847,3 +2847,10 @@ exit:  (macd_hist < macd_hist.shift(1)) or (kdj_k < 70)
 - ECS 两次部署均成功：NL 四文件回滚点 `/tmp/qre-deploy-20261114T032607Z.bak`；Game 两文件回滚点 `/tmp/qre-deploy-20261114T033317Z.bak`。每次 qre-saas active，`/api/saas/factors` 与 `/saas/new` 均 200。
 - 清理：未发现死循环新增的业务文件或独立垃圾目录；删除 `.pytest_cache` 与 src/tests/scripts/.tmp/douyin-smoke 下 22 个 `__pycache__` 及残留 pyc。保留全部文档引用证据、真实快照与浏览器运行依赖。
 - 未 commit/push。
+
+
+### 2026-11-14 Git finalize
+
+- 本轮 F-05、NL 四缺陷、Game T5/T2 已提交并推送：`ba2000b feat: harden strategy compilation and add game snapshots`（origin/master）。
+- 暂存区导出复测 **345 passed**；Chanlun 与其他历史工作树改动均未混入。
+- 抖音挂账号仍阻塞：用户已在自有浏览器登录，但 WebBridge `classic-catalog-smoke` 会话连续返回 401；已把该受控会话切到 `/saas/login`，需在此窗口完成登录后恢复。
