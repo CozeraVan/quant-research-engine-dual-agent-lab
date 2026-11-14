@@ -18,10 +18,7 @@
 from __future__ import annotations
 
 import argparse
-import importlib
-import importlib.util
 import json
-import os
 import re
 import sys
 import time
@@ -31,6 +28,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts" / "win"))
 
+from game_store_source import load_store, resolve_source  # noqa: E402
+
 from quant_research_engine.core.models import OrderSide  # noqa: E402
 from quant_research_engine.game import validation  # noqa: E402
 from quant_research_engine.game.data import PostgresGameDataProvider, qfq_anchor  # noqa: E402
@@ -39,30 +38,10 @@ from quant_research_engine.game.engine import GameRuleError  # noqa: E402
 EMA20 = "factors.stock_daily_overlap_close.ema_20"
 
 
-def load_store(source: str, seed: int):
-    """按 module:Class 或 path/file.py:Class 加载 store；零数据库连接。"""
-    if ":" not in source:
-        raise SystemExit("--store-source 须为 module:Class 或 path/file.py:Class")
-    mod_part, cls_name = source.rsplit(":", 1)
-    if mod_part.endswith(".py") or "/" in mod_part or os.path.sep in mod_part:
-        path = Path(mod_part).resolve()
-        spec = importlib.util.spec_from_file_location("_qre_game_ext_store", path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    else:
-        module = importlib.import_module(mod_part)
-    cls = getattr(module, cls_name)
-    try:
-        return cls(seed=seed)
-    except TypeError:
-        return cls()
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="可切换 store 的五年对局驱动（W5）")
-    parser.add_argument("--store-source",
-                        default=os.environ.get("QRE_GAME_STORE_SOURCE", "game_preview_sample:SampleGameStore"),
-                        help="module:Class 或 path/file.py:Class；默认合成样本")
+    parser.add_argument("--store-source", default=resolve_source(),
+                        help="module:Class 或 path/file.py:Class；默认合成样本（环境变量 QRE_GAME_STORE_SOURCE 同效）")
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--game-bars", type=int, default=1250)
     parser.add_argument("--initial-cash", type=float, default=1_000_000.0)
