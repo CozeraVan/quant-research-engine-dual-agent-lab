@@ -36,7 +36,7 @@ from quant_research_engine.game.data import PostgresGameDataProvider, qfq_anchor
 from quant_research_engine.game.engine import GameRuleError  # noqa: E402
 from quant_research_engine.game.factors import factor_catalog  # noqa: E402
 from quant_research_engine.game.validation import (  # noqa: E402
-    ABS_TOLERANCE, REL_TOLERANCE, _basis_closes, _expected_series,
+    ABS_TOLERANCE, REL_TOLERANCE, _expected_series,
 )
 
 EMA20 = "factors.stock_daily_overlap_close.ema_20"
@@ -81,6 +81,13 @@ def main() -> int:
         for field in ("open", "high", "low", "close", "pre_close"):
             check(abs(getattr(bar, field) - row[field] * ratio) < 1e-9, f"qfq {field} @{row['trade_date']}")
         check(bar.volume == row["vol"] and bar.amount == row["amount"], "vol/amount 原值透传")
+        check(bar.adjustment_ratio == ratio, f"adjustment_ratio 透传 @{row['trade_date']}")
+        if bar.volume:
+            ap = bar.average_price
+            check(ap is not None and bar.low - 1e-6 <= ap <= bar.high + 1e-6,
+                  f"average_price 复权输入在当日区间 @{row['trade_date']}")
+            check(abs(ap - row["amount"] * 10.0 / row["vol"] * ratio) < 1e-9,
+                  f"average_price=原始均价×复权比率 @{row['trade_date']}")
     game_dates = [b.trade_date for b in session.bars[session.start_index + warmup:session.end_index + 1]]
     span_years = (game_dates[-1] - game_dates[0]).days / 365.25
     print(f"回放完整性 OK：候选 {len(session.bars)} 根逐根 qfq；窗口 {game_dates[0]} ~ {game_dates[-1]}"
@@ -205,7 +212,7 @@ def main() -> int:
                 continue
             column = item["column"]
             is_ema = bool(re.match(r"ema_(\d+)$", column))
-            closes = _basis_closes(session.bars, item.get("price_basis") or "close")
+            closes = [float(b.close) for b in session.bars]
             expected = _expected_series(column, closes, {})
             if expected is None:
                 continue
@@ -253,8 +260,8 @@ def main() -> int:
     print(f"期末持仓 {session.quantity} / 可卖 {session.sellable}；should_end={session.engine.should_end}")
     ema_warm = sum(d["bulk"] for d in factor_detail.values() if d["ema"])
     tail_total = sum(d["tail"] for d in factor_detail.values())
-    print(f"终局审计 checked={audit['checked']} 原始mismatches={audit['mismatches']}"
-          f"（价格口径主体 0；EMA 暖机 {ema_warm}；末段离散异常 {tail_total}）")
+    print(f"终局审计 checked={audit['checked']} mismatches(产品审计·4×span暖机豁免后)={audit['mismatches']}"
+          f"；驱动独立重算：价格口径主体 0 / EMA 暖机种子差 {ema_warm}(已豁免) / 末段离散异常 {tail_total}(仍计)")
     for col, d in sorted(factor_detail.items()):
         kind = "EMA " if d["ema"] else "BOLL"
         print(f"  {kind} {col}: 主体={d['bulk']} 末段(idx>{d['valid_last'] - 50})={d['tail']} "
