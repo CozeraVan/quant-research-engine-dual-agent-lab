@@ -31,6 +31,7 @@ class StrategySpec:
     exclude_risk_warning: bool = False
     min_listing_days: int | None = None
     min_amount: float | None = None
+    market_profile: str | None = None
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "StrategySpec":
@@ -101,6 +102,7 @@ class StrategySpec:
             exclude_risk_warning=bool(universe.get("exclude_risk_warning", False)),
             min_listing_days=_optional_int(universe, "min_listing_days"),
             min_amount=_optional_float(universe, "min_amount"),
+            market_profile=_optional_str(experiment, "market_profile"),
         )
 
 

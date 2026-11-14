@@ -2491,6 +2491,9 @@ def test_cli_backtest_batch_can_print_markdown_summary(capsys, monkeypatch):
         def ping(self):
             return True
 
+        def load_security_metadata(self, ts_codes=None, **kwargs):
+            return pd.DataFrame(columns=["ts_code"])
+
     class FakeAssembler:
         def __init__(self, store):
             self.store = store
@@ -2577,6 +2580,9 @@ def test_cli_backtest_batch_group_by_passthrough_column(capsys, monkeypatch):
         def ping(self):
             return True
 
+        def load_security_metadata(self, ts_codes=None, **kwargs):
+            return pd.DataFrame(columns=["ts_code"])
+
     class FakeAssembler:
         def __init__(self, store):
             self.store = store
@@ -2647,6 +2653,9 @@ def test_cli_backtest_batch_prints_benchmark_relative_summary(capsys, monkeypatc
 
         def ping(self):
             return True
+
+        def load_security_metadata(self, ts_codes=None, **kwargs):
+            return pd.DataFrame(columns=["ts_code"])
 
         def load_benchmark_bars(self, table_name, ts_codes, start, end, fields, limit=None):
             assert table_name == "public.index_daily"
@@ -2754,6 +2763,9 @@ def test_cli_backtest_batch_metadata_as_of_threaded_to_assembler(capsys, monkeyp
         def ping(self):
             return True
 
+        def load_security_metadata(self, ts_codes=None, **kwargs):
+            return pd.DataFrame(columns=["ts_code"])
+
     class FakeAssembler:
         def __init__(self, store):
             self.store = store
@@ -2812,6 +2824,9 @@ def test_cli_backtest_batch_metadata_as_of_none_when_omitted(capsys, monkeypatch
 
         def ping(self):
             return True
+
+        def load_security_metadata(self, ts_codes=None, **kwargs):
+            return pd.DataFrame(columns=["ts_code"])
 
     class FakeAssembler:
         def __init__(self, store):

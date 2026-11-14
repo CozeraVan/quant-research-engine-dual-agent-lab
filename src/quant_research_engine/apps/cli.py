@@ -400,6 +400,43 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_market_profile(reference: str | None) -> AShareMarketProfile:
+    """CLI 参数优先；YAML 可写内置名、注册配置名或显式文件路径。"""
+    if reference is None or reference == "ashare_daily_default":
+        return AShareMarketProfile()
+    path = Path(reference)
+    if path.is_file():
+        return load_market_profile(path)
+    registered = (
+        Path(__file__).resolve().parents[3]
+        / "configs"
+        / "market_profiles"
+        / f"{reference}.yaml"
+    )
+    if registered.is_file():
+        return load_market_profile(registered)
+    raise ValueError(f"Unknown market_profile: {reference!r}")
+
+
+def _apply_universe_exclusions(
+    symbols: list[str], metadata: Any, spec: StrategySpec
+) -> tuple[list[str], dict[str, set[str]]]:
+    """在 batch 装配行情前落实 universe 三项排除，并返回可审计的剔除名单。"""
+    excluded: dict[str, set[str]] = {"st": set(), "risk_warning": set(), "suspended": set()}
+    if metadata is None or getattr(metadata, "empty", True) or "ts_code" not in metadata.columns:
+        return list(symbols), excluded
+    for flag, key, enabled in (
+        ("is_st", "st", spec.exclude_st),
+        ("is_risk_warning", "risk_warning", spec.exclude_risk_warning),
+        ("is_suspended", "suspended", spec.exclude_suspended),
+    ):
+        if enabled and flag in metadata.columns:
+            flagged = metadata.loc[metadata[flag].fillna(False).astype(bool), "ts_code"]
+            excluded[key].update(flagged.dropna().astype(str).tolist())
+    removed = set().union(*excluded.values())
+    return [symbol for symbol in symbols if symbol not in removed], excluded
+
+
 def resolve_risk_controls(args: argparse.Namespace, spec: StrategySpec) -> dict[str, float | None]:
     return {
         "stop_loss_pct": args.stop_loss_pct if args.stop_loss_pct is not None else spec.stop_loss_pct,
@@ -1066,7 +1103,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 factor_fields=spec.factor_fields,
                 metadata_as_of=getattr(args, "metadata_as_of", None) or None,
             )
-            market_profile = load_market_profile(args.market_profile) if args.market_profile else AShareMarketProfile()
+            profile_ref = args.market_profile or spec.market_profile
+            market_profile = _resolve_market_profile(profile_ref)
             result = SingleSymbolBacktestEngine(market_profile).run(
                 frame,
                 SingleSymbolBacktestRequest(
@@ -1099,7 +1137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "holding_days": spec.holding_days,
                     "start": str(args.start),
                     "end": str(args.end),
-                    "market_profile": str(args.market_profile) if args.market_profile else "built-in",
+                    "market_profile": str(profile_ref) if profile_ref else "built-in",
                     "metadata_as_of": str(args.metadata_as_of) if getattr(args, "metadata_as_of", None) else None,
                 },
             }
@@ -1118,9 +1156,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             store = PostgresDataStore(settings)
             store.ping()
             spec = StrategySpec.from_yaml(args.strategy)
-            market_profile = load_market_profile(args.market_profile) if args.market_profile else AShareMarketProfile()
+            profile_ref = args.market_profile or spec.market_profile
+            market_profile = _resolve_market_profile(profile_ref)
+            all_symbols = list(args.codes) if args.codes is not None else None
+            metadata = None
+            if all_symbols is None:
+                # QRE-UNIVERSE-NEEQ-LEGACY：全市场宇宙剔除北交所三板残留代码
+                # （920%.BJ 的 2021-11-15 之前历史不可信；见 data/universe_rules.py）。
+                from quant_research_engine.data.universe_rules import filter_untrusted_symbols
+
+                metadata = store.load_security_metadata(ts_codes=None)
+                pool = sorted(metadata["ts_code"].dropna().astype(str).unique().tolist())
+                all_symbols = filter_untrusted_symbols(pool, load_start=args.start)
+            elif spec.exclude_st or spec.exclude_risk_warning or spec.exclude_suspended:
+                metadata = store.load_security_metadata(ts_codes=list(all_symbols))
+            all_symbols, excluded = _apply_universe_exclusions(all_symbols, metadata, spec)
+            for reason, symbols in excluded.items():
+                if symbols:
+                    print(f"universe_excluded_{reason}={len(symbols)}")
             request = BatchBacktestRequest(
-                symbols=args.codes,
+                symbols=all_symbols if args.codes is not None else None,
                 initial_cash_per_symbol=args.initial_cash,
                 entry_signal=spec.signal_expression,
                 exit_signal=spec.exit_signal_expression,
@@ -1146,15 +1201,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 run_batch_streaming,
             )
 
-            all_symbols = args.codes
-            if all_symbols is None:
-                # QRE-UNIVERSE-NEEQ-LEGACY：全市场宇宙剔除北交所三板残留代码
-                # （920%.BJ 的 2021-11-15 之前历史不可信；见 data/universe_rules.py）。
-                from quant_research_engine.data.universe_rules import filter_untrusted_symbols
-
-                metadata = store.load_security_metadata(ts_codes=None)
-                pool = sorted(metadata["ts_code"].dropna().astype(str).unique().tolist())
-                all_symbols = filter_untrusted_symbols(pool, load_start=args.start)
             if len(all_symbols) > STREAMING_MIN_SYMBOLS:
                 result = run_batch_streaming(
                     frame_factory=_build_frame,
@@ -1164,7 +1210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     output_dir=args.output_dir,
                 )
             else:
-                frame = _build_frame(args.codes)
+                frame = _build_frame(all_symbols)
                 result = BatchBacktestEngine(market_profile).run(frame, request)
         except Exception as exc:
             print(str(exc), file=__import__("sys").stderr)
@@ -1234,7 +1280,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "holding_days": spec.holding_days,
                     "start": str(args.start),
                     "end": str(args.end),
-                    "market_profile": str(args.market_profile) if args.market_profile else "built-in",
+                    "market_profile": str(profile_ref) if profile_ref else "built-in",
                     "group_by": args.group_by,
                     "group_rank_top_n": args.group_rank_top_n,
                     "metadata_as_of": str(args.metadata_as_of) if getattr(args, "metadata_as_of", None) else None,
@@ -1285,7 +1331,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 metadata_columns=shared_meta_cols,
                 metadata_as_of=getattr(args, "metadata_as_of", None) or None,
             )
-            market_profile = load_market_profile(args.market_profile) if args.market_profile else AShareMarketProfile()
+            profile_ref = args.market_profile or spec.market_profile
+            market_profile = _resolve_market_profile(profile_ref)
             risk_controls = resolve_risk_controls(args, spec)
             weight_controls = resolve_weight_controls(args, spec)
             rebalance_controls = resolve_rebalance_controls(args, spec)
@@ -1365,7 +1412,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "rebalance_interval_days": rebalance_controls["rebalance_interval_days"],
                     "start": str(args.start),
                     "end": str(args.end),
-                    "market_profile": str(args.market_profile) if args.market_profile else "built-in",
+                    "market_profile": str(profile_ref) if profile_ref else "built-in",
                     "benchmark_table": args.benchmark_table,
                     "benchmark_code": args.benchmark_code,
                     "benchmark_value_column": args.benchmark_value_column,

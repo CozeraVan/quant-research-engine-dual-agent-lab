@@ -437,6 +437,7 @@ def _validate_and_correct(
     from quant_research_engine.gui.nl_semantics import (
         canonical_yaml_text,
         cross_semantic_issues,
+        indicator_semantic_issues,
     )
 
     yaml_text = _with_default_holding(strip_yaml_fence(raw), description)
@@ -453,7 +454,7 @@ def _validate_and_correct(
     from quant_research_engine.gui.factor_correction import correct_factor_fields
 
     mapping = _yaml.safe_load(yaml_text)
-    semantic_issues = cross_semantic_issues(mapping, description)
+    semantic_issues = cross_semantic_issues(mapping, description) + indicator_semantic_issues(mapping, description)
     if lookup is None:
         return {
             "ok": not semantic_issues, "yaml": canonical_yaml_text(mapping), "mapping": mapping,
@@ -473,7 +474,7 @@ def _validate_and_correct(
             report = correct_factor_fields(mapping, lookup)
             corrections = []
             unresolved = report["unresolved"]
-            semantic_issues = cross_semantic_issues(mapping, description)
+            semantic_issues = cross_semantic_issues(mapping, description) + indicator_semantic_issues(mapping, description)
     spec = StrategySpec.from_mapping(mapping)
     missing = find_missing_factor_columns(spec, lookup)
     return {
@@ -502,15 +503,16 @@ def compile_nl(
       {"ok": True, "yaml": str, "warnings": [str, ...], "corrections": 可选,
        "fix_attempts": 可选（修复重试次数，>0 表示走了回喂回路）}
       {"ok": False, "code": "not_configured", "error": 中文}
-      {"ok": False, "code": "llm_error"|"invalid_yaml"|"missing_factors"|"semantic_cross_missing",
+      {"ok": False, "code": "llm_error"|"invalid_yaml"|"missing_factors"|
+       "semantic_cross_missing"|"semantic_indicator_invalid",
        "error": 中文（含候选因子提示）, "yaml": 可选草稿,
        "missing_factors": [...], "suggestions": [...], "corrections": 可选}
 
     五层防线（CR-2026-10-09 + CR-2026-11-03）：①真实因子目录注入 prompt；
-    ②别名字典归一；③缺因子/穿越语义回喂 LLM 重试（最多 MAX_FIX_RETRIES 次，
-    用户无感）；④兜底报错附候选与申请新增因子指引；⑤穿越语义硬闸——用户说了
-    上穿/下穿/金叉/死叉而产物没有 .shift(1) 时，重试后仍不合法就明确报错，
-    **绝不静默降级成当日状态**。
+    ②别名字典归一；③缺因子/穿越及指标语义回喂 LLM 重试（最多 MAX_FIX_RETRIES 次，
+    用户无感）；④兜底报错附候选与申请新增因子指引；⑤语义硬闸——穿越缺 shift、
+    红柱缩短缺正值前置或 BOLL 裸下穿等产物，重试后仍不合法就明确报错，
+    **绝不静默降级成错误的当日状态**。
     """
     description = (description or "").strip()
     if not description:
@@ -561,20 +563,37 @@ def compile_nl(
     semantic_issues = outcome.get("semantic_issues") or []
 
     if semantic_issues:
-        # CR-2026-11-03 语义硬闸：用户说了穿越、产物没有 .shift(1)，重试后仍不
-        # 合法 → 明确报错并给出 canonical 写法。绝不允许静默降级成当日状态。
-        from quant_research_engine.gui.nl_semantics import format_semantic_error
+        # 穿越或指标语义重试后仍不合法 → 明确报错，绝不静默降级。
+        from quant_research_engine.gui.nl_semantics import (
+            ISSUE_BOLL_BARE_BELOW_UPPER,
+            ISSUE_HIST_SHRINK_WITHOUT_POSITIVE,
+            format_semantic_error,
+        )
 
+        indicator_codes = {
+            ISSUE_HIST_SHRINK_WITHOUT_POSITIVE,
+            ISSUE_BOLL_BARE_BELOW_UPPER,
+        }
+        has_indicator_issue = any(
+            issue.get("code") in indicator_codes for issue in semantic_issues
+        )
+        semantic_kind = "指标" if has_indicator_issue else "穿越"
         result: dict[str, Any] = {
             "ok": False,
-            "code": "semantic_cross_missing",
+            "code": (
+                "semantic_indicator_invalid"
+                if has_indicator_issue
+                else "semantic_cross_missing"
+            ),
             "error": format_semantic_error(semantic_issues),
             "yaml": yaml_text,
             "semantic_issues": semantic_issues,
         }
         if fix_attempts:
             result["fix_attempts"] = fix_attempts
-            result["warnings"] = [f"穿越语义经 {fix_attempts} 轮自动修正仍未达标，已停止并报告"]
+            result["warnings"] = [
+                f"{semantic_kind}语义经 {fix_attempts} 轮自动修正仍未达标，已停止并报告"
+            ]
         if warnings:
             result["warnings"] = list(warnings) + list(result.get("warnings") or [])
         return result

@@ -19,6 +19,15 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-13 /api/results 列表 OOM 治本修复
+
+- 触发：用户管理员账号 `17157845743` 点「回测记录」报「加载失败，请稍后重试」。
+- 第一轮已完成：根因定位（uid=6 名下 130 条 / chart_data 合计 135 MB 被整列读取）→ `app.py` 改只取 `chart_data->'metrics'`（4196/4211 行）→ 回归 103 passed → 备份 `app.py.bak-2026-11-13-2003` 后部署 ECS 并重启 → 内存 145MiB → 约 122MiB、无新 OOM。
+- 第二轮已完成（20:44，用户否决治标）：`api_results_list` 4189–4232 改**真 SQL 分页**（ORDER BY/LIMIT/OFFSET/COUNT 全下推；NULL 排序语义照抄旧契约 + `j.id` tiebreaker），`api_strategy_detail` 改子路径并保留 LIMIT 100，第 39 行 import `bindparam`；新增多页/NULL 集成测试 → **105 passed**；psql 实测单请求 **30 kB vs 135 MB**、COUNT=130、翻页 overlap=0；备份 `app.py.bak-2026-11-13-2044` 后部署，md5 `86e9ab488751d8a7d2a82406c561fddc`、MemoryCurrent≈139.7 MiB、首页 200 / 匿名 401、无新 OOM。
+- 系统护栏已完成（22:47）：F-26 drop-in MemoryHigh=650M / MemoryMax=800M；F-28 停用 docker/containerd/tuned/multipathd，fail2ban 保留。整机 available 842→954MB，公网页面正常、无新 OOM；F-25 swap/升配暂缓。
+- 待办：用户浏览器登录态端到端复核（生产登录态接口未实测）；`excess_return` 落真实列 + 索引（DB 侧排序仍 ~800ms）；`_result_cols` 不动；commit/push 等验收。
+- phase = DONE（待用户浏览器复核）
+
 ### 2026-11-12 game 第二轮裁定已提交（纯文档）
 
 - Windows 第二轮回传的三项待裁定已定稿：`22_TRADING_GAME.md` §16、`46_GAME_WINDOWS_TASKS_2026-11-12.md` §11+§12；进度见 `05_PROGRESS.md`，决策条 `QRE-GAME-CONFIG-WHITELIST-AND-STATE-ADDITIVE` 见 `06_DECISION_LOG.md`。
@@ -2416,3 +2425,17 @@ PC 崩溃 interrupted 了 DeepSeek 第四轮（2.5 进行中）。恢复后核�
 **待办**：① 部署 `job.html` / `vol-regime.js` / `card-class.css`
 （night-mode.js / base.html / symbol.html / replay.js 崩溃前已部署并验证）；
 ② 线上目视波动率标尺（job 58）；③ ~~`LEGACY_RETENTION_DAYS` 90 天仍待用户确认~~ → **已确认为 15 天**（R6-2 完成）。
+
+
+### 2026-11-14 当前阶段：QRE-NL-BATCH-DEFECTS-20261114 本地验证完成
+
+- 四缺陷（MACD 红柱、BOLL 裸下穿、market_profile 覆盖、batch universe 未过滤）均已修复，定向与 CLI 回归全绿，真实小样本通过；未跑全量。
+- 下一顺序：ECS 部署并验收 → Game T5/T2 → 清理死循环垃圾；抖音挂账号仍等用户浏览器登录。
+- 未 commit/push；工作树还有其他任务改动，提交必须按任务切边界。
+
+
+### 2026-11-14 当前阶段：本轮开发与清理完成，待用户验收
+
+- NL 四缺陷：本地验证 + ECS 部署完成；Game T5/T2：37 tests + ECS 部署完成。
+- 死循环垃圾核查与缓存清理完成，无业务文件被删除。
+- 抖音挂 uid=6 仍等浏览器登录；未 commit/push，等用户验收后分批处理。

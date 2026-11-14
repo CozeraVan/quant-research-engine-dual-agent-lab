@@ -175,6 +175,155 @@ def cross_semantic_issues(
     return issues
 
 
+ISSUE_HIST_SHRINK_WITHOUT_POSITIVE = "indicator_hist_shrink_without_positive"
+ISSUE_BOLL_BARE_BELOW_UPPER = "indicator_boll_bare_below_upper"
+
+
+def _indicator_aliases(mapping: dict[str, Any] | None, column_fragment: str) -> set[str]:
+    """按真实 factor_fields 目标列识别别名，不猜测用户表达式中的名字。"""
+    data = (mapping or {}).get("data") or {}
+    fields = data.get("factor_fields") if isinstance(data, dict) else None
+    if not isinstance(fields, dict):
+        return set()
+    return {
+        str(alias)
+        for alias, target in fields.items()
+        if isinstance(target, str) and column_fragment in target.rsplit(".", 1)[-1].lower()
+    }
+
+
+def _or_branches(node: ast.AST) -> list[ast.AST]:
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+        return [branch for value in node.values for branch in _or_branches(value)]
+    return [node]
+
+
+def _and_terms(node: ast.AST) -> list[ast.AST]:
+    if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.And):
+        return [term for value in node.values for term in _and_terms(value)]
+    return [node]
+
+
+def _shifted_name(node: ast.AST) -> str | None:
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "shift"
+        and isinstance(node.func.value, ast.Name)
+    ):
+        return node.func.value.id
+    return None
+
+
+def _is_hist_shrink(node: ast.AST, aliases: set[str]) -> str | None:
+    if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+        return None
+    left, right = node.left, node.comparators[0]
+    if (
+        isinstance(node.ops[0], ast.Lt)
+        and isinstance(left, ast.Name)
+        and left.id in aliases
+        and _shifted_name(right) == left.id
+    ):
+        return left.id
+    if (
+        isinstance(node.ops[0], ast.Gt)
+        and isinstance(right, ast.Name)
+        and right.id in aliases
+        and _shifted_name(left) == right.id
+    ):
+        return right.id
+    return None
+
+
+def _has_positive_guard(node: ast.AST, alias: str) -> bool:
+    for term in _and_terms(node):
+        if not isinstance(term, ast.Compare) or len(term.ops) != 1:
+            continue
+        left, right = term.left, term.comparators[0]
+        if (
+            isinstance(term.ops[0], ast.Gt)
+            and isinstance(left, ast.Name)
+            and left.id == alias
+            and isinstance(right, ast.Constant)
+            and right.value == 0
+        ) or (
+            isinstance(term.ops[0], ast.Lt)
+            and isinstance(left, ast.Constant)
+            and left.value == 0
+            and isinstance(right, ast.Name)
+            and right.id == alias
+        ):
+            return True
+    return False
+
+
+def _is_bare_boll_below_upper(node: ast.AST, aliases: set[str]) -> str | None:
+    """仅拦截整个 OR 分支为裸 close < 上轨；带 And/shift 守卫的不误伤。"""
+    if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+        return None
+    if (
+        isinstance(node.ops[0], ast.Lt)
+        and isinstance(node.left, ast.Name)
+        and node.left.id == "close"
+        and isinstance(node.comparators[0], ast.Name)
+        and node.comparators[0].id in aliases
+    ):
+        return node.comparators[0].id
+    return None
+
+
+def indicator_semantic_issues(
+    mapping: dict[str, Any] | None,
+    description: str | None,
+) -> list[dict[str, Any]]:
+    """校验 MACD 柱与 BOLL 的易错出场语义，解析失败保守交由结构校验处理。"""
+    text = description or ""
+    check_hist = any(word in text for word in ("红柱缩短", "红柱变短", "柱缩短"))
+    check_boll = re.search(r"BOLL|布林|上轨", text, re.IGNORECASE) is not None
+    if not check_hist and not check_boll:
+        return []
+    hist_aliases = _indicator_aliases(mapping, "macdh") if check_hist else set()
+    boll_aliases = _indicator_aliases(mapping, "bbu") if check_boll else set()
+    exit_expressions = [expr for side, expr in _signal_sides(mapping) if side == "exit"]
+    issues: list[dict[str, Any]] = []
+    for expression in exit_expressions:
+        try:
+            tree = ast.parse(expression, mode="eval")
+        except SyntaxError:
+            continue
+        for branch in _or_branches(tree.body):
+            for term in _and_terms(branch):
+                alias = _is_hist_shrink(term, hist_aliases)
+                if alias and not _has_positive_guard(branch, alias):
+                    issues.append({
+                        "code": ISSUE_HIST_SHRINK_WITHOUT_POSITIVE,
+                        "severity": "error",
+                        "side": "exit",
+                        "message": (
+                            f"「红柱缩短」出场分支缺少 {alias} > 0 前置条件；"
+                            "绿柱继续变负也会满足柱体小于上一日，导致含义错误。"
+                        ),
+                        "hint": f"({alias} > 0) and ({alias} < {alias}.shift(1))",
+                    })
+            alias = _is_bare_boll_below_upper(branch, boll_aliases)
+            if alias:
+                issues.append({
+                    "code": ISSUE_BOLL_BARE_BELOW_UPPER,
+                    "severity": "error",
+                    "side": "exit",
+                    "message": (
+                        f"出场分支是裸条件 close < {alias}；价格多数时间位于上轨下方，"
+                        "该条件近乎恒真，会造成开仓后立即离场。"
+                    ),
+                    "hint": (
+                        f"脱离上轨：(close.shift(1) >= {alias}.shift(1)) and (close < {alias})；"
+                        f"破上轨：(close > {alias}) and (close.shift(1) <= {alias}.shift(1))。"
+                    ),
+                })
+    return issues
+
+
 def cross_semantic_issues_from_yaml(
     yaml_text: str,
     description: str | None,
@@ -266,6 +415,18 @@ SEMANTIC_DICTIONARY: tuple[dict[str, str], ...] = (
      "canonical": "vol < vol.rolling(N).mean() * X"},
     {"term": "突破（近 N 日高点）", "meaning": "价格上穿近 N 日高点（穿越事件）",
      "canonical": "close > high.rolling(N).max().shift(1)"},
+    {"term": "MACD 红柱 / 绿柱", "meaning": "MACD 柱=macdh_12_26_9；红柱>0、绿柱<0",
+     "canonical": "factors.stock_daily_momentum_close.macdh_12_26_9"},
+    {"term": "MACD 绿柱转红柱", "meaning": "MACD 柱由非正数转为正数",
+     "canonical": "(macdh_12_26_9 > 0) and (macdh_12_26_9.shift(1) <= 0)"},
+    {"term": "MACD 红柱缩短", "meaning": "当前仍为红柱，且柱值低于上一周期",
+     "canonical": "(macdh_12_26_9 > 0) and (macdh_12_26_9 < macdh_12_26_9.shift(1))"},
+    {"term": "BOLL 上轨", "meaning": "20 日、2 倍标准差布林带上轨",
+     "canonical": "factors.stock_daily_volatility_close.bbu_20_2_0_2_0"},
+    {"term": "脱离 BOLL 上轨", "meaning": "上一周期在上轨或其上，当前跌到上轨下方",
+     "canonical": "(close.shift(1) >= bbu_20_2_0_2_0.shift(1)) and (close < bbu_20_2_0_2_0)"},
+    {"term": "突破 BOLL 上轨", "meaning": "当前在上轨上方，上一周期不在上轨上方",
+     "canonical": "(close > bbu_20_2_0_2_0) and (close.shift(1) <= bbu_20_2_0_2_0.shift(1))"},
 )
 
 # 形态类语义可用的预计算因子列（库内已落库，优先引用；没有的周期才用

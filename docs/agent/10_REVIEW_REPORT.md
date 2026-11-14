@@ -1,5 +1,33 @@
 # Review Report
 
+## 2026-11-13 ECS F-26/F-28 内存护栏自审
+
+- Review Status：**PASS，无 Required Fixes**；用户明确批准本轮两项，F-25 swap/升配暂缓。
+- F-26 使用独立 drop-in，不覆盖原 unit：MemoryHigh=650M、MemoryMax=800M，回退路径明确；
+  当前服务 active、NRestarts=0、约 118.8MiB，远低于新阈值。
+- F-28 停用前复核 docker 无运行容器；docker/socket、containerd、tuned、multipathd/socket
+  均 inactive+disabled，fail2ban 保留；只停服务，不删除镜像、容器或数据。
+- 实测整机 used 770→658MB、available 842→954MB；公网三个页面 200、匿名 API 401，
+  kernel 无新 OOM，唯一 ERROR 为既有 `.gunicorn` 权限噪声。
+- 本轮纯系统配置，无仓库代码/schema/权限变化，无需 pytest；未 commit/push。
+
+## 2026-11-13 /api/results 真 SQL 分页自审（第二轮）
+
+- Review Status：**PASS，无 Required Fixes**；已部署 ECS，待用户浏览器验收，未 commit/push。
+- 内存上界证明：排序/分页/计数全在 Postgres，Python 只收当页 `page_size`（≤100）行。生产 psql 实测当页 params+summary+metrics **30 kB**，旧路径整列全量 **135 MB**。上界与用户名下记录总数无关 → 多用户并发打开回测记录/经典策略不再线性叠加。
+- 契约保真：NULL 排序语义反直觉但已逐字照抄旧实现（**desc NULLS FIRST / asc NULLS LAST**），另加 `j.id` tiebreaker 防翻页重复/漏行；`total` 由 `COUNT(*)` 得出，FROM/WHERE 与主查询逐字一致（含 `JOIN strategies s`）；items 组装段与响应字段一字未改；`results.job_id` 有 UNIQUE 约束 → LEFT JOIN 一对一，不放大行数。
+- 前端消费方已核：`_records_scripts.html:177` 是唯一列表调用方且只用 `excess_return`（不画迷你曲线）；`strategy.html:247` 用 `total_return`/`excess_return`（不分页，故 detail 的 `LIMIT 100` 必须保留）；`job.html` 全走详情接口；showcase 走另一接口。
+- 证据：`test_gui_saas.py + test_no_silent_failure_patterns.py` **105 passed in 13.50s**（含新增多页/NULL 排序集成测试）；psql A–I 全绿（`created_at` 排序 ~1ms、COUNT=130、翻页 overlap=0、`::double precision` cast 无报错）；部署后 active / NRestarts=0 / MemoryCurrent=146452480（≈139.7 MiB）/ 首页 200 / 匿名 401 / `journalctl -k` 无新 OOM。
+- 诚实标注：① 生产**登录态** `/api/results` 未实测，只测过匿名 401，待用户浏览器复核；② `sort=excess_return` 在 DB 侧仍 ~800ms（jsonb `->` 需 detoast 全部 130 行），worker 内存已有界但 DB CPU/IO 随总数线性增长，未来落真实列 + 索引；③ 护栏 F-25/F-26/F-28 仍等批准，`_result_cols` 本轮不动。
+
+## 2026-11-13 /api/results 列表 OOM 治本修复自审
+
+- Review Status：PASS，无 Required Fixes；已部署 ECS，待用户浏览器验收，未 commit/push。
+- **根因**：`api_results_list()` 的 SQL 整列取 `r.chart_data`，而 uid=6（`17157845743`）名下 130 条 full 结果的 chart_data 合计 **135 MB**、单行最大 1191 kB；psycopg 解析 JSON 膨胀 3–5 倍 → 500–700 MB+，撞 `MemoryMax=1GiB` 被 cgroup OOM kill（kernel `anon-rss:955184kB`），用户侧即「加载失败，请稍后重试」。
+- **最小修复**：SQL 改取 `(r.chart_data -> 'metrics') AS chart_metrics`（实测 432–440 bytes/行），取值行改 `metrics = row["chart_metrics"] or {}`；共 3 insertions / 2 deletions，响应字段与语义不变、前端零改动。同一手法生产 1557/1573 行（A-12 showcase）已在跑。
+- **验证**：`uv run pytest tests/test_gui_saas.py tests/test_no_silent_failure_patterns.py -q` → **103 passed in 13.00s**，含新增源码级回归 `test_results_list_does_not_load_full_chart_data`。部署后 `/saas/` 200 / 0.252s，服务内存 145MiB → 约 122MiB，`sudo -n journalctl -k` 无新 OOM。
+- **未验证/未做**：管理员登录态下 `/api/results` 端到端未实测（匿名 401 属正常鉴权拒绝），待用户浏览器再点一次「回测记录」；SQL 分页与护栏 F-25/F-26/F-28 未做，另开条目。
+
 ## 2026-11-04 使用说明首列宽度复核
 
 - Review Status：PASS，无 Required Fixes；已部署，待用户验收，未 commit/push。
@@ -3107,4 +3135,48 @@ python .tmp/ui-round3/nodecheck.py → checked 7 script blocks, 0 failed
 uv run pytest tests/ -q → 3205 passed, 34 skipped, 6 warnings in 164.09s (exit 0)
 git show 8789a15 -U0 -- '*.css' '*.html' | grep -E '^[+-].*line-height' | wc -l → 44（22 增 22 删）
   两侧 line-height 值分布（11 档）逐档 diff → 无差异（DISTRIBUTION_IDENTICAL）
+```
+
+## 2026-11-14 QRE-NL-BATCH-DEFECTS-20261114 主 Agent 自审
+
+### Review Status
+
+PASS（本地验证完成，待部署验收；未 commit/push）
+
+### Findings
+
+- 指标语义检查只读 YAML factor_fields 与描述文本，AST 解析失败保守交给结构校验；带 And/shift 守卫的 BOLL 写法不误伤。
+- batch 只在启用排除项时为显式 codes 查询 metadata，避免旧路径增加无谓 DB 查询；request/manifest 保留原始 codes 便于复现。
+- Required Fixes：无。遗留：本轮只修编译与 batch 工程语义，不擅自改抖音原文中 KDJ >50 入 /<70 出的矛盾，也不重跑既有 100 股结果。
+
+### Validation Evidence
+
+```text
+tests/test_nl_indicator_semantics.py → 11 passed
+NL/spec/静默失败回归 → 64 passed
+batch 邻接回归 → 52 passed
+tests/test_cli.py → 325 passed（2 个既有 numpy warning）
+真实 batch：universe_excluded_st=4，symbols=6，total_failed_orders=0
+batch/single run_manifest.request.market_profile=ashare_daily_default
+```
+
+
+## 2026-11-14 Game T5/T2 主 Agent 自审
+
+### Review Status
+
+PASS（已部署 ECS，待用户验收；未 commit/push）
+
+### Findings
+
+- 快照只含匿名代码与整体偏移日期，Store 六方法零 DB；三只均 1500 根，可真实建局。
+- T2 按 46 号契约在本机重写并注明来源，未伪称复制了不可读的 Windows scratch。
+- Required Fixes：无。如实保留：EMA 在 1500 根截断面有种子差异，BOLL 可严格逐点对账；未用全因子零误报假断言掩盖。
+
+### Validation Evidence
+
+```text
+uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py tests/test_game_snapshot_store.py -q → 37 passed
+快照：X00001B/X00002B/X00003B，各 1500 bars；真实代码正则 0 命中
+ECS qre-saas active；/api/saas/factors 200；/saas/new 200
 ```

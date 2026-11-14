@@ -1,5 +1,157 @@
 # Implementation Brief
 
+## Task ID: QRE-NL-BATCH-DEFECTS-20261114
+
+- 日期：2026-11-14
+- 状态：实施中
+- 意图：修复抖音 MACD/KDJ/BOLL 冒烟回测暴露的四个缺陷——
+  ① NL「MACD红柱缩短」出场缺 `macdh>0` 前置（绿柱变长也会触发）；
+  ② NL「BOLL破上轨/脱离上轨」被拆出 `close<bb_upper` 恒真支路（开仓即平）；
+  ③ CLI run_manifest 把 YAML 的 `experiment.market_profile`（ashare_daily_default）覆盖为 "built-in"；
+  ④ `universe.exclude_st:true` 在 batch 路径未生效（BatchBacktestRequest 无此字段，cli 从未过滤；full 结果仍含 4 支 ST：002726.SZ/002977.SZ/300352.SZ/002207.SZ）。
+- 实施边界：
+  - `gui/nl_semantics.py` 新增 `indicator_semantic_issues(mapping, description)`（与 cross 闸同款 issue dict），`nl_compiler._validate_and_correct` 并列接入，复用回喂+硬闸（新 code `semantic_indicator_invalid`，与 `semantic_cross_missing` 区分）；`SEMANTIC_DICTIONARY` 补 MACD 柱（红柱=macdh>0、绿柱转红柱=macdh 上穿 0、红柱缩短=canonical）与 BOLL（上轨=bbu_20_2_0_2_0、破上轨/脱离上轨）条目。
+  - `strategy/spec.py` 加 `market_profile` 字段（experiment.get，默认 None）；`apps/cli.py` single/batch/shared 三路径 profile 取 CLI flag > YAML，manifest 三处如实记录；名字→路径解析按 config/loader.py 实际情况最小改动。
+  - `apps/cli.py` batch 在 pool 过滤后统一按 metadata `is_st` 布尔列过滤（与 preflight 同款）；顺手核对 compiler.py / agent_api.py 的 exclude_st 默认值；若本地库 4 支 ST 漏标则加 name 含 ST 兜底并同步 preflight。
+  - 不重跑已完成的 100 股任务；不跑全量；equity 首日 9100000 vs 10000000 观察项不在本任务范围；KDJ>50入/<70出 是用户原文矛盾，不擅改。
+- Validation：新增 `tests/test_nl_indicator_semantics.py`（stub LLM，RED→GREEN）；小样本（十来支、含 4 支 ST）本地 backtest 验证 manifest 记录与 ST 过滤；`uv run pytest` 相关测试全绿；写 10 并同步 05/09/04/11。
+
+## Task ID: QRE-ECS-MEMORY-GUARDRAILS-003
+
+- 日期：2026-11-13
+- 状态：已实施并验证（2026-11-13 22:47；F-25 swap 与服务器升配暂缓）
+
+### 意图
+
+`/api/results` 的内存治本已部署，本轮补两条系统护栏：把 `qre-saas` 从
+`MemoryMax=1GiB` 收紧到 `MemoryMax=800M` + `MemoryHigh=650M`，避免单个服务先把
+1.6GB 整机拖入 global OOM；停用已确认无容器负载的 docker/containerd 及 tuned/multipathd，
+释放约 180MB 常驻内存。fail2ban 保留，swap 不新增。
+
+### 边界与回退
+
+- 只改 ECS systemd 配置与服务启停，不改仓库代码、数据库 schema、回测任务或 nginx。
+- 使用 `/etc/systemd/system/qre-saas.service.d/memory.conf` drop-in，不直接覆盖发行 unit；
+  回退为删除该文件后 `daemon-reload` + `restart`。
+- 停用前复核 docker 无运行容器；只 stop/disable，不删除二进制、镜像、容器或数据。
+  回退为对原服务逐一 `enable --now`。
+- 若收紧后出现新的 cgroup OOM，先恢复 1GiB，不借扩容或 swap 掩盖接口问题。
+
+### Validation
+
+- 实施前：`MemoryMax=1073741824`、`MemoryHigh=infinity`、MemoryCurrent=159326208；
+  docker/containerd/tuned/multipathd 均 active+enabled，docker 无运行容器；fail2ban 保留。
+- drop-in 生效：`MemoryMax=838860800`、`MemoryHigh=681574400`；六个目标 unit 均
+  inactive+disabled，fail2ban 仍 active+enabled，未删除任何容器或数据。
+- 整机 `free -m`：used **770→658MB**，available **842→954MB**（服务刚停用后瞬时曾为
+  625/987MB）；Swap 仍为 0，符合用户「暂不扩容」要求。
+- `qre-saas` active/running、NRestarts=0、MemoryCurrent=124538880（约 118.8MiB）；
+  `/saas/`、`/saas/login`、`/saas/showcase` 均 200，匿名 `/api/results` 401。
+- 22:47 以来 kernel 无 OOM/killed process；服务日志唯一 ERROR 为既有
+  `/var/www/.gunicorn` 权限噪声，无 traceback。生产登录态页面仍待用户浏览器复核。
+
+## Task ID: QRE-SAAS-RESULTS-PAGINATION-002
+
+- 日期：2026-11-13
+- 状态：已实现 + 已部署 ECS（2026-11-13 20:44）+ 105 passed，未 commit
+
+### 意图
+
+用户否决「只取 metrics 子路径」这层治标修复：读自己的回测记录不该把服务器打崩，
+用户量增长后并发打开经典策略只会崩得更快，ECS 并不承担计算任务。
+OOM-001 把单行 1.1 MB 压到 440 B 是对的，但 `api_results_list` 仍**全量取行**
+再在 Python 侧排序 / 计数 / 切片 —— 单请求内存仍随「该用户名下记录总数」线性增长
+（uid=6 已 130 条，且无上限）。
+
+本轮把分页真正下推 Postgres：`ORDER BY` / `LIMIT` / `OFFSET` / `COUNT` 全在 SQL 侧完成，
+**单请求内存上界只与 `page_size` 成正比（≤100 行 × 约 440 B metrics），与记录总数无关**。
+顺带把 `api_strategy_detail` 的整列 `r.chart_data`
+（已有 LIMIT 100，但 100 × 最坏 1.1 MB ≈ 110 MB/请求）改为同样只取 `-> 'metrics'`。
+
+### 边界
+
+- 不改 schema、不改回测引擎、不改结果写入侧；不新增路由、不动 decorator 叠加块（A-12 前科）。
+- 响应 JSON 字段与语义逐字不变，前端零改动（唯一列表消费方 `templates/_records_scripts.html:177`）。
+- `sort` / `order` 只允许白名单常量拼进 SQL；`uid` / `limit` / `offset` 一律绑定参数。
+- **保留既有 NULL 排序语义**（反直觉但是现存契约）：旧 Python
+  `sort(key=(is None, value), reverse=)` 等价于 desc → NULLS FIRST、asc → NULLS LAST。
+  SQL 用显式 `NULLS FIRST/LAST` 对齐，不「顺手修正」；语义是否合理可另议。
+- 排序追加 `j.id` 次级 tiebreaker：旧实现靠 Python 稳定排序 + SQL 任意序兜底，
+  下推后必须确定性排序，否则翻页会重复 / 漏行。
+- `total` 用独立 `COUNT(*)`，且**保留 `JOIN strategies s`**（主查询是 INNER JOIN），
+  语义与现状逐字等价；`results.job_id` 有唯一约束（生产 `results_job_id_key` 实测），
+  LEFT JOIN 一对一不放大计数。`excess_return` 生产实测 255/258 非空、0 行非数字，
+  `::double precision` 安全，仍按防御性 `NULLIF(...,'')` 包一层。
+- `page_size` 上限 100 保留；`showcase` 标记只查当页 job_id（空页跳过查询）。
+
+### 下一条目（明确不在本轮范围）
+
+- `_result_cols(engine)`（app.py:3986）仍整列取 `r.chart_data` / `r.artifacts`。
+  被 `_load_job_for_user` / `_load_job_for_guest` / `_load_job_public` 共用，
+  三者都 `.mappings().first()` → 单行，1.1 MB/请求是浪费但非 OOM 主因；
+  且 chart-data 接口必须整列，其余 tag-analysis / cumret / benchmarks 只取子键。
+  方向：加 `light_keys` 参数或另开 `_result_cols_light`，需逐接口核对，单独开条目。
+- 待查：`_ensure_result_contract_column(engine)` / `_ensure_signal_tables(engine)`
+  每请求都调，是否有重复 DDL / 目录扫描开销。本轮不深挖。
+- `sort=excess_return` 的 ORDER BY jsonb `->` 需对全部 130 行 detoast，实测约 800ms；
+  worker 内存已有界，但 DB CPU/IO 仍随记录总数线性增长。未来把 `excess_return`
+  落成真实列/生成列并建索引，本轮不做。
+
+### Validation
+
+- `uv run pytest tests/test_gui_saas.py tests/test_no_silent_failure_patterns.py -q`
+  → **105 passed in 13.50s**。新增 `test_list_pagination_multi_page_and_nulls`：
+  验证 total=3、每页 1 条、三页 job_id 不重叠且完整，desc 首条 `excess_return=None`，
+  asc 前两条非 None；源码断言覆盖 SQL 子路径、LIMIT/OFFSET、COUNT 与 detail LIMIT 100。
+- 生产 psql 小样本（uid=6 / kind='full'）：created_at DESC/ASC 各 20 行，
+  **11.462ms / 0.941ms**；excess_return DESC NULLS FIRST 20 行 **824.084ms**，
+  首行 id=298 为空，随后 282=0.6302、303=0.5954、329=0.4973；
+  ASC NULLS LAST 20 行 **774.917ms**，页内无 NULL，cast 未报错。
+- COUNT **130**（6.941ms）；连续两页 `p1_n=20, p2_n=20, overlap=0`（3.430ms）。
+- 当页 metrics **8716 B**，当页 params+summary+metrics **30 kB**；旧路径整列全量 **135 MB**，
+  单请求传输量约 **4600 倍**下降。
+- 部署：备份 `app.py.bak-2026-11-13-2044`；覆盖前生产 md5 `f729a368…`，
+  覆盖后本地=生产 md5 `86e9ab488751d8a7d2a82406c561fddc`，5429 行 / 278545 字节。
+  `qre-saas` active、`NRestarts=0`、`MemoryCurrent=146452480`（约 139.7 MiB）；
+  `/saas/` 200（0.097s），匿名 `/api/results` 401；`journalctl -k` 无新 OOM。
+  日志唯一 ERROR 为既有 `/var/www/.gunicorn` 权限噪声，无 traceback。
+- **生产登录态 `/api/results` 未实测，待用户浏览器以 `17157845743` 复核。**
+
+## Task ID: QRE-SAAS-RESULTS-LIST-OOM-001
+
+- 日期：2026-11-13
+- 状态：第一轮已实现并部署 ECS；分页治本由 OOM-002 承接，未 commit
+
+### 意图
+
+`GET /api/results` 列表接口目前把 `results.chart_data` 整列读进内存，只为取其中的
+`metrics` 子对象。生产 uid=6（`17157845743`）名下 130 条 `kind='full'` 结果，
+`chart_data` 合计 135 MB、单行最大 1191 kB；psycopg 解析 JSON 会再膨胀 3–5 倍，
+worker 直接被吃到 955 MB 并触发 OOM（11/13 19:44:23，nginx 报
+`upstream prematurely closed connection`，用户侧表现为「加载失败，请稍后重试」）。
+
+改为在 SQL 里只取子路径 `(r.chart_data -> 'metrics') AS chart_metrics`，
+实测每行 432–440 bytes，对最大行约 2700 倍压缩。列表接口不再触碰逐日权益曲线。
+
+### 边界
+
+- 不改数据库 schema、不改回测引擎、不改结果写入侧。
+- 不改响应 JSON 的字段与语义（仍返回 `excess_return` 等既有字段），前端零改动。
+- 不动详情接口 `/api/results/<id>/chart-data`（详情页确实需要整条曲线）。
+- 本次不引入 SQL 分页：`sort=excess_return` 在 Python 侧全量排序、`total = len(items)`
+  需全量计数，分页改造已由 `QRE-SAAS-RESULTS-PAGINATION-002` 完成。`page_size` 上限 100 保留。
+- 不新增路由、不动 decorator 叠加块（A-12 前科）。
+
+### Validation
+
+- 新增源码级回归 `tests/test_gui_saas.py::test_results_list_does_not_load_full_chart_data`：
+  断言 handler 内出现 `chart_data -> 'metrics'`，且不出现 `r.chart_data,` 与 `row["chart_data"]`。
+- `uv run pytest tests/test_gui_saas.py tests/test_no_silent_failure_patterns.py -q`
+  → **103 passed in 13.00s**（含 A-12 showcase 同族回归）。
+- 部署后 `systemctl show qre-saas -p MemoryCurrent` 实测 **145MiB → 约 122MiB**；
+  `sudo -n journalctl -k --since "-15min" | grep -i -E "oom|killed process"` 无输出，无新 OOM。
+- （待办）用户浏览器以管理员账号再点一次「回测记录」，确认列表正常渲染。
+
 ## 2026-11-03 缠论结构策略 A 股日线首版
 
 - 立项合同：`change_requests/CR-2026-11-03_chanlun_structure_backtest.md`。
@@ -1360,3 +1512,9 @@ KIMI_CODE 布置，Step 5 实施（2026-10-25，用户批准按统一 Todo 推�
 - ECS 测试账号只读检查与必要的安全配置修改有备份和正式登录验证。
 - 相关与全量测试，真实 Chromium 双游客上下文与移动检查，证据 `.tmp/access-hardening/`。
 - 更新 04/05/06/09/10/11/14/16/17/19（如涉及权限）和最终检查；不 commit/push/ECS 代码部署。
+
+
+## 2026-11-14 实施状态补充
+
+- `QRE-NL-BATCH-DEFECTS-20261114`：实现、定向/邻接回归、真实小样本、10 号自审与 ECS 部署均完成；未跑全量，未 commit/push。
+- Game T5/T2：按 46 号契约完成快照、离线 Store 和测试入库，37 passed，游戏两修复已部署。

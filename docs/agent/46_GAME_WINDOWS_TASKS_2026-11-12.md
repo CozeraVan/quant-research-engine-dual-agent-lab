@@ -255,3 +255,11 @@ def load_factor_history(self, symbols, requests, start: date, end: date) -> pd.D
 9. **W4 回合制证据**：日志或截图序列路径 + 一句结论（是否发现跨日自动推进）。
 
 若某项在上一轮已部分完成，**如实说明现状与增量**，不要重述为「本轮新做」。
+
+## 13. WSL T5/T2 交付完成（2026-11-14）
+
+- T5 已落盘：`scripts/game/export_snapshot.py`、离线 `scripts/game/snapshot_store.py`、`data/game_snapshots/{manifest.json,x00001b.json,x00002b.json,x00003b.json}`。三只各 1500 根，匿名代码、日期统一偏移 3650 天、无真实代码/名称/日期；候选上限 20，已排除 920%.BJ。Store 与 SampleGameStore 六方法同构，可供五年驱动 `--store-source file.py:Class` 使用。
+- T2 已入库：`tests/test_game_windows_fixes.py` 六项（按契约在本机重写，未读取 Windows scratch）；`tests/test_trading_game_web.py` 的 `read_text` 已补 UTF-8。补真快照测试 `tests/test_game_snapshot_store.py`。
+- 本机修复：`game/validation.py` 不再用 close 重算 typical_price 口径；`game.html` 显式 `.kv-grid{display:grid}`。两文件已部署 ECS（qre-saas active，HTTP 200）。
+- 验证：`uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py tests/test_game_snapshot_store.py -q` → **37 passed**。真实 X00003B 可建 1500 根会话并加载因子；BOLL 逐点 0 mismatch。EMA 长周期在 1500 根截断面存在种子差异，文档与测试已明确，不伪称全因子零误报。
+- Windows 下一步：用 `scripts/game/snapshot_store.py` + `data/game_snapshots/` 复跑五年驱动和双视口审计。未 commit/push。

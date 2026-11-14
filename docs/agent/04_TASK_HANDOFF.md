@@ -1,5 +1,14 @@
 # Task Handoff
 
+## /api/results 列表 OOM 治本（2026-11-13，已部署待验收）
+
+- 用户以管理员 `17157845743` 点「回测记录」报「加载失败」→ 根因是列表接口整列读 chart_data（该账号 130 条 / 135 MB）打爆 1GiB cgroup。第一轮改只取 `chart_data->'metrics'`（103 passed，内存 145MiB → 约 122MiB）。
+- 第二轮（20:44，用户否决治标：读自己的记录不该弄崩服务器）：改**真 SQL 分页**，`ORDER BY / LIMIT / OFFSET / COUNT` 全下推 Postgres，单请求内存只与 `page_size` 成正比、与用户名下记录总数无关；`api_strategy_detail` 同步改子路径（保留 `LIMIT 100`）。**105 passed**；生产 psql 实测单请求 **30 kB vs 旧 135 MB**、COUNT=130、翻页 overlap=0；已部署 ECS（md5 `86e9ab488751d8a7d2a82406c561fddc`、5429 行、备份 `app.py.bak-2026-11-13-2044`），重启后 active / MemoryCurrent≈139.7 MiB、首页 200、匿名 401、无新 OOM。
+- 系统护栏（22:47，用户批准 F-26/F-28）：drop-in 已设 MemoryHigh=650M / MemoryMax=800M；docker/containerd/tuned/multipathd 已停用且开机禁用，fail2ban 保留。整机 used 770→658MB、available 842→954MB，公网页面正常、无新 OOM；F-25 swap/升配暂缓。
+- 残留：`sort=excess_return` 的 jsonb 排序在 DB 侧仍 ~800ms（未来落真实列 + 索引）；生产**登录态**接口未实测。
+- 待办：请用户浏览器再点一次「回测记录」做登录态端到端复核；未 commit/push。
+- 细节见 `05_PROGRESS.md` 2026-11-13 条目、`10_REVIEW_REPORT.md` 同日自审、`41_CF_RUN_ANOMALY_LOG_2026-11-09.md` A-13 与 F-26/F-27/F-28。
+
 ## 使用说明首列防折行（2026-11-04，已部署待验收）
 
 - 七个说明表格首列统一 160px；51 项相关测试通过，公网双视口实测单行且零横溢。
@@ -3127,3 +3136,18 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
   一并带进了 `8789a15`（2026-10-29 13:04，含 `TV_ROUND4_*`、`AGENTS.md`、
   `deploy/saas/scan-macd-legacy-names.sh`、`tests/test_no_silent*`、`test_template_inline_js_syntax`），
   该提交已推送到 `origin/master`（本地与远端无差）。**ECS 未部署**。
+
+## 2026-11-14 当前任务交接
+
+1. 四缺陷修复已完成本地实现与小样本验证，详见 05/09/10 同日条目；不跑全量，等待部署验收与分批提交批准。
+2. 抖音 100 股 5 年结果挂 uid=6：继续走浏览器提交生产 job + `assign_owner`，用户需先在 aguhuice.com 用 17157845743 短信登录，再恢复此步；不直接 INSERT 生产库。
+3. Game T5 脱敏快照与 T2 Windows 六项测试入库为下一开发切片。
+4. 清理仅限本轮死循环新增的临时垃圾和可再生缓存，保留 `.tmp/nl-batch-defects-verify/` 等被文档引用的证据。
+
+
+## 2026-11-14 收尾状态
+
+- NL 四缺陷与 Game T5/T2 均完成、测试通过并已部署 ECS；详见 05/09/10/46。
+- 缓存清理完成，未发现可归属于死循环的新增业务垃圾；文档证据保留。
+- 唯一仍阻塞的用户请求：抖音 100 股 5 年结果挂 uid=6，等用户在公网浏览器完成短信登录后恢复。
+- 所有改动未 commit/push，后续按 NL、Game、其他历史任务分批提交，不能整体 add。

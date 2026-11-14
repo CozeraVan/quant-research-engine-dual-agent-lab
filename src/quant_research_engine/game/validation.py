@@ -103,7 +103,11 @@ def audit_price_factors(bars, factors: dict, canonicals) -> dict:
     }
     for canonical in canonicals:
         item = catalog.get(canonical)
-        expected = None if item is None else _expected_series(item["column"], closes, cache)
+        # 只有 close 口径能由游戏 OHLC 的收盘价重算；typical_price 等输入不同，
+        # 拿 close 重算会制造误报，未登记口径继续按 skipped 处理。
+        if item is None or not item["table"].endswith("_close"):
+            continue
+        expected = _expected_series(item["column"], closes, cache)
         if expected is None:
             continue
         stats = {"checked": 0, "mismatches": 0, "max_abs_diff": 0.0}

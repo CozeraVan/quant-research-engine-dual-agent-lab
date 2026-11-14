@@ -1,3 +1,9 @@
+2026-11-13 22:47 ECS 内存护栏 F-26/F-28（**已实施并验证，未 commit**）：用户明确不做 swap/升配、批准另外两项。①F-26 新建 `/etc/systemd/system/qre-saas.service.d/memory.conf`，MemoryHigh=650M、MemoryMax=800M，daemon-reload+restart 后实际值 681574400/838860800，qre-saas active/running、NRestarts=0、MemoryCurrent≈118.8MiB；②F-28 停用并 disable docker.service/docker.socket/containerd/tuned/multipathd.service/multipathd.socket，实施前确认 docker 无运行容器，只停服务不删数据，fail2ban 保持 active+enabled；③整机 free -m 实测 used **770→658MB**、available **842→954MB**，Swap 仍为 0；④公网 `/saas/`、`/saas/login`、`/saas/showcase` 均 200，匿名 `/api/results` 401，22:47 以来 kernel 无 OOM/killed process，唯一 ERROR 为既有 `/var/www/.gunicorn` 权限噪声；⑤回退路径：删除 drop-in 后 daemon-reload+restart，原服务逐一 enable --now；⑥纯系统配置，无仓库代码/schema/权限变更，生产登录态仍待用户浏览器复核。
+
+2026-11-13 20:44 /api/results 真 SQL 分页（第二轮，**已部署 ECS，待用户浏览器验收，未 commit**）：针对用户否决「只压单行、不全量分页」的治标方案，`api_results_list` 改为 ORDER BY/LIMIT/OFFSET/COUNT 全下推 Postgres，单请求内存只与 page_size 成正比；保留旧 NULL 契约（desc→NULLS FIRST、asc→NULLS LAST）、追加 `j.id` tiebreaker、COUNT 保留 INNER JOIN strategies；`api_strategy_detail` 同步只取 metrics 子路径并保留 LIMIT 100，响应字段与前端契约不变。新增 `test_list_pagination_multi_page_and_nulls`，`uv run pytest tests/test_gui_saas.py tests/test_no_silent_failure_patterns.py -q` → **105 passed in 13.50s**。生产 psql（uid=6 / kind='full'）：created_at DESC/ASC **11.462ms / 0.941ms**，excess_return DESC/ASC **824.084ms / 774.917ms**，COUNT=130，连续两页 20+20 且 overlap=0；当页 metrics **8716 B**、params+summary+metrics **30 kB**，旧整列全量 **135 MB**，约 4600 倍下降。部署备份 `app.py.bak-2026-11-13-2044`，本地=生产 md5 `86e9ab488751d8a7d2a82406c561fddc`、5429 行；服务 active、NRestarts=0、MemoryCurrent≈139.7MiB，`/saas/` 200/0.097s、匿名 `/api/results` 401、无新 OOM。残留：excess_return 排序仍需 DB detoast 全部 130 行约 800ms，后续落真实列/生成列并建索引；生产登录态待用户复核。未 commit，其他遗留改动未碰。
+
+2026-11-13 20:03–20:05 /api/results 列表接口 OOM 治本（**已部署 ECS，待用户浏览器验收，未 commit**）：①用户以管理员 `17157845743` 点「回测记录」报「加载失败，请稍后重试」，nginx error.log 19:44:23 `upstream prematurely closed connection while reading response header`（request `GET /api/results?sort=created_at&order=desc&page=1&page_size=20`）+ 同秒 kernel `oom-kill constraint=CONSTRAINT_MEMCG oom_memcg=/system.slice/qre-saas.service` / `Killed process 1512 (gunicorn) anon-rss:955184kB`，坐实为列表接口打爆 1GiB cgroup；②生产实测 uid=6 名下 `kind='full'` **130 条、chart_data 合计 135 MB、单行最大 1191 kB**（results 全表 258 行），而 `api_results_list()` 的 SQL 整列取 `r.chart_data` 只为拿其中的 metrics；③最小修复 `src/quant_research_engine/gui/saas/app.py`：SQL 改 `(r.chart_data -> 'metrics') AS chart_metrics`（4196 行，实测 **432–440 B/行**）、取值改 `metrics = row["chart_metrics"] or {}`（4211 行），共 3 insertions / 2 deletions，响应字段与语义不变、前端零改动，与生产 1557/1573 行 A-12 showcase 同手法；④新增源码级回归 `tests/test_gui_saas.py::test_results_list_does_not_load_full_chart_data`，`uv run pytest tests/test_gui_saas.py tests/test_no_silent_failure_patterns.py -q` → **103 passed in 13.00s**；⑤部署：先核生产旧版 md5 `73d913a3…` 与 `git show HEAD` 一致再整文件 scp 到 `/tmp/app.py.new`，`cp -a` 备份为 `app.py.bak-2026-11-13-2003`，覆盖后新版 md5 `f729a368…` 与本地工作树一致，`sudo -n systemctl restart qre-saas`（20:03:11 term → 20:03:16 Started）；⑥部署后实测：`https://aguhuice.com/saas/` 200 / 0.252s，未登录 `/api/results` 401（正常鉴权拒绝），`MemoryCurrent` 145MiB → 约 122MiB、`NRestarts=0`，`sudo -n journalctl -k --since "-15min"` 无新 OOM；⑦未做：管理员登录态端到端待用户浏览器复核、SQL 分页（`sort=excess_return` 在 Python 侧全量排序、`total=len(items)` 需全量计数）已由 `QRE-SAAS-RESULTS-PAGINATION-002` 完成（见本日 20:44 条目）、护栏 F-25 加 swap / F-26 收紧 cgroup / F-28 关无用常驻待批准；⑧未 commit/push，工作树其他遗留改动一律未碰。
+
 2026-11-11 15:2x UI 与《我不是股神》Windows 分离（用户选方案 A）：新建 `45_WINDOWS_UI_GAME_SEPARATION_2026-11-11.md`，明确目录归属——Windows 拥有 `gui/saas/templates`、`gui/templates`、`game/`（含逻辑）、`gui/static`、`scripts/win`；WSL 拥有 worker/data/portfolio/strategies/orchestration/security/apps 与 `gui/**/*.py` 后端。**边界重点**：`gui/saas/app.py` 是后端归 WSL，只有 `saas/templates/` 归 Windows。核查：模板三目录独立（21/12/1）、静态集中 34 个文件、游戏子包与引擎不混写。方案 A 不物理搬离仓库；分支 `ui/<topic>` 与 `game/windows-dev`，最终提交归主 Agent。43 号文档已链接到 45。WSL 干净规则：UI 草稿/截图/视频素材不进 WSL 仓库。
 
 2026-11-11 15:0x 大库备份中断并挂起（用户裁定）：中断首次 pg_dump（进程已停），删除已备份数据（`/home/van/backups/market-db/`，释放 6.7 GB，磁盘回到 230G 可用），停用 `qre-market-backup.timer`（`disable --now`，不再周日自动跑）。**备份任务挂到全线上云之后**：等上云后有多个地点的数据盘再做。脚本与 timer 已备（`deploy/cloud/backup-market-db-weekly.sh` + `qre-market-backup.timer`），届时 `systemctl enable --now` 即可启用。14 号 F.3-20 与 44 号总结已同步该裁定。
@@ -2711,4 +2717,133 @@ WSL 侧交付 **3–5 只脱敏真实快照**，与 `SampleGameStore` 六方法�
 - 本小节 + `docs/agent/06_DECISION_LOG.md` 一条 `QRE-GAME-CONFIG-WHITELIST-AND-STATE-ADDITIVE`。
 
 ### F. 状态
-未提交、未 push（等用户批准）。本轮无代码改动，故未跑 pytest，仅跑 `scripts/check-progress-docs.sh` 文档闸。
+未提交、未 push（等用户批准）。本轮无代码改动，故未跑 pytest，仅跑 `scripts/check-progress-docs.sh` 文档闸。## 2026-11-13 抖音博主策略 NL 入口烟测（MACD 绿柱转红 + KDJ + BOLL 三选一出场）
+
+用户从抖音抄录一条博主策略，要求**原文一字不改**送入自然语言入口做小范围验证，目的是检验 NL 编译链路能否把口语化描述编译成可执行策略并正常产出结果，而非评价收益率。本轮不改 `src/`、不提交、不 push、不部署。
+
+### A. 被测原文（逐字，未替用户改错别字）
+
+> 入场点：MACD绿珠转红柱，且KDJ的K值大于50；以下3个条件满足任一一点即出场：1、MACD红柱缩短；2、KDJ的K值小于70；3、BOLL线破上柜或者脱离上轨。
+
+三处歧义的处置（**均按原文执行，不擅自"修正"成合理版本**）：
+
+1. 「绿珠」按「绿柱」理解，「上柜」按「上轨」理解 —— 仅错别字容错，不改变语义。
+2. 出场 2「K 值小于 70」与入场「K 值大于 50」自相矛盾：K∈(50,70) 时入场与出场同时成立 → 开仓即平。**保留原样**，用成交笔数/持仓天数/逐笔明细把矛盾摊给用户看。
+3. 「破上柜或者脱离上轨」被编译成两条并列条件（见 C 节），未做人工合并。
+
+### B. 编译产物与驱动
+
+- 编译脚本 `.tmp/douyin-smoke/compile_only.py`，耗时 4.2s；`[guard] decision = pass / reasons=[] / missing=[]`、`[compile] ok = True code = None`，无 warnings、无 fix_attempts。
+- 结果 `.tmp/douyin-smoke/compile_result.json`；最终策略 `.tmp/douyin-smoke/douyin_macd_kdj_boll.yaml`（`experiment.name = nl_macd_hist_turn_red_kdj_k_boll_exit`）。
+- 因子映射：`macd_hist → factors.stock_daily_momentum_close.macdh_12_26_9`、`kdj_k → factors.stock_daily_momentum_close.k_9_3`、`bb_upper → factors.stock_daily_volatility_close.bbu_20_2_0_2_0`。
+- 驱动 `.tmp/douyin-smoke/run_smoke.py`：`SEED = "douyin-macd-kdj-boll-20261113"`、`pool_size = 5201`、`OUTPUT = outputs/douyin/20261113_macd_kdj_boll`，选股落 `OUTPUT/selection.json` 并复用，smoke 与 full 同一批股；RLIMIT_AS 12GiB。
+- 参数：单股独立资金 10 万、`holding_days = 0`、其余默认。`backtest-batch` **无 `--max-positions` 参数**（仅 `backtest-shared` 有且 required），batch 本身每股独立资金独立组合，故"不设持仓上限"天然满足，无需传参。
+
+编译后的信号表达式：
+
+```
+entry: (macd_hist > 0) and (macd_hist.shift(1) <= 0) and (kdj_k > 50)
+exit:  (macd_hist < macd_hist.shift(1)) or (kdj_k < 70)
+       or ((close > bb_upper) and (close.shift(1) <= bb_upper.shift(1)))
+       or (close < bb_upper)
+```
+
+### C. 编译语义评估
+
+- **入场正确**：`(macd_hist > 0) and (macd_hist.shift(1) <= 0)` 是真正的穿越事件，未降级成"当日红柱"状态判断；`kdj_k > 50` 原样保留。
+- **出场 1 有缺陷（语义降级）**：「红柱缩短」编译成裸 `macd_hist < macd_hist.shift(1)`，**缺 `macd_hist > 0` 前置**。正确应为 `macd_hist > 0 and macd_hist < macd_hist.shift(1)`。后果：绿柱继续变长（更负）也满足该式 → 绿柱期间天天触发离场。
+- **出场 3 有缺陷（更致命）**：「破上柜或者脱离上轨」被拆成「上穿上轨事件」`or close < bb_upper`。后半段在绝大多数交易日恒真 → **开仓即平的主因**。
+- **KDJ 列名已证实正常**：`factors.stock_daily_momentum_close` 确有 `k_9_3`（0–100 K 值）。此前交接中的怀疑已证伪，不列入缺陷。
+
+### D. smoke 阶段（先小样本，遵守用户既定规矩）
+
+`{"stage":"smoke_5_1y","symbol_count":5,"start":"2025-11-13","end":"2026-11-13","elapsed_s":37.624,"returncode":0,"child_max_rss_kb":148684}`
+
+5 支：`600310.SH / 688233.SH / 000652.SZ / 600538.SH / 002726.SZ`。
+`summary_metrics.json`：`mean_total_return = -0.02199`、`mean_buy_hold = -0.25942`、`mean_excess = +0.23743`、`positive_rate = 0.2`、`total_trades = 28`、`total_cost = 2987.43`、`failed_orders = 0`。28 笔持仓天数 mean 1.46 / median 1，分布 `{1:23, 3:4, 6:1}`，`exit_reason` 全为 `exit_signal`。
+
+### E. full 阶段（100 股 × 5 年）
+
+`{"stage":"full_100_5y","symbol_count":100,"start":"2021-11-13","end":"2026-11-13","elapsed_s":67.544,"returncode":0,"child_max_rss_kb":259128,"recorded_at":"2026-11-13T10:48:36Z"}`
+
+即 **67.5 秒 / 峰值 RSS 约 253 MiB**（smoke 的 37.6s 大头是启动与选股，非回测本身）。产物 `outputs/douyin/20261113_macd_kdj_boll/full_100_5y/`：25 个顶层文件 + 100 个每股子目录，与 smoke 同集合（`backtest_report.html / .xlsx / equity_curve.csv / equity_curve_chart.png / drawdown_curve.csv / drawdown_curve_chart.png / round_trips.csv / trades_ledger.csv / summary.csv / summary.md / summary_metrics.json / strategy_performance.json / trade_analysis.json / symbol_performance.csv / symbol_month_returns.csv / window_summary_{M,Q,Y}.csv / rolling_summary_20.csv / capital_usage.json / report_manifest.json / run_manifest.json / driver_result.json / driver.std{out,err}.log`）。
+
+`summary_metrics.json` 关键值：
+
+- `symbol_count = 100`、`traded_symbol_count = 100`（**100 支全部有成交，无空信号股**）
+- `mean_total_return = -0.032628`、`median_total_return = -0.078128`
+- `return_p25 = -0.137863`、`return_p75 = 0.059526`、`return_std = 0.185310`
+- `mean_buy_hold_return = +0.197817`、`median_buy_hold_return = -0.044499`
+- `mean_excess_return_vs_buy_hold = -0.230445`、`median_excess = +0.006455`（均值被少数大涨股拉偏）
+- `positive_return_symbol_rate = 0.38`、`total_trades = 2982`、`mean_trade_count = 29.82`
+- `total_cost = 316579.74`、`total_failed_orders = 18`
+- `best_symbol = 688160.SH (+56.72%)`、`worst_symbol = 600446.SH (-34.23%)`
+
+`round_trips.csv`（2982 行）：
+
+- `holding_days` mean **1.669** / median **1** / min 1 / max 15；分布 **1 天 2242 笔（75.2%）**、2 天 52、3 天 523（17.5%）、4 天 53、5 天 21、6 天 36、7 天 11、8 天 8、9 天 6、10 天 10、11 天 16、13 天 1；≤2 天占 **76.9%**。
+- `exit_reason` **2982/2982 全为 `exit_signal`**，无一笔止盈/止损/到期离场。
+- **`gross_pnl` 合计 −9701.92、`total_cost` 合计 316579.74、`net_pnl` 合计 −326281.66** → 毛利只亏 0.97 万，摩擦 31.66 万，净亏 32.63 万，**亏损的约 97% 来自交易磨损**；平均每笔摩擦约 106 元。
+
+逐笔证据（`symbol 入→出 天数 入价→出价 净收益 / 毛收益 / 费用`，全部 `exit_reason=exit_signal`）：
+
+- 1 天最差：`688191.SH 2023-08-31→09-01 1天 25.625→21.41225 净 −16.54% 毛 −16.44% 费 93.56`
+- 1 天次差：`300629.SZ 2026-03-03→03-04 1天 73.624152→62.4816 净 −15.23% 毛 −15.13% 费 95.46`
+- 1 天最好：`300712.SZ 2024-11-13→11-14 1天 34.5462→46.54364 净 +34.59% 毛 +34.73% 费 135.55`
+- 1 天次好：`688233.SH 2025-09-24→09-25 1天 37.89192→49.870656 净 +31.48% 毛 +31.61% 费 140.78`
+- 最长 15 天：`688456.SH 2024-04-30→05-15 15天 29.81174→35.81088 净 +20.00% 费 130.04`；`000593.SZ 2024-09-25→10-10 15天 26.544→29.624 净 +11.48% 费 122.45`
+- 全样本最佳单笔：`300629.SZ 2022-07-29→08-05 7天 44.5898→62.20869 净 +39.37% 费 128.42`
+
+`300629.SZ` 同时出现在最差与最佳，可用于说明"同一标的被出场条件反复切碎"。
+
+`summary.csv`（100 行 × 16 列）补充：
+
+- `failed_order_count` 合计 18，分布 14 支：`600775.SH 1 / 603121.SH 1 / 002344.SZ 1 / 603687.SH 1 / 002977.SZ 2 / 600446.SH 1 / 002093.SZ 2 / 000593.SZ 1 / 600405.SH 2 / 000962.SZ 1 / 600789.SH 1 / 002207.SZ 1 / 600012.SH 1 / 000533.SZ 2`
+- `is_st=True` **4 支**（`002726.SZ / 002977.SZ / 300352.SZ / 002207.SZ`）；`is_risk_warning=True` 0 支；零成交股：无。
+- worst5：`600446.SH −34.23%(29笔) / 300715.SZ −33.46%(34) / 002207.SZ −31.97%(33) / 600405.SH −31.82%(31) / 688400.SH −31.29%(25)`
+- best5（含买入持有）：`301153.SZ +31.32%(19笔, BH −9.30%) / 688229.SH +42.94%(29, +10.5%) / 688286.SH +51.03%(27, −1.36%) / 688233.SH +53.78%(24, −29.31%) / 688160.SH +56.72%(26, +185.06%)`
+
+`equity_curve.csv` 1212 行（列 `trade_date, cash, market_value, total_equity, daily_return, cumulative_return, position_count, turnover`）：首行 `2021-11-15 total_equity = 9100000.0`（起始 910 万而非 1000 万，本轮未深究）；末行 `2026-11-13 total_equity = 9673718.34 / cumulative_return = -0.034132 / position_count = 0`。
+
+### F. 输入参数随结果落盘（复现能力已确认）
+
+`run_manifest.json` 顶层 keys：`artifacts, command, kind, request, run_id, schema_version, strategy_path`；`command = "backtest-batch"`、`schema_version = 1`、`strategy_path` 指向上述 YAML。
+`request` keys：`end, entry_signal, exit_signal, group_by, group_rank_top_n, holding_days, initial_cash_per_symbol, market_profile, metadata_as_of, start, symbols`。其中 `entry_signal` / `exit_signal` 为完整表达式原文，`holding_days = 0`、`initial_cash_per_symbol = 100000.0`、`start = 2021-11-13`、`end = 2026-11-13`、`group_by = None`、`symbols` 长度 100 —— 即用户此前要求的"输入参数作为数据的一部分、可格式化调用与复现"已在 batch 链路落实。
+
+### G. 两条 caveat（如实记录，本轮不改代码）
+
+1. `run_manifest.request.market_profile` 记为 `"built-in"`，而 YAML 写的是 `ashare_daily_default` → **CLI 默认值覆盖了 YAML 的 market_profile**。未深究，待后续核实优先级。
+2. YAML `universe.exclude_st: true`，但 full 结果里 4 支 `is_st=True` 仍被回测 → **`backtest-batch` 入口未应用 universe 过滤**。这是真实缺陷，需单独立项修。
+
+### H. 结论与后续提议
+
+- **NL 入口链路可用**：口语化原文（含错别字、含自相矛盾条件）能被 guard 放行、编译成可执行 YAML，100/100 支产生信号并成交，2982 笔，全套报告齐全，无崩溃、无空结果。
+- **策略本身按原文不可用**：不是"看错方向"（毛利仅 −0.97 万），而是被自己的出场条件切碎成近乎日内进出，**摩擦吃掉一切**（31.66 万）。
+- 待用户裁定的下一步（**未擅自执行**）：出一版"消歧后"对照策略 —— 红柱缩短加 `macd_hist > 0` 前置、BOLL 只保留上穿事件、K 值出场改 `< 50` 或去掉 —— 用同一批 100 股做 A/B。
+- 另需立项：`backtest-batch` 的 universe 过滤缺失、`market_profile` 被 CLI 默认覆盖。
+
+### 状态：未提交、未 push（等用户批准）
+
+本轮仅追加本文档 + 落 `.tmp/douyin-smoke/` 脚本与 `outputs/douyin/` 产物，未改 `src/`，工作树中早前轮遗留改动一律未 add。### 2026-11-14 F-05 CF 运行态归档
+
+- 背景：CF 队列 118/118 已终态（results.jsonl 125 行去重 118 全 completed），运行态此前只存本机 `.tmp/classic-catalog-fullscale/`，换机或清理即丢。
+- 已执行：五件运行态快照（results.jsonl / job_ids.json / retry_counts.json / events_state.json / supervisor.log）复制到 `docs/agent/classic_catalog/snapshots/2026-11-14/`，已核实存在。
+- `.tmp/classic-catalog-fullscale/supervisor.lock` 已删除（删前两次确认无 supervisor/classic_catalog 进程）。
+- 41 号文档 F-05 行已标 ✅ 已归档；若未来重启 CF 队列，再建每日快照机制。
+- 纯文档归档，不部署 ECS、未提交。
+
+### 2026-11-14 QRE-NL-BATCH-DEFECTS-20261114 四缺陷修复
+
+- NL 编译新增指标语义硬闸：红柱缩短必须有 `macd_hist > 0` 前置；BOLL 出场禁止整个 OR 分支为裸 `close < bb_upper`。非法产物进入既有 LLM 回喂，耗尽后以 `semantic_indicator_invalid` 明确报错；语义字典补真实列 `macdh_12_26_9` / `bbu_20_2_0_2_0`。
+- `StrategySpec.market_profile` 已接入 single/batch/shared 三入口，CLI 显式参数优先，manifest 不再把 YAML 值覆盖成 `built-in`。
+- `backtest-batch` 在装配行情前落实 ST/风险警示/停牌排除，并打印各类剔除数；小样本 `universe_excluded_st=4`、最终 `symbols=6`。
+- 验证：`tests/test_nl_indicator_semantics.py` 11 passed；NL/spec/静默失败回归 64 passed；batch 邻接 52 passed；`tests/test_cli.py` 325 passed。真实库 10 股 5 年（含 4 ST）与单股 1 年均成功，两个 manifest 均记录 `ashare_daily_default`。证据 `.tmp/nl-batch-defects-verify/`。
+- 未跑全量回测；未 commit/push。
+
+
+### 2026-11-14 Game T5/T2 + 部署与清理
+
+- Game T5 三份真实脱敏快照与离线 Store 已交付，T2 六项测试入库；新增 3 项快照契约测试，游戏回归 **37 passed**。详见 46 号 §13。
+- ECS 两次部署均成功：NL 四文件回滚点 `/tmp/qre-deploy-20261114T032607Z.bak`；Game 两文件回滚点 `/tmp/qre-deploy-20261114T033317Z.bak`。每次 qre-saas active，`/api/saas/factors` 与 `/saas/new` 均 200。
+- 清理：未发现死循环新增的业务文件或独立垃圾目录；删除 `.pytest_cache` 与 src/tests/scripts/.tmp/douyin-smoke 下 22 个 `__pycache__` 及残留 pyc。保留全部文档引用证据、真实快照与浏览器运行依赖。
+- 未 commit/push。

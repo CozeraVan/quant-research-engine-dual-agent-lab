@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "seed": 20261112,
+  "candidate_limit": 20,
+  "date_offset_days": 3650,
+  "snapshots": [
+    {
+      "file": "x00001b.json",
+      "symbol": "X00001B",
+      "bars": 1500,
+      "factor_rows": 1500,
+      "sha256": "ee7bc84860e64d32e8ed7796a51acb7b73135a5f1673e35425be620ff4033ef3"
+    },
+    {
+      "file": "x00002b.json",
+      "symbol": "X00002B",
+      "bars": 1500,
+      "factor_rows": 1500,
+      "sha256": "6124152de6683b6c8ff52f4948607ed4a482f8e5e5bcdfb2b02e90c529537c40"
+    },
+    {
+      "file": "x00003b.json",
+      "symbol": "X00003B",
+      "bars": 1500,
+      "factor_rows": 1569,
+      "sha256": "8b83a3638f2f5eaef77c82882384fba149aecc0f230658ba214d1446a8ec18e8"
+    }
+  ]
+}

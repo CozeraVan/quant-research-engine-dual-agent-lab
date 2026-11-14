@@ -107,7 +107,7 @@ def test_other_browser_cannot_access_session(client):
 
 
 def test_template_has_turn_based_layout_without_autoplay_or_shared_chips():
-    template = Path("src/quant_research_engine/game/templates/game.html").read_text()
+    template = Path("src/quant_research_engine/game/templates/game.html").read_text(encoding="utf-8")
     for marker in ("game-layout", "game-side", "markArea", "btn-advance", "btn-settle",
                    "factor-groups", "order-price"):
         assert marker in template

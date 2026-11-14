@@ -177,6 +177,58 @@
 
 ---
 
+### A-13 ECS 整机冻死：`/api/results` 列表接口把 worker 吃到 955MB ✅已治本（2026-11-13）
+
+- **现象**：用户报 `aguhuice.com` 无法连接，SSH/VNC 均卡死；重启实例后 VNC 画面仍「卡死」。
+  实测**公网本身已恢复**（19:47 `https://aguhuice.com/saas/` code=200 / 0.27s，SSH 秒回 banner），
+  VNC 里是重启前残留画面，不是服务未起。
+- **两级 OOM，必须区分**：
+  - 11/11 11:39:54、11:59:40、12:01:19 三次 → `constraint=CONSTRAINT_MEMCG`，
+    `oom_memcg=/system.slice/qre-saas.service`，anon-rss 980028 / 978088 / 979988 kB。
+    **cgroup 局部 OOM**，只杀 worker，systemd 自动重启，公网未中断。
+  - **11/13 19:42:01 → `cron invoked oom-killer` + `constraint=CONSTRAINT_NONE`（global_oom）**，
+    `Killed process 4214 (gunicorn) anon-rss:904652kB`。**整机内存枯竭**，
+    sshd / nginx 都申请不到内存 → 表现为「TCP 握手成功但零字节、sshd 150s 不发 banner」。
+    这才是用户看到的整机冻死。
+- **根因链**：ECS 仅 **1612MB 物理内存 + 零 swap**（`swapon --show` 空、`/etc/fstab` 无 swap 行）；
+  `qre-saas.service` `MemoryMax=1073741824`（1GiB，占物理内存 62%）、`MemoryHigh=infinity`；
+  另有约 300MB 常驻杂项（dockerd 78MB + containerd 47MB + fail2ban 44MB + tuned 28MB + multipathd 27MB …）。
+  worker 一旦冲到 900MB+，cgroup 上限还没触发，**整机先没内存** → 升级为 global OOM。
+- **真凶是列表接口，不是回测**（本轮最重要修正）。nginx error.log 决定性一行：
+  ```
+  19:44:23 [error] upstream prematurely closed connection while reading response header
+    request: "GET /api/results?sort=created_at&order=desc&page=1&page_size=20"
+    upstream: "http://127.0.0.1:8090/api/results?..."
+    host: "www.aguhuice.com", referrer: "https://www.aguhuice.com/saas/profile"
+  ```
+  即**个人中心拉回测记录列表**单次把 worker 打到 `anon-rss:955184kB`。
+  重启后 **95 秒**（19:42:48 起服 → 19:44:23 被杀）用户一打开个人中心就又炸一次，
+  `Consumed 8.401s CPU, 923.3M memory peak, 0B swap peak`，19:44:34 自动重启（NRestarts=1）。
+  **排除回测嫌疑**：生产库 `jobs` 表 `completed 257 / failed 2`，**无 running / queued**；
+  worker 是 WSL 侧独立进程（nginx 日志 `120.227.214.72` 每 5s `POST /api/worker/jobs/claim` 返回空队列）。
+- **基线占用很小，是单请求打上去的**：稳定期 worker RSS 78720KB + 72232KB + master 26980KB，
+  `MemoryCurrent≈138MiB`。所以不是「基础占用就危险」，而是**某个接口一次性能吃 900MB**。
+- **同族前科**：A-12 已记「showcase 因整列读 `chart_data` 把 2GB 实例 OOM」，
+  当时只修了 showcase（改取 `chart_data->'metrics'`）。**`/api/results` 是同一个病灶的漏网之鱼。**
+- **磁盘已排除**：`/` 40G，used 11G，avail 28G（28%）。
+- **顺带发现（非根因）**：gunicorn 每次启动报
+  `[ERROR] Control server error: [Errno 13] Permission denied: '/var/www/.gunicorn'`
+  （worker uid=33/www-data，家目录不可写），不影响服务。
+- **处置（已完成代码治本）**：`/api/results` 列表 SQL 由整列读 `r.chart_data` 改为只取
+  `r.chart_data -> 'metrics'`（`src/quant_research_engine/gui/saas/app.py` 4196 / 4211 行），
+  单行传输量从最大 1191kB 降到 432–440B；响应字段与语义不变，前端零改动。
+- **生产落地**：2026-11-13 20:03 部署 ECS，旧版备份
+  `/srv/aguhuice/qre/src/quant_research_engine/gui/saas/app.py.bak-2026-11-13-2003`；
+  `sudo -n systemctl restart qre-saas` 后 `MemoryCurrent` 145MiB → 约 122MiB，
+  `sudo -n journalctl -k --since "-15min"` 无 `oom|killed process`。
+- **回归**：`uv run pytest tests/test_gui_saas.py tests/test_no_silent_failure_patterns.py -q`
+  → 103 passed in 13.00s（新增 `test_results_list_does_not_load_full_chart_data`）。
+- **状态**：✅ 代码治本已部署；**登录态端到端待用户浏览器复核**（再点一次「回测记录」），**未 commit**。
+- **护栏进展（2026-11-13 22:47）**：F-26 收紧 cgroup、F-28 关无用常驻已由用户批准并实施验证；
+  F-25 加 swap 与服务器升配按用户要求暂缓。整机 available 842→954MB，公网正常、无新 OOM。
+
+---
+
 ## 2. 待修复清单（未来逐项推进）
 
 | ID | 项 | 影响 | 建议做法 | 优先级 |
@@ -185,13 +237,17 @@
 | F-02 | **回传重试未在大产物场景实测** ✅已修 | 此前只在小样本验过 | `test_result_upload_chunked.py` 新增 200 文件/4 分片 + 第 2 批 429 的集成测试，重试后完整落盘、退避 5s、不落 failed | ✅ |
 | F-03 | **并发深度不自适应** ✅已修 | 曾见 peak 16.09 GiB/18 GiB | `supervise.sh` 新增 `check_memory_pressure()`：peak ≥17 GiB 自动降为 1 路并重启驱动、写 40 号日志 | ✅ |
 | F-04 | **重任务与并行冲突未自动识别** | R-MEM-001 规则 6 要求「单任务 ≥8GiB 不得并行」，目前靠人工判断 | 由 `capacity.estimate_peak_budget(交易数)` 在提交前算预算，>8GiB 的策略打 `serial_only` 标记，驱动跳过并行位 | P1 |
-| F-05 | **CF 运行态不在版本控制内** | `job_ids.json`/`results.jsonl`/`retry_counts.json` 只在本机 `.tmp`，换机或清理即丢（本次已两次靠人工续接） | 每日快照进 `docs/agent/classic_catalog/snapshots/`（只保留最新 N 份）或入库 `cf_queue_state` 表 | P1 |
+| F-05 | **CF 运行态不在版本控制内** ✅已归档（2026-11-14） | `job_ids.json`/`results.jsonl`/`retry_counts.json` 只在本机 `.tmp`，换机或清理即丢（本次已两次靠人工续接） | 已执行：快照入 `docs/agent/classic_catalog/snapshots/2026-11-14/`（results.jsonl/job_ids.json/retry_counts.json/events_state.json/supervisor.log 五件）；`.tmp/classic-catalog-fullscale/supervisor.lock` 已删（删前两次确认无进程）。CF 队列 118/118 已终态，若未来重启队列再建每日快照机制 | ✅ |
 | F-06 | **重启时序未实测** ✅**已于 2026-11-10 10:35 崩溃重启中验证** | 无 | 证据：unit 10:35:25 进入 `activating (start-pre)` 并持续约 4 分钟，PG 10:39:11 才 accepting，worker 之后才拿到 MainPID；全程无 57P03 失败。后续只需保持该 drop-in 不被覆盖 | ✅ 已验证 |
 | F-07 | **`--concurrency` 与槽位不匹配时无告警** | 只提交不执行（A-06 的体验：有管线没并行） | 驱动启动时读 `systemctl cat` 的 `heavy-slots` 与 `--concurrency` 比对，不一致就打印显式告警 | P2 |
 | F-08 | **`_UPLOAD_HTTP_CLASSES` 与 SaaS 侧白名单靠测试锁一致** | 新增分类易漂移 | 已有 `test_worker_mirror_matches_saas_classes`；补一条「可重试集合也是 SaaS 侧可重试的子集」 | P2 |
 | F-09 | **监管与驱动的失败策略仍分散** | 失败处理散在 `run_queue`/`supervise`/worker 三处，语义要人读代码才懂 | 抽出 `docs/agent/36` 里的失败策略表：哪类失败自动重试、哪类停、哪类告警，单一来源 | P2 |
 | F-10 | **单机 8 核下 CPU 利用率仍低（~14%）** | 2 路只用到 ~0.5 核；并行深度受内存预算而非 CPU 限制 | 若后续把单任务预算实测降到 5GiB 级，可试 3 路（需 cgroup 18G 内 + F-03 的动态降档兜底），先做容量推演不直接上 | P2 |
 | F-11 | **状态轮询对 SSH 瞬断无重试** ✅已修 | 曾一次 rc=255 打死驱动 | `fullscale.py` 新增 `run_with_ssh_retry()`（rc=255 退避 2/5/15s，rc=1 不掩盖），设为默认 runner；3 例测试 | ✅ |
+| F-25 | **ECS 零 swap（A-13 救命项，暂缓）** | 1.6GB 物理内存 + Swap 0，内存尖峰直接升级 global OOM，整机冻死、SSH 进不去 | 用户 2026-11-13 决定暂不加 swap、不升配；原方案保留：4G swapfile + `vm.swappiness=10` | 暂缓 |
+| F-26 | **`qre-saas` cgroup 上限过宽（A-13） ✅已修** | 原 `MemoryMax=1GiB` 占物理内存 62%，可能先把整机拖入 global OOM | 2026-11-13 22:47 已建 drop-in：`MemoryMax=800M` + `MemoryHigh=650M`；实测 838860800/681574400，服务 active、NRestarts=0、MemoryCurrent≈118.8MiB，公网正常、无新 OOM | ✅ |
+| F-27 | **`/api/results` 列表接口整列读大 JSON（A-13 治本项） ✅已修** | 单次 `GET /api/results?page_size=20` 把 worker 吃到 955MB；A-12 修过 showcase 同族病灶，此接口漏网 | 已证实：`uid=6`（`17157845743`）名下 130 条 `kind='full'` 结果，`chart_data` 合计 135MB、单行最大 1191kB，列表却整列 select 后只取 `metrics`。已改 SQL 为 `r.chart_data -> 'metrics'`（432–440B/行），取值同步改 `row["chart_metrics"]`，`app.py:4196/4211`；响应字段与语义不变，前端零改动。回归 `tests/test_gui_saas.py::test_results_list_does_not_load_full_chart_data`（源码级断言禁止整列读回潮），`test_gui_saas.py + test_no_silent_failure_patterns.py` 103 passed。已部署 ECS，备份 `app.py.bak-2026-11-13-2003`。**第二轮（20:44）治本升级**：用户否决治标 → 真 SQL 分页（`ORDER BY`/`LIMIT`/`OFFSET`/`COUNT` 全下推 Postgres，NULL 排序语义照抄旧契约 + `j.id` tiebreaker）+ `api_strategy_detail` 子路径，单请求内存只与 `page_size` 成正比；**105 passed**，psql 实测单请求 **30 kB vs 旧 135 MB**、COUNT=130、翻页 overlap=0；备份 `app.py.bak-2026-11-13-2044`、md5 `86e9ab488751d8a7d2a82406c561fddc`，重启后 MemoryCurrent≈139.7 MiB、无新 OOM。残留：`sort=excess_return` 的 jsonb 排序 DB 侧仍 ~800ms（未来落真实列+索引）；生产登录态接口未实测 | ✅ |
+| F-28 | **ECS 常驻无用服务占内存（A-13） ✅已修** | `docker`+`containerd` 约 125MB（实施前再次确认为空）、`tuned` 28MB、`multipathd` 27MB | 2026-11-13 22:47 已停用并 disable docker.service/socket、containerd、tuned、multipathd.service/socket；未删除任何数据，fail2ban 保留。整机 used 770→658MB、available 842→954MB | ✅ |
 
 ---
 

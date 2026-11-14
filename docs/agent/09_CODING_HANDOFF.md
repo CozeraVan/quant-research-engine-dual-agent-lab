@@ -1,5 +1,35 @@
 # Coding Handoff
 
+## 2026-11-13 ECS F-26/F-28 内存护栏（已实施）
+
+- 用户批准收紧 cgroup 与关闭无用常驻；F-25 swap 和服务器升配暂缓。
+- `/etc/systemd/system/qre-saas.service.d/memory.conf`：`MemoryHigh=650M`、`MemoryMax=800M`；
+  daemon-reload + restart 后 active、NRestarts=0、MemoryCurrent≈118.8MiB。
+- docker.service/socket、containerd、tuned、multipathd.service/socket 已 disable --now；
+  实施前 docker 无运行容器，未删除任何数据；fail2ban 保持 active+enabled。
+- 整机 used 770→658MB、available 842→954MB；`/saas/`、login、showcase 均 200，
+  匿名 `/api/results` 401，无新 OOM。回退：删 drop-in 后 daemon-reload+restart；
+  原服务逐一 enable --now。纯系统配置，未 commit/push。
+
+## 2026-11-13 /api/results 真 SQL 分页（第二轮，已部署，未 commit）
+
+- 用户否决「只取 metrics」这层治标：读自己的记录不该弄崩服务器。改为单请求内存上界只与 `page_size` 成正比、与记录总数无关。
+- `src/quant_research_engine/gui/saas/app.py`：
+  - 第 39 行 `from sqlalchemy import bindparam, create_engine, text`。
+  - `api_results_list`（def 4176）**4189–4232**：`ORDER BY`（`j.created_at` 或 `NULLIF(r.chart_data->'metrics'->>'excess_return','')::double precision`，**desc NULLS FIRST / asc NULLS LAST**，逐字照抄旧 Python 排序语义）+ `j.id` tiebreaker + `LIMIT :limit OFFSET :offset`；`SELECT COUNT(*)` 用同一 FROM/WHERE 单独计数；showcase 改 `bindparam(expanding=True)` 只查当页 id。4182–4188 参数解析（`page_size` 上限 100、非法整数 400）与 4233–4267 items 组装**完全未动**，响应字段契约不变。
+  - `api_strategy_detail`（约 2019–2031）：`(r.chart_data -> 'metrics') AS chart_metrics`，`ORDER BY j.created_at DESC LIMIT 100` 保留（该接口不分页）。
+  - **不改 `_result_cols`**：三个 `_load_job_*` 均 `.mappings().first()` 单行，且被必须整列的 chart-data 接口共用。
+- 测试：`tests/test_gui_saas.py` 新增 `TestResultsApi::test_list_pagination_multi_page_and_nulls`（+31 行，多页不重叠 + NULL 排序）；`test_gui_saas.py + test_no_silent_failure_patterns.py` **105 passed in 13.50s**。
+- 部署：app.py **5429 行 / 278545 字节**，本地=生产 md5 **`86e9ab488751d8a7d2a82406c561fddc`**，备份 `app.py.bak-2026-11-13-2044`；restart 后 active / NRestarts=0 / MemoryCurrent=146452480（≈139.7 MiB）、`/saas/` 200、匿名 `/api/results` 401、`journalctl -k` 无新 OOM。
+- 未做：护栏 F-25/F-26/F-28（等批准）、`_result_cols` 改造、`excess_return` 落真实列 + 索引（DB 侧排序仍 ~800ms）、commit/push（等人工验收）。生产登录态接口未实测。
+
+## 2026-11-13 /api/results 只取 metrics（已部署，未 commit）
+
+- 改动：`src/quant_research_engine/gui/saas/app.py` 的 `api_results_list()` —— 4196 行 SQL 取 `(r.chart_data -> 'metrics') AS chart_metrics`（不再整列读 `r.chart_data`），4211 行 `metrics = row["chart_metrics"] or {}`；共 3 insertions / 2 deletions，响应字段与前端不变。回归：`tests/test_gui_saas.py::test_results_list_does_not_load_full_chart_data`。
+- 验证：`uv run pytest tests/test_gui_saas.py tests/test_no_silent_failure_patterns.py -q` → 103 passed in 13.00s。
+- 部署：`scp` 到 `/tmp/app.py.new` → 生产 `cp -a` 备份 `app.py.bak-2026-11-13-2003` → 覆盖 `/srv/aguhuice/qre/src/quant_research_engine/gui/saas/app.py` → `sudo -n systemctl restart qre-saas`；部署后 `/saas/` 200 / 0.252s、内存 145MiB → 约 122MiB、内核日志无新 OOM。
+- 未做：SQL 分页（`sort=excess_return` Python 侧全量排序、`total=len(items)` 需全量计数）、护栏 F-25/F-26/F-28、commit/push（等用户验收）。根因数据与故障证据见 41 号 A-13 / F-27。
+
 ## 2026-11-04 使用说明首列宽度（已部署，未 commit）
 
 - `gui/saas/templates/help.html`：七处首列 `width:120px`→`160px`；`tests/test_saas_help_copy.py` 加宽度/数量断言。
@@ -4578,3 +4608,20 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
   收尾提交 `8789a15`（2026-10-29 13:04，标题含「TV_ROUND4 R4-1~R4-4 + UI 第三轮」）
   把本轮 18 文件一并提交，且已推到 `origin/master`（本地与远端无差）。
   `deploy/saas/public-beta-audit/seed.json` 仍是唯一未跟踪文件，非本轮产物。
+
+## 2026-11-14 NL 指标语义 + batch 工程缺陷交接
+
+- 改动：`gui/nl_semantics.py`、`gui/nl_compiler.py`、`strategies/spec.py`、`apps/cli.py`；新增 `tests/test_nl_indicator_semantics.py`，并给 `tests/test_cli.py` 五个 batch FakeStore 补 `load_security_metadata`。
+- 接口只增不删：新 `indicator_semantic_issues`、两个 issue code；新 CLI helper `_resolve_market_profile` / `_apply_universe_exclusions`；`StrategySpec` 新增可选 `market_profile`。
+- 命令：`uv run pytest tests/test_nl_indicator_semantics.py tests/test_nl_semantics.py tests/test_strategy_spec.py tests/test_no_silent_failure_patterns.py tests/test_universe.py tests/test_streaming_batch.py tests/test_batch_runner.py tests/test_portfolio_batch.py tests/test_cli.py -q`。
+- 真实验证产物：`.tmp/nl-batch-defects-verify/batch_10_5y/` 与 `single_1_1y/`；4 支 ST 已剔除、profile 已正确落 manifest。
+- 抖音 100 股公网挂账号仍阻塞于浏览器登录；Game T5/T2 待下一切片。未 commit/push。
+
+
+## 2026-11-14 Game T5/T2 实施交接
+
+- 快照生产：`uv run python scripts/game/export_snapshot.py`（需本地 QRE_MARKET_DB_URL）；输出 `data/game_snapshots/`。
+- Windows 消费：`scripts/game/snapshot_store.py` 的 `SnapshotGameStore`，构造参数为快照目录；六方法零 DB。
+- 测试：`uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py tests/test_game_snapshot_store.py -q` → 37 passed。
+- `game/validation.py` 只重算 `*_close` 表因子，typical_price 不再误报；`game.html` 已显式 grid。两文件 ECS 已部署。
+- 清理仅可再生缓存；`.tmp/nl-batch-defects-verify/` 等证据未删。未 commit/push。
