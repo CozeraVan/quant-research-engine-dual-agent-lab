@@ -258,6 +258,26 @@ class TestPasswordLoginLockout:
                            json={"phone": phone, "password": "abc12345"}).status_code == 429
 
 
+class TestSmsLoginWithExistingPassword:
+    def test_explicit_sms_mode_bypasses_password_path(self, client, app):
+        phone = "13800029999"
+        _register(client, phone, "abc12345")
+        _send_code(client, phone)
+        code = _code_for(app, phone)
+
+        response = client.post(
+            "/api/saas/auth/login",
+            json={"phone": phone, "code": code, "auth_mode": "sms"},
+        )
+
+        assert response.status_code == 200, response.get_json()
+        assert response.get_json()["token"]
+        # 默认密码路径保持兼容，且显式短信错误码不能拿去试密码。
+        assert client.post(
+            "/api/saas/auth/login", json={"phone": phone, "password": "abc12345"}
+        ).status_code == 200
+
+
 class TestMembershipEndpoint:
     def test_requires_login(self, client):
         resp = client.get("/api/saas/membership")

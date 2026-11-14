@@ -3180,3 +3180,24 @@ uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py test
 快照：X00001B/X00002B/X00003B，各 1500 bars；真实代码正则 0 命中
 ECS qre-saas active；/api/saas/factors 200；/saas/new 200
 ```
+
+
+## 2026-11-14 短信登录 hotfix 自审
+
+### Review Status
+
+PASS（已部署并实测 uid=6 登录、job 提交与结果读取；待提交）
+
+### Findings
+
+- 显式 `auth_mode=sms` 只改变凭证路径选择，不绕过 `_consume_sms_code`；密码路径、防爆破与默认兼容行为不变。
+- Required Fixes：无。job 358 已完成且归 uid=6；结果指标为策略事实，不构成投资建议。
+
+### Validation Evidence
+
+```text
+test_saas_membership_auth.py → 22 passed
+test_gui_saas.py → 85 passed
+模板 inline JS + 静默失败 → 47 passed, 13 skipped
+生产登录 me.id=6 / is_admin=true；job 358 completed / symbols=100 / HTTP 200
+```

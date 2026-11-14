@@ -383,7 +383,7 @@ $('btn-code-login').addEventListener('click', async function(){
   var btn = $('btn-code-login');
   btn.disabled = true;
   try {
-    var r = await postJson('/api/saas/auth/login', {target: target, code: code});
+    var r = await postJson('/api/saas/auth/login', {target: target, code: code, auth_mode: 'sms'});
     if (!r.resp.ok || !r.data || !r.data.ok){
       setError((r.data && r.data.error) || ('登录失败（HTTP ' + r.resp.status + '）'));
       return;

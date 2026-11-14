@@ -2854,3 +2854,11 @@ exit:  (macd_hist < macd_hist.shift(1)) or (kdj_k < 70)
 - 本轮 F-05、NL 四缺陷、Game T5/T2 已提交并推送：`ba2000b feat: harden strategy compilation and add game snapshots`（origin/master）。
 - 暂存区导出复测 **345 passed**；Chanlun 与其他历史工作树改动均未混入。
 - 抖音挂账号仍阻塞：用户已在自有浏览器登录，但 WebBridge `classic-catalog-smoke` 会话连续返回 401；已把该受控会话切到 `/saas/login`，需在此窗口完成登录后恢复。
+
+
+### 2026-11-14 抖音 100 股 5 年公网回测 + 短信登录缺陷修复
+
+- 受控会话短信登录时定位真 bug：账号已有 `password_hash` 后，6 位短信码被强制按密码校验。`POST /api/saas/auth/login` 新增可选 `auth_mode: "sms"`，登录页验证码入口显式携带；默认密码路径与防爆破不变。
+- 验证：新增已有密码账号短信登录回归；`test_saas_membership_auth.py` 22 passed、`test_gui_saas.py` 85 passed、模板/静默失败 47 passed + 13 skipped。ECS 已部署，回滚点 `/tmp/qre-deploy-20261114T035601Z.bak`，qre-saas active。
+- uid=6 登录成功并提交 **job 358 / strategy 316**，kind=full，100 股、2021-11-13 至 2026-11-13、每股独立 10 万，状态 **completed**；归属已确认 uid=6。公网 API 复验 HTTP 200 / completed / symbol_count=100。
+- 结果：总交易 2982、traded_symbol_count=100、strategy_total_return=-0.0323073、buy_hold_return=0.0429487、excess=-0.0752560、win_rate=0.4386318、max_drawdown=-0.0427523。证据 `.tmp/douyin-smoke/public_job_result.json`。

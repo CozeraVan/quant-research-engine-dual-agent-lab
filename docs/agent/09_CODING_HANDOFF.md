@@ -4625,3 +4625,10 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
 - 测试：`uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py tests/test_game_snapshot_store.py -q` → 37 passed。
 - `game/validation.py` 只重算 `*_close` 表因子，typical_price 不再误报；`game.html` 已显式 grid。两文件 ECS 已部署。
 - 清理仅可再生缓存；`.tmp/nl-batch-defects-verify/` 等证据未删。未 commit/push。
+
+
+## 2026-11-14 短信登录 hotfix + 抖音公网 job
+
+- 登录合同新增可选 `auth_mode: sms`；已有密码账号必须能显式选择短信验证码，不传时保持密码优先以兼容旧客户端。
+- 改动：SaaS `app.py` 一个条件分支、登录模板一处请求参数、`test_saas_membership_auth.py` 一项回归。
+- 抖音生产结果：`/saas/jobs/358`，uid=6，completed，100 股 5 年；本地证据 `.tmp/douyin-smoke/public_job_result.json`。

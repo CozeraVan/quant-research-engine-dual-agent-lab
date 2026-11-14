@@ -2679,7 +2679,7 @@ def create_saas_app() -> Flask:
                     text("SELECT id, password_hash FROM users WHERE phone = :t"),
                     {"t": lookup},
                 ).mappings().first()
-                if pw_user is not None and pw_user["password_hash"]:
+                if pw_user is not None and pw_user["password_hash"] and data.get("auth_mode") != "sms":
                     # 防爆破只作用于密码路径：先查锁，再验密码，失败计数
                     if attempts_ready:
                         attempt = conn.execute(
