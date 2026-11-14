@@ -1,5 +1,21 @@
 # Task Handoff
 
+## 《我不是股神》按需公网上线（2026-11-15，DONE）
+
+- 入口 `https://aguhuice.com/game`；Windows 至 `28034a3` 的 S4/换股/终局总结及审计修复已整合，游戏与生产测试 68 passed，前端守卫 47 passed / 13 skipped。
+- 采用 on-demand 单股直读 + WSL 主动 SSH 反向隧道，ECS 不落行情明细。`qre-game` 与 `qre-game-tunnel` 已 enabled/active，nginx 已备份并 reload。
+- 公网开局、回合、非终局匿名、owner 隔离和真实 DB 终局 reveal 全通过。冷开局约 22–26 秒，未达建议亚秒估算，性能 profiling 为后续优化项。
+- 用户已明确要求 commit/push；本轮只提交游戏、相关测试、部署与文档，不带入其他主线遗留改动。
+
+## 《我不是股神》Windows 第三轮集成（2026-11-14，待补两项旧测试与 typical 核查）
+
+- 已把 `game/windows-dev` 至 `fd832b8` 的 S1/S2/S3、真实快照五年驱动、显式连播和两位小数改动集成到 master 工作树；`game.html` 仅 `.kv-grid` 一处冲突，保留 Windows 完整双列网格定义。
+- 同步五个 `scripts/win/game_*`/预览脚本、`game/data.py`、`session.py`、`web.py`、新 gameplay/windows 测试；保留 WSL 新版 `validation.py`，未回退审计契约。
+- 验证：游戏套件 **54 passed / 3 failed**；模板与静默失败守卫 **47 passed / 13 skipped**；`git diff --check` 通过。失败为两项旧 T4 断言和 typical_price 691 mismatches，详见 10 号自审，不能宣称全绿。
+- 按用户边界：**未部署 ECS、未 commit/push**。下一步分离处理旧契约测试更新与 typical 真实数据差异。
+- 2026-11-14 已通过 lanbus 派给 `imnotstockgod` 修复，任务 `ea982ae0e7d0`（parent `e341fcdfce98`）：要求逐 canonical/index 定位 typical 根因、更新两项旧 T4 契约、复跑完整游戏及模板守卫；禁止删断言/放宽容差掩盖问题，禁止 ECS/push。
+- 最新核查：修复已写 Windows 工作区，静态根因为 EMA 跨 basis 缓存污染；但任务因权限门 **failed / exit 126**，pytest/commit 未执行。用户人工测试期间冻结推进，WSL 暂不同步、不复跑。
+
 ## /api/results 列表 OOM 治本（2026-11-13，已部署待验收）
 
 - 用户以管理员 `17157845743` 点「回测记录」报「加载失败」→ 根因是列表接口整列读 chart_data（该账号 130 条 / 135 MB）打爆 1GiB cgroup。第一轮改只取 `chart_data->'metrics'`（103 passed，内存 145MiB → 约 122MiB）。
@@ -3195,3 +3211,15 @@ FRM 间歇缺失已修复：根因是 result/files 20MB 上限按文件名字典
 
 - average_price 输入和审计已完成并部署。
 - SaaS 蓝图阻塞于 Windows 最新代码未推送、ECS 无行情库；不以旧版或假数据冒充完成。
+
+
+## 2026-11-14 快照裁定与 job 359 完成
+
+- Windows 可复跑新快照；全集 typical/risk/liquidity 有值，EMA 暖机审计已修。
+- job 359 全 A 全历史已完成，结果与 run_config 采样边界已核验。
+
+
+## 2026-11-14 Game 暂时挂起
+
+- 用户明确挂起《我不是股神》，当前阶段证据已同步 Windows；恢复时再完成最终复跑与 SaaS 蓝图。
+- 主线候选：回测复现合同深化、持续策略更新与赢家聚类、ProfileShareJs 测试 harness、F-04 重任务串行护栏、EMA250 生成口径核查。

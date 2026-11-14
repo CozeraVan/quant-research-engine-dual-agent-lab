@@ -20,6 +20,8 @@ class GameSession:
     game_bars: int = 1250
     display_name: str = "B"
     display_code: str = "X00001B"
+    # S1：自选初始资金透传到引擎；默认基线 1,000,000 不变（22 号:28）。
+    initial_cash: float = 1_000_000.0
 
     def __post_init__(self) -> None:
         required = self.warmup_bars + self.game_bars
@@ -29,7 +31,9 @@ class GameSession:
             raise GameRuleError("随机窗口越界")
         self.cursor = self.start_index + self.warmup_bars - 1
         self.phase = "closed"
-        self.engine = DailyGameEngine()
+        self.engine = DailyGameEngine(initial_cash=self.initial_cash)
+        # S1：逐日权益曲线，首点为初始资金；每次 close_day 追加结算后权益。
+        self.equity_curve: list[float] = [float(self.initial_cash)]
         self.factors: dict[int, dict[str, float | None]] = {}
         self.loaded_canonicals: set[str] = set()
         self.selected_canonicals: tuple[str, ...] = ()
@@ -61,6 +65,23 @@ class GameSession:
     @property
     def equity(self) -> float:
         return self.engine.equity
+
+    @property
+    def return_pct(self) -> float:
+        """累计收益率 = 当前权益 / 初始资金 - 1（小数，非百分数）。"""
+        base = self.engine.initial_cash
+        return self.engine.equity / base - 1.0 if base else 0.0
+
+    @property
+    def max_drawdown(self) -> float:
+        """权益曲线峰谷最大回撤（小数，>=0）；仅统计已结算日。"""
+        peak = 0.0
+        drawdown = 0.0
+        for value in self.equity_curve:
+            peak = max(peak, value)
+            if peak > 0:
+                drawdown = max(drawdown, (peak - value) / peak)
+        return drawdown
 
     @property
     def total_cost(self) -> float:
@@ -144,6 +165,7 @@ class GameSession:
             fill = self.engine.settle_pending(bar)
             unfilled = None if fill is not None else self.engine.events[-1].get("reason", "unfilled")
         self.engine.close_day(bar)
+        self.equity_curve.append(float(self.engine.equity))
         self.phase = "closed"
         self.settlement = {
             "t": self.cursor - self.start_index + 1,
@@ -166,7 +188,8 @@ class GameSessionFactory:
     warmup_bars: int = 250
     game_bars: int = 1250
 
-    def create(self, candidates: dict[str, list[Bar]], *, seed: int | None = None) -> GameSession:
+    def create(self, candidates: dict[str, list[Bar]], *, seed: int | None = None,
+               initial_cash: float = 1_000_000.0) -> GameSession:
         required = self.warmup_bars + self.game_bars
         eligible = [symbol for symbol in sorted(candidates) if len(candidates[symbol]) >= required]
         if not eligible:
@@ -176,4 +199,5 @@ class GameSessionFactory:
         symbol = rng.choice(eligible)
         start_index = rng.randint(0, len(candidates[symbol]) - required)
         return GameSession(symbol=symbol, bars=candidates[symbol], start_index=start_index,
-                           seed=actual_seed, warmup_bars=self.warmup_bars, game_bars=self.game_bars)
+                           seed=actual_seed, warmup_bars=self.warmup_bars, game_bars=self.game_bars,
+                           initial_cash=initial_cash)

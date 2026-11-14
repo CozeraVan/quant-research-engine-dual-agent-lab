@@ -1,3 +1,10 @@
+### 2026-11-15: Game 公网采用按需单股直读 + WSL 主动反向隧道（QRE-GAME-ONDEMAND-PUBLIC）
+
+- Decision: 不上传全市场快照，不让 ECS 直连行情库。浏览器 `/game` 经 ECS nginx → 回环 8092 → WSL 主动 SSH 反向隧道 → 家庭只读 PG；仅抽中的单股与所需因子进入内存会话。真实身份只在 finished reveal 下发，DB 会话日期偏移为 0。
+- Rationale: 保留 ECS 无行情明细、家庭无公网入站的既定安全边界，同时解除三只离线快照限制。单 worker 多线程避免内存会话跨 worker 丢失。
+- Verification: 68 游戏测试 + 47 前端守卫通过；真实 DB 250 回合终局 reveal 通过；公网开局、owner 隔离、主要 SaaS 页面均通过。
+- Owner: KIMI_CODE；用户明确批准上线及 commit/push。
+
 ### 2026-11-04: Authing 完全移除，身份权威收敛为自建手机号登录 + Casdoor OIDC
 
 - Decision: 删除 `authing.py`、`tests/test_saas_authing.py`、`GET /saas/login/authing`、`POST /api/saas/auth/authing`、`POST /api/saas/auth/bind`、`users.authing_id`/`idx_users_authing`、登录页 Authing 入口与 `.auth-authing` 样式；`oidc_client.get_config` 只保留 Casdoor；callback 只按 Casdoor state 分流。schema 用 `DROP INDEX IF EXISTS` + `DROP COLUMN IF EXISTS`，新旧库幂等。`/api/saas/auth/bind` 直接删除、不做替代，老用户改走手机号 + 短信验证码登录/找回（按 `users.phone` 匹配），`users.email` 仅作历史数据保留。
@@ -1598,7 +1605,7 @@ No open questions remain.
 - Owner: KIMI_CODE（用户 2026-11-01 指示继续未完成任务）
 
 ### 2026-11-12: game 开局配置白名单与 _state 三字段按只增不改接受（QRE-GAME-CONFIG-WHITELIST-AND-STATE-ADDITIVE）
-- Decision: 同意修订 22 号验收基准，开局配置改白名单校验：`game_bars ∈ {250, 750, 1250}`、`initial_cash ∈ {100000, 500000, 1000000, 5000000}`，白名单为服务端最终闸（前端下拉仅便利，篡改请求体必须被拒）；`1250 / 1,000,000` 仍为默认基线，旧验收结论不作废。S3「播放/暂停/单步/倍速」计入阶段 1 验收，但必须守 V1.1 回合制：播放/结算只收束当前一根 K 线随后立即停止，不得跨日自动连播，倍速只缩短单根收束动画时长。`_state` 新增 `initial_cash` / `return_pct` / `max_drawdown` 三键按「只增不改」接受，口径见 22 号 §16.3（`return_pct` 为小数比率非百分数；`max_drawdown` 恒 >= 0，负号由前端显示层自行处理）。
+- Decision: 同意修订 22 号验收基准，开局配置改白名单校验：`game_bars ∈ {250, 750, 1250}`、`initial_cash ∈ {100000, 500000, 1000000, 5000000}`，白名单为服务端最终闸（前端下拉仅便利，篡改请求体必须被拒）；`1250 / 1,000,000` 仍为默认基线，旧验收结论不作废。S3「播放/暂停/单步/倍速」计入阶段 1 验收，必须守 V1.1 回合制：单根收束动画不自动进入下一回合；2026-11-14 用户人工测试后批准显式连播例外，允许跨日自动推进，但每天仍真实结算，停止条件为有待成交委托、发生成交、本局结束或手动暂停；倍速同时调节单根动画与连播节奏。`_state` 新增 `initial_cash` / `return_pct` / `max_drawdown` 三键按「只增不改」接受，口径见 22 号 §16.3（`return_pct` 为小数比率非百分数；`max_drawdown` 恒 >= 0，负号由前端显示层自行处理）。
 - Reason: 默认值未变，既有 1250/100 万口径下的全部实测结论仍然成立，不需要重跑基线；S3 四控件本就写在 22 号 §8 阶段 1（L149）设计项内，补齐属还设计欠账而非扩范围；三字段为纯 additive，下游缺键按可选读取即可兼容存量快照与既有消费方，改既有字段语义反而会破坏兼容。
 - Alternatives: 「拒绝白名单、维持硬编码单基线」被否——会挡住短局/小资金的合理用例，且服务端校验比硬编码更能防篡改；「要求按新白名单重跑全部基线」被否——默认配置未变，重跑无信息增量；「后端直接输出负值 max_drawdown」被否——回撤幅度作为统计量恒非负，符号属展示层职责，后端翻符号会与 SaaS 结果页/审计脚本口径冲突。
 - Impact: 下游（SaaS 结果页、审计脚本、旧快照 JSON）对三键一律缺键不抛错、按可选读取；主仓当前 grep 无 `return_pct`/`max_drawdown`，三键与白名单均只存在于 Windows `game/windows-dev` 检出，属契约预告，cherry-pick 进 master 时才生效。T5（3–5 只脱敏真实快照，每只 1500 根 = warmup 250 + game 1250，同 SampleGameStore 六方法接口）与两项 tests 待办（6 项测试对齐入库 `tests/test_game_windows_fixes.py`、既有 tests 的 `read_text()` 补 `encoding="utf-8"`）归 WSL 主 Agent，不派回 Windows。

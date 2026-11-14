@@ -161,7 +161,7 @@ def test_audit_against_game_bars_detects_mismatch_directly():
 
     shifted = {index: {EMA5: value * 1.3} for index, value in enumerate(expected) if value is not None}
     dirty = audit_price_factors(bars, shifted, [EMA5])
-    assert dirty["mismatches"] == len(shifted)
+    assert dirty["mismatches"] == len(shifted) - 16  # 4 个种子点 + 4×EMA5 暖机段不审计
 
 
 def test_family_classification_matches_evidence():

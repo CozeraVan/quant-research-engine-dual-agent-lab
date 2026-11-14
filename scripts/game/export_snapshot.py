@@ -17,7 +17,7 @@ from quant_research_engine.data.postgres import PostgresDataStore
 from quant_research_engine.data.settings import DatabaseSettings
 from quant_research_engine.data.universe_rules import filter_untrusted_symbols
 from quant_research_engine.game.data import PostgresGameDataProvider
-from quant_research_engine.game.factors import DEFAULT_CANONICALS
+from quant_research_engine.game.factors import factor_catalog
 
 REQUIRED_BARS = 1500
 
@@ -55,10 +55,15 @@ def export_snapshots(
     random.Random(seed).shuffle(symbols)
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, Any]] = []
-    requests = [
-        FactorFieldRequest.from_target(canonical, canonical)
-        for canonical in DEFAULT_CANONICALS
-    ]
+    # 与 GUI 增选全集一致；不能只导 DEFAULT_CANONICALS 让真实副图空白。
+    requests = []
+    skipped_factor_targets = []
+    for item in factor_catalog():
+        try:
+            requests.append(FactorFieldRequest.from_target(item["canonical"], item["canonical"]))
+        except ValueError:
+            # 少数上游列名含 %，不受 FactorFieldRequest DSL 支持；显式登记而非静默丢弃。
+            skipped_factor_targets.append(item["canonical"])
     for source_symbol in symbols[:candidate_limit]:
         rows = [
             row for row in provider.load_raw_bars(source_symbol, date(2000, 1, 1), latest)
@@ -112,6 +117,7 @@ def export_snapshots(
         "seed": seed,
         "candidate_limit": candidate_limit,
         "date_offset_days": date_offset_days,
+        "skipped_factor_targets": skipped_factor_targets,
         "snapshots": manifest,
     }
     (output_dir / "manifest.json").write_text(

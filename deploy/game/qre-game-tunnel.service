@@ -1,0 +1,16 @@
+[Unit]
+Description=QRE game reverse tunnel to aguhuice.com
+After=network-online.target qre-game.service
+Wants=network-online.target qre-game.service
+
+[Service]
+Type=simple
+User=van
+ExecStart=/usr/bin/ssh -N -T -i /home/van/.ssh/aguhuice_ed25519 -R 127.0.0.1:8092:127.0.0.1:8092 -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes deploy@47.119.127.40
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

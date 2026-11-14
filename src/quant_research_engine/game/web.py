@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 from dataclasses import dataclass
+from datetime import timedelta
+from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
+from quant_research_engine.factor_basis import FACTOR_BASIS_QFQ_ANCHOR_V1
 from quant_research_engine.game.engine import GameRuleError
 from quant_research_engine.game.factors import GROUP_LABELS, GROUP_ORDER, factor_catalog
 from quant_research_engine.game.session import GameSession
 
 OWNER_COOKIE = "qre_game_owner"
+
+# S1：开局配置白名单（服务端最终闸，防篡改 22 号:97）。默认基线 1250 / 1,000,000 不变。
+ALLOWED_GAME_BARS = (250, 750, 1250)
+ALLOWED_INITIAL_CASH = (100_000, 500_000, 1_000_000, 5_000_000)
 
 
 @dataclass
@@ -23,13 +31,17 @@ class GameSessionRegistry:
         if self.sessions is None:
             self.sessions = {}
 
-    def create(self) -> GameSession:
-        game = self.provider.create_session()
+    def create(self, **options) -> GameSession:
+        game = self.provider.create_session(**options)
         game_id = secrets.token_urlsafe(24)
         while game_id in self.sessions:
             game_id = secrets.token_urlsafe(24)
         game.web_id = game_id
         game.owner_id = secrets.token_urlsafe(24)
+        # DB 按需会话使用真实日期，只有离线快照才应用导出时的日期偏移。
+        if not game.symbol.startswith("X"):
+            game.reveal_date_offset_days = 0
+            game.reveal_identity = self.provider.reveal_identity(game.symbol)
         self.sessions[game_id] = game
         return game
 
@@ -38,6 +50,65 @@ class GameSessionRegistry:
         if game is None or game.owner_id != owner_id:
             return None
         return game
+
+
+# 终局揭示的数据来源（只读，零 DB）：快照脱敏元数据 manifest.json 的日期偏移，
+# 以及可选的真实身份映射 identity.json（匿名代码 → {name, code}）。
+# identity.json 由 WSL 侧提供（真实名称只在终局揭示，游戏中全程匿名）；缺失时真实名称留空，
+# 前端显示「待揭示」占位——这是「需要 WSL 补充的接口」，Windows 不伪造真实证券名称。
+_SNAPSHOT_DIR = Path(__file__).resolve().parents[3] / "data" / "game_snapshots"
+
+
+def _reveal_meta() -> tuple[int, dict]:
+    offset = 0
+    identity: dict = {}
+    try:
+        manifest = json.loads((_SNAPSHOT_DIR / "manifest.json").read_text(encoding="utf-8"))
+        offset = int(manifest.get("date_offset_days", 0))
+    except (OSError, ValueError, TypeError):
+        offset = 0
+    try:
+        loaded = json.loads((_SNAPSHOT_DIR / "identity.json").read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            identity = loaded
+    except (OSError, ValueError, TypeError):
+        identity = {}
+    return offset, identity
+
+
+def _reveal(game: GameSession) -> dict:
+    """仅终局随 _state 下发：真实名称/代码 + 真实时间区间 + 总结统计。
+
+    真实日期 = 快照日期 − 脱敏偏移（manifest.date_offset_days）；游戏中 K 线只用匿名 turn，
+    真实日期与名称只在 finished 后揭示。equity_curve / trade_marks 供总结页收益曲线与买卖点。
+    """
+    snapshot_offset, identity = _reveal_meta()
+    offset = getattr(game, "reveal_date_offset_days", snapshot_offset)
+    ident = getattr(game, "reveal_identity", None)
+    if ident is None:
+        ident = identity.get(game.symbol, {}) if isinstance(identity, dict) else {}
+    if not isinstance(ident, dict):
+        ident = {}
+    first_idx = game.start_index + game.warmup_bars
+    last_idx = game.cursor
+    shift = timedelta(days=offset)
+    turn_of = {bar.trade_date: idx - game.start_index + 1 for idx, bar in enumerate(game.bars)}
+    return {
+        "real_name": ident.get("name"),
+        "real_code": ident.get("code"),
+        "start_date": (game.bars[first_idx].trade_date - shift).isoformat(),
+        "end_date": (game.bars[last_idx].trade_date - shift).isoformat(),
+        "selected_bars": game.game_bars,
+        "played_bars": last_idx - first_idx + 1,
+        "date_offset_days": offset,
+        "equity_curve": [float(value) for value in game.equity_curve],
+        "trade_marks": [
+            {"t": turn_of.get(fill.trade_date), "side": fill.side.value,
+             "price": fill.price, "quantity": fill.quantity, "cost": fill.cost,
+             "date": (fill.trade_date - shift).isoformat()}
+            for fill in game.trades
+        ],
+    }
 
 
 def _state(game: GameSession) -> dict:
@@ -49,6 +120,10 @@ def _state(game: GameSession) -> dict:
         "cursor": game.cursor - game.start_index + 1,
         "warmup_bars": game.warmup_bars,
         "game_bars": game.game_bars,
+        # S1：资金基线与收益统计（additive，默认值不变；收益率/回撤为小数）。
+        "initial_cash": game.engine.initial_cash,
+        "return_pct": game.return_pct,
+        "max_drawdown": game.max_drawdown,
         "finished": game.finished,
         "should_end": game.engine.should_end,
         "history": game.public_history(),
@@ -70,6 +145,10 @@ def _state(game: GameSession) -> dict:
         "selected": list(game.selected_canonicals),
         "loaded": sorted(game.loaded_canonicals),
         "price_anchor": getattr(game, "price_anchor", None),
+        # QRE-FACTOR-BASIS-CONTRACT 第 1 条：生成侧显式带口径标记（46 号 T3）。
+        # 游戏价格型因子已按 K 线前复权锚点换算（族白名单除以 anchor），
+        # 满足 qfq_anchor_v1；沿用现有 price_basis 逻辑，不新增换算层。
+        "factor_basis": FACTOR_BASIS_QFQ_ANCHOR_V1,
         "factor_audit": getattr(game, "factor_audit", None),
         "factor_errors": dict(getattr(game, "factor_errors", {}) or {}),
         "trades": [
@@ -77,6 +156,8 @@ def _state(game: GameSession) -> dict:
              "quantity": fill.quantity, "cost": fill.cost}
             for fill in game.trades
         ],
+        # 终局揭示（additive，仅 finished 下发；游戏中为 None，不泄露真实身份/日期）。
+        "reveal": _reveal(game) if game.finished else None,
     }
 
 
@@ -102,15 +183,28 @@ def create_game_app(provider: object, *, testing: bool = False) -> Flask:
 
     @app.post("/game/api/sessions")
     def create_session():
+        data = request.get_json(silent=True) or {}
+        options: dict = {}
+        for key, allowed in (("game_bars", ALLOWED_GAME_BARS), ("initial_cash", ALLOWED_INITIAL_CASH)):
+            if key not in data:
+                continue
+            try:
+                value = int(data[key])
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"{key} 必须为整数"}), 400
+            if value not in allowed:
+                return jsonify({"ok": False, "error": f"{key} 仅支持 {list(allowed)}"}), 400
+            options[key] = value
         try:
-            game = registry.create()
+            game = registry.create(**options)
         except GameRuleError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         owner = request.cookies.get(OWNER_COOKIE) or game.owner_id
         game.owner_id = owner
         response = jsonify(_state(game))
         response.set_cookie(OWNER_COOKIE, owner, max_age=60 * 60 * 24 * 365,
-                            httponly=True, samesite="Lax")
+                            httponly=True, samesite="Lax",
+                            secure=bool(app.config.get("GAME_COOKIE_SECURE")))
         return response
 
     def authorized(game_id: str) -> GameSession | None:

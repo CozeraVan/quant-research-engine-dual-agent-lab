@@ -13,6 +13,9 @@ from quant_research_engine.game.factors import factor_catalog
 
 ABS_TOLERANCE = 0.02
 REL_TOLERANCE = 2e-3
+# 全历史 EMA 与窗口首根 SMA 种子存在几何衰减差；只豁免 4×span 的暖机段，
+# 之后的任何单点异常仍逐项计数，避免把真实错位/缺数据一并隐藏。
+EMA_SEED_WARMUP_MULTIPLIER = 4
 
 _EMA_RE = re.compile(r"^ema_(\d+)$")
 _SMA_RE = re.compile(r"^sma_(\d+)$")
@@ -92,7 +95,14 @@ def _expected_series(column: str, closes, cache: dict):
 
 
 def audit_price_factors(bars, factors: dict, canonicals) -> dict:
-    """逐点比对因子表值与按游戏 K 线重算的值；只审计可重算的价格型列。"""
+    """逐点比对因子表值与按游戏 K 线重算的值；只审计可重算的价格型列。
+
+    重算输入按 canonical 所属口径表选择（close / typical_price / average_price），
+    每个口径独立缓存：_expected_series 的内层缓存键只含公式与参数（如
+    ("ema", "5")），跨口径共用同一个 cache 时，先审计的 close 会把 typical /
+    average 的同名列误配到收盘价序列——2026-11-14 样本 typical 691 处误报的
+    根因即此（checked=11383 中 691 处全部落在 typical.ema_5，非暖机、非上游异常）。
+    """
     closes = [float(bar.close) for bar in bars]
     catalog = {item["canonical"]: item for item in factor_catalog()}
     cache: dict = {}
@@ -103,23 +113,40 @@ def audit_price_factors(bars, factors: dict, canonicals) -> dict:
     }
     for canonical in canonicals:
         item = catalog.get(canonical)
-        # 只有 close 口径能由游戏 OHLC 的收盘价重算；typical_price 等输入不同，
-        # 拿 close 重算会制造误报，未登记口径继续按 skipped 处理。
         if item is None:
+            summary["canonicals"][canonical] = {"checked": 0, "mismatches": 0, "skipped": True}
             continue
-        if item["table"].endswith("_average_price"):
-            expected = [bar.average_price for bar in bars]
-        elif item["table"].endswith("_close"):
-            expected = _expected_series(item["column"], closes, cache)
+        table = item.get("table", "")
+        if table.endswith("_average_price"):
+            # 先求 VWAP（Bar.average_price 已按会话复权比率换算），再按该因子
+            # 的公式计算；不能直接把所有 average_price 口径列都当成 VWAP 本体
+            # （EMA/MACD/BOLL 等会被误判 100%）。
+            series = [bar.average_price for bar in bars]
+            if any(value is None for value in series):
+                # 缺 vol/amount 的 bar 还原不了均价，整列不做猜测性重算。
+                summary["canonicals"][canonical] = {"checked": 0, "mismatches": 0, "skipped": True}
+                continue
+            basis = "average_price"
+        elif table.endswith("_typical_price"):
+            series = [(bar.high + bar.low + bar.close) / 3 for bar in bars]
+            basis = "typical_price"
+        elif table.endswith("_close"):
+            series = closes
+            basis = "close"
         else:
-            # typical_price 等输入不同，未登记口径继续按 skipped 处理。
+            # 未登记价格口径不做猜测性重算，显式 skipped。
+            summary["canonicals"][canonical] = {"checked": 0, "mismatches": 0, "skipped": True}
             continue
+        expected = _expected_series(item["column"], series, cache.setdefault(basis, {}))
         if expected is None:
+            summary["canonicals"][canonical] = {"checked": 0, "mismatches": 0, "skipped": True}
             continue
+        ema_match = _EMA_RE.match(item["column"])
+        warmup = int(ema_match.group(1)) * EMA_SEED_WARMUP_MULTIPLIER if ema_match else 0
         stats = {"checked": 0, "mismatches": 0, "max_abs_diff": 0.0}
         for index, values in factors.items():
             actual = values.get(canonical)
-            if actual is None or index >= len(expected):
+            if actual is None or index >= len(expected) or index < warmup:
                 continue
             reference = expected[index]
             if reference is None:

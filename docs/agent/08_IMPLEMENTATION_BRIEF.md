@@ -1,5 +1,14 @@
 # Implementation Brief
 
+## 2026-11-15 《我不是股神》按需直读与公网上线
+
+- 采纳 Windows 建议：开局只读抽中的单股及所需因子，不向 ECS 导出全市场快照，不让 ECS 直连行情库。
+- 拓扑：浏览器 HTTPS → ECS nginx `/game` → ECS 回环 8092 → WSL 主动 SSH 反向隧道 → WSL 回环 8092 → 本地只读 PG。ECS 不落行情明细，家庭宽带无入站端口。
+- 集成 Windows 至 `28034a3` 的 S4/终局总结/换股入口及缓存污染修复；修正 on-demand 终局揭示不复用快照 3650 天偏移。
+- WSL 新增单 worker/多线程内部游戏服务、受限反向隧道与 nginx `/game` 转发；owner cookie 在公网启用 Secure。
+- 验证：游戏与前端守卫全绿；真实 DB 开局/揭盲/终局 reveal 小样本；nginx -t；公网匿名开局、私有会话、静态资源与主要 SaaS 页面回归。不跑全量回测。
+
+
 ## Task ID: QRE-NL-BATCH-DEFECTS-20261114
 
 - 日期：2026-11-14

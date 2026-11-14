@@ -1,5 +1,21 @@
 # Coding Handoff
 
+## 2026-11-15 《我不是股神》按需公网接入
+
+- `game/server.py:create_app()` 由本地 `DatabaseSettings.from_env()` 建只读 store；生产服务用单 gunicorn worker + 4 threads，避免内存 registry 跨 worker 分裂。
+- `deploy/game/qre-game.service`：回环 8092、MemoryMax=1G；`qre-game-tunnel.service`：WSL 主动 SSH `-R 127.0.0.1:8092:127.0.0.1:8092`，ExitOnForwardFailure + keepalive。
+- `deploy/landing/nginx-aguhuice.conf` 新增 `/game` 回环代理。ECS `sites-available` 与 `sites-enabled` 是普通两份文件，必须同时更新；本轮已同步并 nginx -t/reload。
+- `GameSessionRegistry.create` 对非匿名 DB symbol 设置 reveal offset=0 和运行时身份；`_reveal` 保持快照旧契约，公网 Secure cookie 由 `QRE_GAME_COOKIE_SECURE=1` 开启。
+- 游戏测试 68 passed；生产公网链路通过。冷开局 22–26 秒，后续只可经 profiling 优化，不把估算当实测。
+
+## 2026-11-14 《我不是股神》Windows 集成
+
+- 来源：`D:\workzone\webui` 的 `game/windows-dev`，HEAD `fd832b8`；以 `master...game/windows-dev` 定向补丁集成，未整仓覆盖。
+- 新增 Windows 预览/五年驱动脚本 5 个；集成 `game/data.py`、`session.py`、`web.py`、`game.html` 与两份测试。`validation.py` 两侧 SHA-256 均为 `8d3582f6…`，未重复覆盖。
+- `game.html` 唯一冲突是 `.kv-grid`：采用 `display:grid;grid-template-columns:1fr 1fr;gap:4px 10px`，并保留既有 `.side-card .kv-grid` 完整字体规则。
+- 复验命令：`uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py -q`；`uv run pytest tests/test_no_silent_failure_patterns.py tests/test_template_inline_js_syntax.py -q`。
+- 当前 54 passed / 3 failed 与 47 passed / 13 skipped；剩余修复归后续小切片，不改实现迎合 typical 断言，不恢复已删除的平均价旧常量。
+
 ## 2026-11-13 ECS F-26/F-28 内存护栏（已实施）
 
 - 用户批准收紧 cgroup 与关闭无用常驻；F-25 swap 和服务器升配暂缓。
@@ -4678,3 +4694,11 @@ localStorage + `QREPriceScale.readMode()`"，未做整页 reload。
 - `Bar.average_price` 已可直接消费；快照 rows 经 bars_from_rows 自动携带 adjustment_ratio。
 - 验证 `uv run pytest tests/test_trading_game_*.py tests/test_game_windows_fixes.py tests/test_game_snapshot_store.py -q` → 38 passed。
 - 下一步阻塞项：Windows 推送最新 game/windows-dev；明确 SaaS 访问 WSL 行情的方式后再注册蓝图。
+
+
+## 2026-11-14 快照因子与 run_config 边界交接
+
+- EMA 审计暖机 = 4×span；末段异常不豁免。
+- 新快照已覆盖 WSL/Windows 同路径，约 160MB，3 个 % 列显式 skipped。
+- run_config 部分详情时看 actual_codes_complete 与 sampled_codes，不能再用 actual_codes 长度代替 symbol_count。
+- job 359 已完成，收益与风险指标见 05 同日条目。

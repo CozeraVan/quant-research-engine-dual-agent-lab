@@ -1,3 +1,11 @@
+2026-11-15 《我不是股神》公网上线完成：阅读并采纳 Windows on-demand 建议，集成至 `28034a3` 的 S4/终局总结/换股入口及 EMA 跨 basis 缓存隔离修复。新增 `game/server.py`、WSL qre-game/qre-game-tunnel、nginx `/game` 转发和 gunicorn 依赖；DB 会话 reveal 改用真实日期与运行时身份，不错用快照 3650 天偏移。测试 **68 passed + 47 passed/13 skipped**；公网 `/game`、SaaS 三页面和静态均 200，真实开局/回合、第二 cookie 401、非终局无真实信息均通过。真实 DB 250 回合终局揭示通过。公网冷开局 26.16s、本地真实 DB 开局 22.01s，明确未达亚秒估算。服务均 enabled/active，回滚点见 16 号文档。未跑回测。
+
+2026-11-14 Game 终局真实标的映射已交付：按 export 的 seed=20261112、candidate_limit=20、1500 根过滤顺序只读重建匿名映射，并查 `reference.stock_basic` 名称；X00001B=鲁抗医药(600789.SH)、X00002B=尚荣医疗(002551.SZ)、X00003B=普利制药(300630.SZ，该代码已退市而不在现行 stock_basic，名称由公开证券资料补证)。`identity.json` 已同时写入 WSL 与 `D:\workzone\webui\data\game_snapshots\`，两侧 SHA-256 均为 `846461c3261e…`、JSON 三键与非空名称/代码校验通过。Windows 重启 8091 预览即可在 finished reveal 读取，无需改代码；未重启预览、未跑回测、未部署 ECS、未 commit/push。
+
+2026-11-14 Windows 修复任务 `ea982ae0e7d0` 状态核查（**仅更新进度，用户人工测试中，不做集成/复跑/推进**）：Windows 已在工作区完成三项修复代码与测试改写，但 Hub 终态为 **failed / exit 126 / verify_ok=1**，原因是无人值守权限门拦截 pytest、脚本执行及 git add/commit；因此没有新测试数字、没有 commit/push，不能宣称验收通过。其静态定位为典型 EMA 跨价格口径缓存污染：`close.ema_5` 与 `typical_price.ema_5` 共用 `_expected_series` 内层 `("ema","5")` 键，后者误用 EMA(close)；拟按 basis 分离子缓存。两项旧 T4 测试已改新契约，并补非对称 bar 缓存污染回归与 VWAP→EMA 用例。修复仍仅在 Windows 工作区，WSL 未同步；根因和测试结论待后续可执行环境独立验证。
+
+2026-11-14 《我不是股神》Windows 第三轮集成：将 `game/windows-dev` 至 `fd832b8` 的 17 个提交内容以补丁方式合入当前 master 工作树，避免覆盖其他未提交主线改动。范围包括 S1 自选时长/资金、S2 决策快捷、S3 单根动画及显式连播、真实快照五年驱动、K 线两位小数和新增测试。`game.html` 的 `.kv-grid` 冲突已按 Windows 完整定义解决；WSL 的暖机/HLC3/VWAP 审计修复保留。复验 `tests/test_trading_game_*.py tests/test_game_windows_fixes.py` 为 **54 passed / 3 failed**，模板/静默失败守卫 **47 passed / 13 skipped**，diff check 通过。三项失败：typical_price 691 mismatches 需按真实数据核查；另两项仍断言已废弃的顶层 `skipped` 与 `AVERAGE_PRICE_RAW_FORMULA`。未部署 ECS、未 commit/push。
+
 2026-11-13 22:47 ECS 内存护栏 F-26/F-28（**已实施并验证，未 commit**）：用户明确不做 swap/升配、批准另外两项。①F-26 新建 `/etc/systemd/system/qre-saas.service.d/memory.conf`，MemoryHigh=650M、MemoryMax=800M，daemon-reload+restart 后实际值 681574400/838860800，qre-saas active/running、NRestarts=0、MemoryCurrent≈118.8MiB；②F-28 停用并 disable docker.service/docker.socket/containerd/tuned/multipathd.service/multipathd.socket，实施前确认 docker 无运行容器，只停服务不删数据，fail2ban 保持 active+enabled；③整机 free -m 实测 used **770→658MB**、available **842→954MB**，Swap 仍为 0；④公网 `/saas/`、`/saas/login`、`/saas/showcase` 均 200，匿名 `/api/results` 401，22:47 以来 kernel 无 OOM/killed process，唯一 ERROR 为既有 `/var/www/.gunicorn` 权限噪声；⑤回退路径：删除 drop-in 后 daemon-reload+restart，原服务逐一 enable --now；⑥纯系统配置，无仓库代码/schema/权限变更，生产登录态仍待用户浏览器复核。
 
 2026-11-13 20:44 /api/results 真 SQL 分页（第二轮，**已部署 ECS，待用户浏览器验收，未 commit**）：针对用户否决「只压单行、不全量分页」的治标方案，`api_results_list` 改为 ORDER BY/LIMIT/OFFSET/COUNT 全下推 Postgres，单请求内存只与 page_size 成正比；保留旧 NULL 契约（desc→NULLS FIRST、asc→NULLS LAST）、追加 `j.id` tiebreaker、COUNT 保留 INNER JOIN strategies；`api_strategy_detail` 同步只取 metrics 子路径并保留 LIMIT 100，响应字段与前端契约不变。新增 `test_list_pagination_multi_page_and_nulls`，`uv run pytest tests/test_gui_saas.py tests/test_no_silent_failure_patterns.py -q` → **105 passed in 13.50s**。生产 psql（uid=6 / kind='full'）：created_at DESC/ASC **11.462ms / 0.941ms**，excess_return DESC/ASC **824.084ms / 774.917ms**，COUNT=130，连续两页 20+20 且 overlap=0；当页 metrics **8716 B**、params+summary+metrics **30 kB**，旧整列全量 **135 MB**，约 4600 倍下降。部署备份 `app.py.bak-2026-11-13-2044`，本地=生产 md5 `86e9ab488751d8a7d2a82406c561fddc`、5429 行；服务 active、NRestarts=0、MemoryCurrent≈139.7MiB，`/saas/` 200/0.097s、匿名 `/api/results` 401、无新 OOM。残留：excess_return 排序仍需 DB detoast 全部 130 行约 800ms，后续落真实列/生成列并建索引；生产登录态待用户复核。未 commit，其他遗留改动未碰。
@@ -2699,7 +2707,7 @@ Windows agent（`D:\workzone\webui`，分支 `game/windows-dev`）第二轮回�
 
 ### B. 三条裁定结论
 1. **同意修订 22 号验收基准**：开局配置白名单 `game_bars ∈ {250,750,1250}`、`initial_cash ∈ {100000,500000,1000000,5000000}`；**1250 / 1,000,000 仍是默认基线，旧验收结论不作废、不需重跑**。非默认属额外用例，须记 `game_bars/initial_cash/seed`。白名单是服务端最终闸（22 号 §5），前端下拉只是便利，篡改请求体必须被拒。依据：`docs/agent/22_TRADING_GAME.md` §16.1、§2 L33-35、§13.4 L259 补注。
-2. **播放/暂停/单步/倍速计入阶段 1 验收**：22 号 §8 阶段 1（L149）本就是设计项，补齐属还欠账而非扩范围。**但必须守 V1.1 回合制（L56）：播放/结算只收束当前一根 K 线随后立即停止，不得跨日自动连播；倍速只缩短单根收束动画时长。** 实测若自动跨日推进，按 bug 修。依据：22 号 §16.2、L153-157 blockquote。
+2. **播放/暂停/单步/倍速计入阶段 1 验收**：22 号 §8 阶段 1（L149）本就是设计项，补齐属还欠账而非扩范围。**守 V1.1 回合制：单根收束动画不自动进入下一回合；用户显式开启连播时允许跨日自动推进，每天仍真实结算；倍速同时调节单根动画与连播节奏。** 2026-11-14 用户人工测试后批准显式连播，撤销此前“跨日一律按 bug”的裁定。依据：22 号 §2、§16.2。
 3. **`_state` 三字段按「只增不改」接受**：`initial_cash`（float 元，透传 `DailyGameEngine(initial_cash=...)`）、`return_pct`（**小数比率非百分数**，`equity/initial_cash-1.0`，含摩擦，`initial_cash==0` 返 `0.0`）、`max_drawdown`（小数比率**恒 >= 0**，遍历 `equity_curve` 峰值回撤，只统计已结算日，首点 = initial_cash）。**符号纪律：前端自行 `-Math.abs()` 转负显示（Windows 侧 `game/templates/game.html:293`），后端不得改符号。** 下游缺键不抛错、按可选读取。依据：22 号 §16.3 口径表。
 
 ### C. T5 认领（46 号）
@@ -2926,3 +2934,18 @@ exit:  (macd_hist < macd_hist.shift(1)) or (kdj_k < 70)
 
 - Bar 携带逐根复权比率，average_price=amount×10/vol×ratio；游戏审计接入，38 passed，已部署，回滚点 `/tmp/qre-deploy-20261114T062553Z.bak`。
 - SaaS 蓝图未虚假上线：Windows 最新 game/web 仅在未推送的 game/windows-dev 分支，主仓不能重复实现；生产 ECS 又无本地行情库，需先解决代码集成与行情访问路径。
+
+
+### 2026-11-14 快照三问题裁定 + 抖音全量完成
+
+- Windows 快照三问题已裁定：上游单点异常非 export bug；EMA 4×span 暖机豁免；全集因子导出并同步 Windows，39 passed。详见 46 号 §15。
+- run_config 边界修正：全量详情采样数 < symbol_count 时，`actual_codes=[]`、`actual_codes_complete=false`、`sampled_codes=[...]`，禁止把样本误标全池；9 passed，已部署。
+- **job 359 已完成**：5201 股、351151 笔、traded=5177，strategy_total_return=-0.1253295、buy_hold=0.1188294、excess=-0.2441590、win_rate=0.3859764、max_drawdown=-0.4252619、profit_factor=0.8668656。NL 原文与 run_id 均核验。
+
+
+### 2026-11-14 板块热力图盈亏配色修复
+
+- 根因：旧 `pnlColor` 按相对排名着色，亏损较轻的板块会被染红，违反「盈利红/亏损绿」约定。
+- 改为符号决定色相、绝对盈亏只决定深浅；零值灰白，非零最低 8% 强度避免近零亏损失去可辨识色。文本色随强度同步。
+- 新增 `tests/test_pnl_color.py`，模板/静默守卫 28 passed + 13 skipped，SaaS pages 96 passed。
+- 生产 job 359 实测前六板块均为不同深浅绿色，已部署，回滚点 `/tmp/qre-deploy-20261114T073226Z.bak`；未 commit/push。

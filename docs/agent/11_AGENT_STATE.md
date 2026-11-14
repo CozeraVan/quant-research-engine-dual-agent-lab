@@ -19,6 +19,26 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-15 《我不是股神》公网上线 DONE
+
+- 用户解除冻结并明确要求上线、commit/push。入口 `https://aguhuice.com/game`，按需直读 WSL 只读库 + 主动反向隧道；ECS 无行情明细。
+- Windows S4/换股/总结与缓存修复已整合；68 游戏/生产测试、47 前端守卫通过，真实公网开局/隔离/回合与 DB 终局 reveal 通过。
+- qre-game/qre-game-tunnel enabled/active，nginx 备份可回滚。已知冷开局 22–26 秒，性能优化待后续 profiling。
+- phase = DONE（本轮用户已批准 commit/push）。
+
+### 2026-11-14 用户人工测试，冻结推进
+
+- 当前只核查并记录 Windows 任务 `ea982ae0e7d0`：三项修复已写进 Windows 工作区，但权限门导致 Hub **failed / exit 126**，pytest 与 commit 均未执行；没有新通过数字。
+- Windows 静态根因为 EMA 跨 basis 缓存污染，拟按 close/typical/average 分离缓存；WSL 尚未同步、未复验，原 **54 passed / 3 failed** 仍是最近可信实测基线。
+- 用户正在人工测试；**不继续同步、不修代码、不部署、不 commit/push、不派新任务**。phase = PAUSED_FOR_MANUAL_TEST。
+
+### 2026-11-14 《我不是股神》Windows 第三轮已集成，验收未全绿
+
+- `game/windows-dev` 至 `fd832b8` 的 S1/S2/S3、真实快照驱动、显式连播和两位小数已进入 master 工作树；唯一模板冲突已解决。
+- 游戏套件 **54 passed / 3 failed**；模板/静默失败守卫 **47 passed / 13 skipped**；`git diff --check` 通过。
+- 剩余：两项旧 T4 测试仍依赖废弃契约；typical_price 真实审计有 691 mismatches，须单独定位，禁止直接删断言或回退审计实现。
+- 按 Game 边界仅本地集成，**未部署 ECS、未 commit/push**。phase = INTEGRATED_WITH_REQUIRED_FIXES。
+
 ### 2026-11-13 /api/results 列表 OOM 治本修复
 
 - 触发：用户管理员账号 `17157845743` 点「回测记录」报「加载失败，请稍后重试」。
@@ -32,7 +52,7 @@ This file is the source of truth for single-agent workflow recovery.
 
 - Windows 第二轮回传的三项待裁定已定稿：`22_TRADING_GAME.md` §16、`46_GAME_WINDOWS_TASKS_2026-11-12.md` §11+§12；进度见 `05_PROGRESS.md`，决策条 `QRE-GAME-CONFIG-WHITELIST-AND-STATE-ADDITIVE` 见 `06_DECISION_LOG.md`。
 - **开局白名单**：`game_bars ∈ {250,750,1250}`、`initial_cash ∈ {10万,50万,100万,500万}`；默认仍 1250 / 100 万 → 22 号旧验收不作废、不重跑。白名单是**服务端最终闸**，前端下拉只是便利，篡改请求体必须被拒。
-- **播放控件**：播放/暂停/单步/倍速**计入阶段 1 验收**（22 号 §8 原有设计项，属还欠账）；守 V1.1 回合制——只收束当前一根 K 线随后立即停止，**不得跨日自动连播**，倍速只缩短单根动画时长。
+- **播放控件**：播放/暂停/单步/倍速**计入阶段 1 验收**（22 号 §8 原有设计项，属还欠账）；守 V1.1 回合制——单根收束动画不自动进入下一回合；用户显式开启连播时允许跨日自动推进，每天仍真实结算，倍速同时调节单根动画与连播节奏。
 - **`_state` 三字段只增不改**：`initial_cash`（元，默认 100 万）、`return_pct`（小数比率、含摩擦）、`max_drawdown`（小数比率、恒非负，负号由前端转换）。三键尚未合入 master，属**契约预告**，下游缺键按可选读取不抛错。
 - **归 WSL（不派 Windows）**：T2 六项测试入库为 `tests/test_game_windows_fixes.py`、既有 tests 补 `encoding="utf-8"`、T5 脱敏快照生产（`scripts/game/export_snapshot.py` 与 `data/game_snapshots/` **尚未创建**）、SaaS 蓝图注册/鉴权/部署、`average_price` 上游输入。
 - **已派 Windows 第三轮 W1–W5**（46 号 §12）：W1 样本 `vol/amount` 单位（手 / 千元）是唯一阻塞 cherry-pick 项；集成由主 Agent 把 Windows 两提交 `d10cfb1`、`f6385d8` cherry-pick 到当前 master。
@@ -2492,3 +2512,20 @@ PC 崩溃 interrupted 了 DeepSeek 第四轮（2.5 进行中）。恢复后核�
 
 - average_price 已部署并验证。后续需 Windows 推送 game/windows-dev 和明确 ECS→WSL 行情访问，再实施蓝图。
 - 其余顺序项 run_config/聚类已完成；job 359 后台执行。
+
+
+### 2026-11-14 快照三问题与 job 359：DONE
+
+- 快照已更新并同步 Windows；暖机审计和 run_config 采样边界已部署。
+- 抖音全量回测完成，结果负超额，不能作有效性宣传；完整指标见 05。
+
+
+### 2026-11-14 板块热力图配色：已部署待验收
+
+- 亏损全部绿色、盈利全部红色，job 359 实测通过；未 commit/push。
+
+
+### 2026-11-14 Game《我不是股神》暂时挂起
+
+- 用户决定暂停 Game。真实快照、五年驱动、浏览器审计、因子审计与 glob 裁定已完成；Windows 最终复跑与 SaaS 蓝图留待重启。
+- 后续只推进 QRE 主线，不再主动部署 Game 文件。

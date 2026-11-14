@@ -1,3 +1,5 @@
+**《我不是股神》公网上线（2026-11-15，QRE-GAME-ONDEMAND-PUBLIC）**：`https://aguhuice.com/game` 已可用。链路为 nginx `/game` → ECS 回环 8092 → WSL `qre-game-tunnel.service` 主动 SSH 反向隧道 → WSL `qre-game.service`（回环 8092）→ 本地只读行情库；ECS 无行情明细，家庭无公网入站。按需只读抽中单股和所需因子，真实身份仅终局揭示。两服务 enabled/active，游戏 MemoryMax=1G；公网开局/回合/隔离与 SaaS 回归通过。nginx 回滚备份 `/tmp/aguhuice.pre-game-20261115T013507` 和 `/tmp/aguhuice-enabled.pre-game-20261115`。冷开局实测约 22–26 秒，性能优化另列，不宣称亚秒。
+
 **默认不限持仓已部署（2026-11-03，未 commit）**：仅同步 `gui/saas/templates/new.html`，
 `#p-maxpos` 初始值与空值回退改为 0（不限）；备份 `/tmp/qre-maxpos-default-<STAMP>/new.html`，
 qre-saas 重启后 active/MainPID 621570，生产 `/saas/new` 实测 value=0。worker 未重启、

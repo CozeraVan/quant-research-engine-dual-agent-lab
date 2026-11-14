@@ -1,5 +1,22 @@
 # Review Report
 
+## 2026-11-15 《我不是股神》按需公网上线自审
+
+- Review Status：**PASS，无 Required Fixes**；用户明确要求上线并 commit/push。
+- Windows S4/换股入口与缓存污染修复已集成；原 3 项失败全部消失，游戏与生产测试 **68 passed**，模板/静默守卫 **47 passed / 13 skipped**。
+- 安全：ECS 不存行情、不直连 DB；8092 仅回环，WSL 主动 SSH 加密转发；非终局 reveal=None、响应无真实代码/日期；第二 cookie 访问他人会话 401；公网 owner cookie Secure。
+- 实测：公网 `/game` 与 SaaS 主要页面/静态均 200，真实开局+advance/close 通过；真实 DB 250 回合终局揭示真实名称/代码、真实日期、offset=0。
+- 已知性能：公网冷开局 26.16s、另一次真实 DB 开局 22.01s，**未达到建议文档的亚秒估算**；候选股全历史读取/冷缓存是后续 profiling 对象，不虚报性能。
+- 运维：qre-game 与 qre-game-tunnel 均 enabled/active，MemoryMax=1G；nginx -t 通过。回滚备份 `/tmp/aguhuice.pre-game-20261115T013507`、`/tmp/aguhuice-enabled.pre-game-20261115`。
+
+## 2026-11-14 《我不是股神》Windows 集成自审
+
+- Review Status：**CHANGES REQUESTED（测试尚未全绿）**。代码/脚本已集成，冲突解决和 diff check 无格式错误；未部署 ECS、未 commit/push。
+- 正向证据：游戏套件 54 passed；模板 inline JS/静默失败守卫 47 passed、13 skipped。S1/S2/S3、真实快照驱动与显式连播均进入 master 工作树。
+- Required Fix 1：`test_audit_skips_unregistered_basis` 与 `test_average_price_formula_registered_but_skipped` 仍检查旧顶层 `skipped` 和已删除 `AVERAGE_PRICE_RAW_FORMULA`，须更新为 per-canonical skipped 与 `Bar.adjustment_ratio` 后的 VWAP 审计契约。
+- Required Fix 2：`test_audit_typical_basis_no_false_mismatch` 实测 691 mismatches（checked=11383、max_abs_diff≈0.1702、max_rel_diff≈0.0089）。该断言针对真实数据，不能直接当旧测试删除；须定位具体 canonical/索引并区分暖机、上游数据或实现问题。
+- 边界：仅本地集成，不触发 ECS；工作树大量非本轮改动未纳入、未修改。
+
 ## 2026-11-13 ECS F-26/F-28 内存护栏自审
 
 - Review Status：**PASS，无 Required Fixes**；用户明确批准本轮两项，F-25 swap/升配暂缓。
@@ -3325,4 +3342,44 @@ PASS（实现与部署完成；SaaS 蓝图另列阻塞）
 ```text
 游戏全部 → 38 passed（含 average_price 与真实快照）
 ECS qre-saas active；/api/saas/factors 200；/saas/new 200
+```
+
+
+## 2026-11-14 快照裁定与 run_config 边界自审
+
+### Review Status
+
+PASS（实现、部署与真实数据验证；未 commit/push）
+
+### Findings
+
+- 暖机豁免按 EMA span 有界，单点异常仍保留；export 不改上游异常值。
+- 部分详情采样不再误标 actual_codes，run_config 明确 complete/sampled 两种状态。
+- Required Fixes：无。
+
+### Validation Evidence
+
+```text
+游戏 → 39 passed
+run_config → 9 passed
+typical/risk/liquidity 各 1500 非空；job 359 completed / 5201 symbols / 351151 trades
+```
+
+
+## 2026-11-14 板块配色修复自审
+
+### Review Status
+
+PASS（生产 job 359 实测，未 commit/push）
+
+### Findings
+
+- 修复严格按盈亏正负，不再按名次改变色相；金额大小仅影响明暗。
+- Required Fixes：无。
+
+### Validation Evidence
+
+```text
+pnl color + 模板/静默 → 28 passed, 13 skipped；SaaS pages 96 passed
+job 359 前六板块颜色均 rgb 绿色系，已部署
 ```

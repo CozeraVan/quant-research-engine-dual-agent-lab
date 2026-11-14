@@ -176,7 +176,7 @@ Windows 侧**不要 rebase master**（master 含 Windows 非法文件名，check
 ### 11.1 三条裁定结论
 
 1. **22 号基线可配置 → 同意修订，默认不变。** 白名单 `game_bars ∈ {250, 750, 1250}`、`initial_cash ∈ {100000, 500000, 1000000, 5000000}`；默认仍 `1250 / 1,000,000`，故既有验收结论不作废、不需重跑。非默认配置属额外用例，验收记录须写明 `game_bars` / `initial_cash` / `seed`。白名单是服务端最终闸（22 号 §5），前端下拉只是便利，篡改请求体必须被拒。
-2. **S3 播放/暂停/单步/倍速 → 计入第一阶段验收。** 依据 22 号 §8 阶段 1 L149 本就是设计项，属还欠账。但必须守 V1.1 回合制：播放/结算只收束当前一根 K 线随后立即停止，**不得跨日自动连播**；倍速只缩短单根收束动画时长。实测若自动跨日推进，按 bug 修。
+2. **S3 播放/暂停/单步/倍速 → 计入第一阶段验收。** 依据 22 号 §8 阶段 1 L149 本就是设计项，属还欠账。守 V1.1 回合制：单根收束动画不自动进入下一回合；2026-11-14 用户人工测试后批准显式连播例外，允许跨日自动推进，每天仍真实结算；倍速同时调节单根动画与连播节奏。
 3. **`_state` 三字段 → 按「只增不改」接受，下游知会如下。**
 
 | 字段 | 类型 / 单位 | 口径 | 边界 |
@@ -228,7 +228,7 @@ def load_factor_history(self, symbols, requests, start: date, end: date) -> pd.D
 | **W1** | T1 样本单位修正（§1）：`scripts/win/game_preview_sample.py` 的 `vol` 改「手」、`amount` 改「千元」——先按股数/元金额生成，再 `vol/100`、`amount/1000`；随机序列与 tick 精度逻辑不许动 | 新增逐根断言 `amount*10/vol ∈ [low, high]`；**必须给红灯证据**（临时去掉 `/1000` 后该断言失败的真实输出）+ 绿灯输出 | **P0，唯一阻塞 cherry-pick** |
 | **W2** | T3 显式返回口径（§3）：game 状态返回 `factor_basis=FACTOR_BASIS_QFQ_ANCHOR_V1`，`from quant_research_engine.factor_basis import FACTOR_BASIS_QFQ_ANCHOR_V1` 引用常量 | 沿用现有 `price_basis` 逻辑，**不新增换算层**；测试断言字面值等于 `qfq_anchor_v1` | P1 |
 | **W3** | 开局白名单落地（§11.1 第 1 条）：前端下拉给 `game_bars` 三档 / `initial_cash` 四档，默认 1250 / 1,000,000；**服务端为最终闸** | 新增测试证明篡改请求体被服务端拒绝（至少 `game_bars=999`、`initial_cash=1` 两例），前端下拉不作为唯一防线；默认路径回归仍过 | P1 |
-| **W4** | 回合制守卫实测（§11.1 第 2 条）：播放 / 暂停 / 单步 / 倍速逐项实测 | 证据（审计日志或截图序列）证明**收束当前一根 K 线后立即停止、不跨日自动连播**；倍速只缩短单根动画时长。若实测跨日推进，按 bug 修并如实回报 | P1 |
+| **W4** | 回合制守卫实测（§11.1 第 2 条）：播放 / 暂停 / 单步 / 倍速逐项实测 | 证据证明**单根收束动画不自动进入下一回合**；显式连播允许跨日且每天真实结算，倍速同时调节单根动画与连播节奏 | P1 |
 | **W5** | T5 预备（§11.2）：把现有五年驱动脚本改成**可传入快照路径 / store 来源**（参数或环境变量），保留合成样本为默认 | 脚本能在不改代码的前提下切换到外部 store；本轮仍用合成样本跑通一次并给日志 | P2 |
 
 ### 12.2 明确不派给 Windows（归 WSL，见 §10 / §11.3）
@@ -252,7 +252,7 @@ def load_factor_history(self, symbols, requests, start: date, end: date) -> pd.D
 §8 七项全部照给，另加：
 
 8. **W3 拒绝篡改的测试输出**（真实 pytest 行，含被拒用例名与断言）。
-9. **W4 回合制证据**：日志或截图序列路径 + 一句结论（是否发现跨日自动推进）。
+9. **W4 回合制证据**：日志或截图序列路径 + 单根动画不自动进回合、显式连播逐日真实结算的结论。
 
 若某项在上一轮已部分完成，**如实说明现状与增量**，不要重述为「本轮新做」。
 
@@ -271,3 +271,35 @@ def load_factor_history(self, symbols, requests, start: date, end: date) -> pd.D
 - `game/validation.py` 对 `*_average_price` 表按 `amount×10/vol×adjustment_ratio` 审计，typical_price 等非登记口径仍 skipped。
 - 回归：游戏 38 passed（含 average_price 复权与 3 只真实快照）；已部署 ECS。
 - Windows 可用 Bar.average_price 解除 T4 skipped。SaaS 蓝图仍待 Windows 最新 game/web 可访问提交与生产行情连接裁定，不能拿旧版重复实现。
+
+
+## 15. Windows 三因子问题裁定与修复（2026-11-14）
+
+1. **末段单点 mismatch**：snapshot 无重复日期，raw bars/factors 一一对齐，复权比率正确；bbm/bbu/ema_5 在 idx1493 是上游因子单点异常，不是 export 对齐或复权错误。不得修改原始值，后续应标记 source_anomaly。
+2. **EMA 暖机种子差**：`validation.py` 现对 EMA 豁免 4×span 暖机段，之后任何单点异常仍计数；注入末段异常与 39 项游戏回归通过。EMA250 末段差属于全历史种子 vs 窗口 SMA 种子的良性衰减。
+3. **因子内容缺口**：export 改为完整 `factor_catalog()`，三只各 1500 根，含 typical_price、风险、流动性真实值；3 个含 `%` 的上游列名不受 FactorFieldRequest 支持，manifest 显式 skipped。新快照约 160MB，已同步 `D:\workzone\webui\data\game_snapshots\` 并覆盖旧版；V1 备份在 WSL `.tmp/game_snapshots_v1_backup/`。
+- 验证：39 passed；typical EMA、beta、amount_ma 各 1500 非空值；已部署。
+
+
+### 15.1 末段异常上游实证（2026-11-14）
+
+- X00001B 源为 `600789.SH`（异常原始日 2026-11-05），X00002B 源为 `002551.SZ`（同日）。库内原值与快照一致，排除 export 错位。
+- 对同一原始 close×adj_factor 全历史重算：600789 ema_5 DB=20.86 / 重算=20.9837，bbm DB=22.00 / 重算=21.8601，bbu DB=24.51 / 重算=24.2067；002551 bbm DB=26.39 / 重算=26.2212，bbu DB=29.06 / 重算=28.8472。异常确属上游因子生成口径/数据，不改快照。
+
+
+### 15.2 average_price 审计分支修正（2026-11-14）
+
+- Windows 回传五年驱动 28/27/0、样本 30629 项 0 mismatch、浏览器 97/97、ui-smoke PASS、average_price 逐根校验通过。
+- 同步修正审计分支：`*_average_price` 不再把 VWAP 直接当最终因子值，而是先求 VWAP，再调用对应 EMA/BOLL 公式；未登记 MACD 公式仍 skipped，不制造误报。
+- 修复前真实 average_price MACD 审计 13500/13500 误报，修复后未登记项不再错误比较；游戏 39 passed。已部署并同步 Windows validation.py。
+- 其余两项：glob 5 个失败需 Windows 原始输出才能逐项裁定；idx1493 已确认上游异常，保持源值不改。
+
+
+### 15.3 Windows glob 5 项失败逐项裁定（2026-11-14）
+
+1. `price_basis:164`：暖机后应 1480，测试已改为 1496−16；原断言过期。
+2/3. typical_price：不再整体 continue，现按 `(high+low+close)/3` 重算；真实快照 typical EMA checked=1480、mismatch=0，异常仍计数。
+4. 旧 mock catalog 缺 table 键：审计改 `item.get("table", "")`，未登记/未知/未支持公式统一写 `canonicals[canonical].skipped=true`，不再 KeyError。
+5. `AVERAGE_PRICE_RAW_FORMULA`：Bar 已有复权比率，旧「保持 skipped」前提过期；average_price 先 VWAP 后公式，未登记公式 skipped。Windows 测试应更新而非恢复常量。
+- 测试集合差异：WSL 跑 `test_trading_game_*.py + test_game_windows_fixes.py + test_game_snapshot_store.py` 共 39 项；Windows glob 46 项还含其扩展用例，不应用数量直接判冲突。
+- validation.py 与更新测试已同步 Windows，39 passed；已部署。
