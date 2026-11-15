@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "saas/templates/base.html" %}
 {% block title %}回测结果 · A股回测台{% endblock %}
 {% block body %}
 <div class="container">
@@ -195,7 +195,7 @@
 <script src="/static/perf-metrics.js?v={{ asset_v }}"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（随机会话 Cookie 派生 guest_key，API 侧鉴权），不强制登录
-const JOB_ID = {{ job_id }};
+const JOB_ID = {{ job_id | tojson }};
 
 function card(label, value, klass, tip){
   return '<div class="metric-card"' + (tip ? ' tabindex="0" data-tip="' + escH(tip) + '"' : '') + '><div class="m-label">' + label + '</div>' +
@@ -478,18 +478,20 @@ function renderMain(d){
 
 // --- 赚钱板块归因（tag_analysis，数据为回传截断版：板块聚合全量 + 个股前/后各 50） ---
 let tagChart = null, tagData = null, curLayer = 'A', curTag = null;
-// 相对排名双色刻度：盈利降序 → 最好深红、最差深绿，中段趋近灰白（即使全盈/全亏也有层次）
+// 盈亏符号决定色相：盈利红、亏损绿、零值灰白；绝对盈亏只影响深浅，绝不改变色相。
 function pnlColor(pnl, minPnl, maxPnl){
   const red = [212, 48, 48], light = [245, 245, 245], green = [26, 158, 75];
-  const t = maxPnl > minPnl ? (maxPnl - pnl) / (maxPnl - minPnl) : 0.5;  // 0=最好，1=最差
-  const seg = t <= 0.5 ? [red, light, t / 0.5] : [light, green, (t - 0.5) / 0.5];
-  const mix = seg[0].map((c, i) => Math.round(c + (seg[1][i] - c) * seg[2]));
+  if (pnl === 0) return 'rgb(' + light.join(',') + ')';
+  const base = pnl > 0 ? red : green;
+  const maxAbs = Math.max(Math.abs(minPnl), Math.abs(maxPnl), 1);
+  const strength = Math.max(0.08, Math.min(Math.abs(pnl) / maxAbs, 1));
+  const mix = base.map((c, i) => Math.round(light[i] + (c - light[i]) * strength));
   return 'rgb(' + mix.join(',') + ')';
 }
-// 标签色：淡色块（中段灰白）用深紫保证可读，深色块（深红/深绿）用白
+// 标签色：浅色块用深紫保证可读，深色块用白；判据同样是绝对盈亏强度。
 function pnlTextColor(pnl, minPnl, maxPnl){
-  const t = maxPnl > minPnl ? (maxPnl - pnl) / (maxPnl - minPnl) : 0.5;
-  return (t > 0.25 && t < 0.75) ? '#4A3A78' : '#fff';
+  const maxAbs = Math.max(Math.abs(minPnl), Math.abs(maxPnl), 1);
+  return Math.abs(pnl) / maxAbs > 0.65 ? '#fff' : '#4A3A78';
 }
 function renderAttribution(attr){
   if (!attr || !attr.layers){ document.getElementById('box-tags').classList.add('hidden'); return; }

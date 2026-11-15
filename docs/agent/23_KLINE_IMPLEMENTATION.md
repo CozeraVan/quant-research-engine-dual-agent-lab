@@ -14,7 +14,7 @@
 - 夜间主题：`src/quant_research_engine/gui/static/night-mode.css`、`night-mode.js`。
 - 主题与提示：`lab-theme.css`、`lab-ui.js`（含 `LabUI.helpTips`、日历等）。
 - SaaS 页面：`gui/saas/templates/job.html`、`symbol.html`、`base.html`。
-- 本地 lab：`gui/lab_result.py` 与 `gui/templates/lab_symbol.html`。该模板是独立静态个股页，不是 SaaS 模板副本；没有因子 chips、重播、Night Mode 或显式 `dispose()`。
+- 本地 lab：自 2026-11-15 起，`gui/lab_result.py` 的结果/列表/个股路由直接复用 `gui/saas/templates/{job,symbols,symbol}.html`，与公网共用因子 chips、重播、夜间模式和 K 线生命周期；旧 `lab_symbol.html` 不再是现行路由模板。
 - 游戏：`src/quant_research_engine/game/templates/game.html`，后端为 `game/{session,data,factors,engine,web}.py`。
 
 ### 1.2 后端到页面的主要链路
@@ -311,7 +311,7 @@ open 时：
 - K 线只画已经完整的 OHLC，open 阶段仅显示 open 参考线，不把未完成蜡烛当完整 K 线。
 - 成交量、overlay 和副图共用同一 ECharts 实例与动态高度：`560 + 185 * paneCount`。
 - EMA/BOLL overlay 主图；MACD DIF/DEA/HIST 同副图；其他因子按选择生成独立副图。
-- 没有自动跨日连播；“播放并结算”只收束一根。
+- 单根收束动画不自动进入下一回合；用户显式开启连播时可跨日自动推进，每天仍走真实结算，停止条件见 22 号 §2。
 - 创建会话时已预载 `DEFAULT_CANONICALS` 的 11 个默认因子；其余因子在用户勾选后才按 canonical 白名单增量加载。因子目录与序列分离，同列不同口径分别缓存，不使用共享芯片 remap。
 
 ### 5.5 交易规则

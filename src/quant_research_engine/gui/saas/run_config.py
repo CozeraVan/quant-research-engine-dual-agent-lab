@@ -39,20 +39,26 @@ def build_run_config(
     """生成可下载、可恢复的稳定 JSON；不改变 worker 输入。"""
     summary = result_summary or {}
     files = artifacts or []
-    actual_codes = _actual_codes(params, files)
+    sampled_codes = _actual_codes(params, files)
     original = params.get("codes") or []
     if isinstance(original, str):
         original = [original]
-    excluded = sorted(set(map(str, original)) - set(actual_codes)) if files else []
+    reported_count = summary.get("symbol_count")
+    complete = not files or reported_count is None or reported_count == len(sampled_codes)
+    # 全量结果只采样部分个股详情时，绝不能把样本误标为实际全股票池。
+    actual_codes = sampled_codes if complete else []
+    excluded = sorted(set(map(str, original)) - set(actual_codes)) if files and complete else []
     return {
         "schema_version": 1,
-        "job_id": int(job_id),
+        "job_id": job_id,
         "strategy": {"name": strategy_name},
         "input": dict(input_snapshot),
         "params": json.loads(json.dumps(params, ensure_ascii=False)),
         "execution": {
             "run_id": summary.get("run_id"),
             "actual_codes": actual_codes,
+            "actual_codes_complete": complete,
+            "sampled_codes": [] if complete else sampled_codes,
             "excluded_codes": excluded,
             "symbol_count": summary.get("symbol_count", len(actual_codes)),
         },

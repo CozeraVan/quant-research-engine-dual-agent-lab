@@ -1,5 +1,12 @@
 # Review Report
 
+## 2026-11-15 本地视频结果直读自审
+
+- Review Status：**PASS，无 Required Fixes**；已部署本地与公网共享兼容层，待用户验收及 commit 批准。
+- 视频 agent 有机器可读目录、run overview、产物路径、参数和个股 JSON，不再依赖公网或人工定位。
+- 本地与公网复用同一结果/个股模板，避免视觉漂移；真实 run 与浏览器三页均通过，209 passed/13 skipped。
+- 无归因数据返回诚实 404，个股列表仍可直读；不复制生产库、不新增公网写权限、不跑回测。
+
 ## 2026-11-15 Game 候选池持久化自审
 
 - Review Status：**PASS，无 Required Fixes**；已部署 WSL 生产服务，待用户批准 commit/push。

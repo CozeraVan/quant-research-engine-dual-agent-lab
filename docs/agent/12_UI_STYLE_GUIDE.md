@@ -19,9 +19,9 @@
 | `static/style.css` | 8080 管理台旧样式，lab 页面会连带加载，lab-theme.css 尾部（`lab-theme.css:376-442`）负责逐项纠偏 |
 | `templates/base.html`（25 行） | 母板：`<header class="topbar">` + `<main>`，lab 各页 extends 它 |
 | `templates/lab.html` | 新建策略 + 回测记录（两 tab 同页） |
-| `templates/lab_result.html` | 回测结果详情页 |
-| `templates/lab_symbols.html` | 个股明细列表页 |
-| `templates/lab_symbol.html` | 个股回测详情页 |
+| `gui/lab_result.py` + SaaS `job.html` | 本地回测结果详情页（2026-11-15 起复用公网模板） |
+| `gui/lab_result.py` + SaaS `symbols.html` | 本地个股明细列表页（复用公网模板） |
+| `gui/lab_result.py` + SaaS `symbol.html` | 本地个股回测详情页（复用公网模板、重播与因子 chips） |
 | SaaS 侧 `gui/saas/templates/*.html` | 复刻版：base.html 内嵌一份精简 tokens 后**同样引入 `/static/lab-theme.css` + `lab-ui.js`**（`saas/templates/base.html:73`），视觉以 lab-theme 为准 |
 
 **重要现状**：lab_result/lab_symbol 模板头部有一段页面级 `<style>`（如 `lab_result.html:5-58`），是落地早期残留的灰蓝色硬编码（`#2563eb` 蓝、`#e5e7eb` 灰等），其中大部分被 lab-theme.css 后加载覆盖/纠偏。**新代码一律用 lab-theme 的类与变量，禁止再写页面级硬编码颜色**；残留蓝（如 tag-rank 的 `#2563eb` 链接色、`lab_result.html:42-44`）属于已存在瑕疵，不是规范。

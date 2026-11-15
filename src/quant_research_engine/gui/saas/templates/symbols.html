@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "saas/templates/base.html" %}
 {# P1 只读分享（QRE-SAAS-READONLY-SHARE）：分享视图的返回链接保留 token #}
 {% set share_qs = '?share=' ~ request.args.get('share') if request.args.get('share') else '' %}
 {% block title %}个股回测明细 · A股回测台{% endblock %}
@@ -36,7 +36,7 @@
 {% block scripts %}
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
-const JOB_ID = {{ job_id }};
+const JOB_ID = {{ job_id | tojson }};
 // P1 只读分享（QRE-SAAS-READONLY-SHARE）：分享视图带 token 访问结果 API 与导航
 const SHARE_TOKEN = (function(){
   try { return new URLSearchParams(location.search).get('share') || ''; } catch (e) { return ''; }

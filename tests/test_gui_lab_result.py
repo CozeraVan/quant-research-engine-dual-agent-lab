@@ -150,7 +150,7 @@ def test_lab_result_page_200(lab_client):
     assert "/static/lab-theme.css" in html
     assert "chart-data" in html
     assert "dataZoom" in html
-    assert "回撤" in html and "赚钱效应归因" in html and "treemap" in html
+    assert "回撤" in html and "赚钱板块归因" in html and "treemap" in html
     # QRE-LAB-UI-LANDING：模块顺序 概述→收益曲线→交易磨损→FRM→归因→个股明细入口
     assert 'id="box-fees"' in html and "交易磨损" in html
     assert 'id="big-symbols"' in html and "/symbols" in html
@@ -159,8 +159,8 @@ def test_lab_result_page_200(lab_client):
         < html.index('id="box-tags"') < html.index('id="big-symbols"')
     # 滑块重算 rAF 节流（性能顺手项）
     assert "requestAnimationFrame" in html
-    # treemap 三级显隐（面积分档 labelText）+ tooltip 贡献居前个股（1:1 移植设计稿）
-    assert "labelText" in html and "贡献居前" in html
+    # 公网同款 treemap 与个股贡献下钻
+    assert "treemap" in html and "个股贡献" in html
     # QRE-GUI-LAB-RESULT-025：月度热力图与个股 Top10 区块已删除
     assert "chart-monthly" not in html and "chart-symbols" not in html
     assert lab_client.get("/lab/runs/ghost").status_code == 404
@@ -297,7 +297,7 @@ def test_lab_symbols_page_200(lab_client):
     html = resp.data.decode("utf-8")
     assert "/static/lab-theme.css" in html
     assert 'id="sym-table"' in html and 'id="syms-filter"' in html
-    assert "tag-analysis" in html          # 数据源复用归因端点
+    assert "/api/results/" in html and "/symbols" in html  # 公网同源个股列表端点
     assert "赚钱效应分位" in html and "总净盈亏" in html
     assert "Enter" in html                 # 完整代码回车直跳
     assert lab_client.get("/lab/runs/ghost/symbols").status_code == 404
@@ -537,7 +537,7 @@ def test_symbol_detail_page_and_endpoint(lab_client):
     html = resp.data.decode("utf-8")
     assert "candlestick" in html and "chart-kline" in html and "个股回测详情" in html
     # RESULT-035：防溢出样式（长文本/宽表格不出框）
-    assert "word-break: break-all" in html and "overflow: hidden" in html
+    assert "overflow:hidden" in html and "overflow-x:auto" in html
 
     d = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
     assert d["ok"] is True
@@ -1519,3 +1519,25 @@ class TestQfqAnchorDate:
         lab_result._fetch_factor_panels({"run_id": "r1"}, "600330.SH", dates)
         assert seen.get("as_of") == "2024-01-04", (
             f"锚点日期必须是 K 线最后交易日，实际 {seen.get('as_of')}")
+
+
+def test_local_video_agent_run_catalog_and_overview(lab_client):
+    listed = lab_client.get("/api/lab/runs").get_json()
+    item = next(row for row in listed["runs"] if row["run_id"] == RUN_ID)
+    assert item["links"]["page"] == f"/lab/runs/{RUN_ID}"
+    assert item["links"]["symbol_detail"].endswith("/symbol/<ts_code>/detail")
+
+    response = lab_client.get(f"/api/lab/runs/{RUN_ID}")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["run"]["run_id"] == RUN_ID
+    assert payload["run"]["output_dir"]
+    assert payload["links"] == item["links"]
+    assert lab_client.get("/api/lab/runs/not-found").status_code == 404
+
+
+def test_local_video_agent_short_symbol_code(lab_client):
+    response = lab_client.get(f"/api/results/{RUN_ID}/symbols/000001")
+    assert response.status_code == 200
+    assert response.get_json()["summary"]["ts_code"] == "000001.SZ"

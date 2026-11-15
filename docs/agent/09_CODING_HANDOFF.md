@@ -1,5 +1,13 @@
 # Coding Handoff
 
+## 2026-11-15 本地结果直读与 SaaS 模板复用
+
+- `lab_result._lab_run_links` 是 agent URL 唯一目录；`GET /api/lab/runs/<id>` 返回 run record/output_dir/links。
+- 本地 `/lab/runs` 三页面渲染 `saas/templates/{job,symbols,symbol}.html`；`/api/results/<run_id>` 与 `/saas/jobs/<run_id>` 是本地别名，不连接 SaaS DB。
+- `run_config.job_id` 支持字符串 run id；本地 artifacts dict 不冒充 worker list。无 tags 时 symbols 由 `_symbol_trade_stats` 构建。
+- lab 与 SaaS 均用 ChoiceLoader 增加 gui 根目录，模板显式 `saas/templates/base.html`；公网回归 209 passed/13 skipped。
+- 浏览器证据 `.tmp/local-video-browser/result.json` 及截图；真实数据未复制到公网。
+
 ## 2026-11-15 Game 候选池缓存与预热
 
 - `game/data.py`：`_latest_cached`（600s）/`_pool_cached`（latest key + 24h）使用线程锁；`filter_untrusted_symbols` 返回新 list 后才 shuffle，不污染缓存。`warmup()` 只读预填；`invalidate_cache()` 供日切/测试。

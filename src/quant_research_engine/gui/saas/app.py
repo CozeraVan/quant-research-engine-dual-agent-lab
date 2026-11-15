@@ -36,7 +36,8 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, g, jsonify, render_template, request, session
-from sqlalchemy import create_engine, text
+from jinja2 import ChoiceLoader, FileSystemLoader
+from sqlalchemy import bindparam, create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -1399,6 +1400,10 @@ def create_saas_app() -> Flask:
         static_folder=str(SHARED_STATIC_DIR),
         static_url_path="/static",
     )
+    # 允许本地 lab 与 SaaS 共用显式 saas/base.html 模板路径。
+    app.jinja_loader = ChoiceLoader([
+        app.jinja_loader, FileSystemLoader(str(SAAS_TEMPLATE_DIR.parent.parent)),
+    ])
     app.config["SECRET_KEY"] = os.urandom(24)
     # P0-9（CR-2026-11-03，压测实测）：worker 一个产物文件一个 multipart part，
     # 全市场回测的 manifest 实测 1,537 part，超过 Flask 3.1 默认 MAX_FORM_PARTS=1000
@@ -2033,7 +2038,7 @@ def create_saas_app() -> Flask:
             jobs = conn.execute(
                 text(
                     "SELECT j.id, j.kind, j.status, j.created_at, j.params, "
-                    "r.summary, r.chart_data "
+                    "r.summary, (r.chart_data -> 'metrics') AS chart_metrics "
                     "FROM jobs j LEFT JOIN results r ON r.job_id = j.id "
                     "WHERE j.strategy_id = :sid AND j.user_id = :uid "
                     "ORDER BY j.created_at DESC LIMIT 100"
@@ -2042,7 +2047,7 @@ def create_saas_app() -> Flask:
             ).mappings().all()
         history = []
         for j in jobs:
-            metrics = ((j["chart_data"] or {}).get("metrics") or {})
+            metrics = j["chart_metrics"] or {}
             summary = j["summary"] or {}
             params = j["params"] or {}
             codes = params.get("codes")
@@ -4230,28 +4235,53 @@ def create_saas_app() -> Flask:
             page_size = min(100, max(1, int(request.args.get("page_size", 20))))
         except ValueError:
             return jsonify({"ok": False, "error": "page/page_size 须为整数"}), 400
+        direction = "ASC" if order == "asc" else "DESC"
+        if sort == "excess_return":
+            # 与旧 Python 排序语义逐字对齐：desc 时 NULL 在前，asc 时 NULL 在后
+            nulls = "FIRST" if order == "desc" else "LAST"
+            order_by = (
+                "ORDER BY NULLIF(r.chart_data -> 'metrics' ->> 'excess_return', '')"
+                "::double precision " + direction + " NULLS " + nulls +
+                ", j.created_at DESC, j.id DESC"
+            )
+        else:
+            order_by = "ORDER BY j.created_at " + direction + ", j.id " + direction
+        from_clause = (
+            " FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
+            "LEFT JOIN results r ON r.job_id = j.id "
+            "WHERE j.user_id = :uid AND j.kind = 'full' "
+        )
         with engine.connect() as conn:
             contract_col = (", r.result_contract AS result_result_contract"
                             if _ensure_result_contract_column(engine) else "")
+            # QRE-SAAS-RESULTS-PAGINATION-002：排序/分页/计数全部下推 SQL，
+            # 单请求内存只与 page_size 成正比，与用户名下记录总数无关
             rows = conn.execute(
                 text(
                     "SELECT j.id, j.kind, j.status, j.created_at, j.params, "
-                    "s.name AS strategy_name, r.summary, r.chart_data, r.data_until"
-                    + contract_col +
-                    " FROM jobs j JOIN strategies s ON s.id = j.strategy_id "
-                    "LEFT JOIN results r ON r.job_id = j.id "
-                    "WHERE j.user_id = :uid AND j.kind = 'full' "
-                    "ORDER BY j.created_at DESC"
+                    "s.name AS strategy_name, r.summary, "
+                    "(r.chart_data -> 'metrics') AS chart_metrics, r.data_until"
+                    + contract_col + from_clause + order_by +
+                    " LIMIT :limit OFFSET :offset"
                 ),
-                {"uid": uid},
+                {"uid": uid, "limit": page_size, "offset": (page - 1) * page_size},
             ).mappings().all()
+            total = int(conn.execute(
+                text("SELECT COUNT(*)" + from_clause), {"uid": uid}
+            ).scalar() or 0)
             _ensure_signal_tables(engine)
-            showcase_ids = {
-                r[0] for r in conn.execute(text("SELECT job_id FROM showcase WHERE is_active"))
-            }
+            showcase_ids = set()
+            if rows:
+                showcase_ids = {
+                    r[0] for r in conn.execute(
+                        text("SELECT job_id FROM showcase WHERE is_active AND job_id IN :ids")
+                        .bindparams(bindparam("ids", expanding=True)),
+                        {"ids": [r["id"] for r in rows]},
+                    )
+                }
         items = []
         for row in rows:
-            metrics = ((row["chart_data"] or {}).get("metrics") or {})
+            metrics = row["chart_metrics"] or {}
             summary = row["summary"] or {}
             params = row["params"] or {}
             # symbol_count 兜底：summary 无此字段时按提交参数推导
@@ -4284,13 +4314,6 @@ def create_saas_app() -> Flask:
                 "result_contract": _jsonable(contract_view(
                     row["id"], row.get("result_result_contract"), row["data_until"])),
             })
-        if sort == "excess_return":
-            items.sort(key=lambda x: (x["excess_return"] is None, x["excess_return"]),
-                       reverse=(order == "desc"))
-        else:
-            items.sort(key=lambda x: x["created_at"] or "", reverse=(order == "desc"))
-        total = len(items)
-        items = items[(page - 1) * page_size: page * page_size]
         return jsonify({"ok": True, "total": total, "page": page,
                         "page_size": page_size, "items": items})
 

@@ -1,5 +1,11 @@
 # Task Handoff
 
+## 本地视频 Agent 结果直读（2026-11-15，已部署待验收）
+
+- 视频 agent 从 `http://127.0.0.1:8081/api/lab/runs` 发现 completed run，按 links 读取 overview/chart/risk/symbol，不经 ECS。
+- 本地结果/个股页已复用公网模板；真实 run 全链路与浏览器三页通过，209 项相关测试通过。
+- 手册 `docs/auxiliary/video/LOCAL_VIDEO_AGENT_API.md`。未 commit/push；后续顺序为 output_dir 隔离 → EMA 口径 → 安全审计 → NL 缓存清理。
+
 ## Game 冷开局缓存优化（2026-11-15，DONE）
 
 - provider 级 latest/pool 缓存 + 启动后台预热 + factor_catalog 缓存已发布；随机与因子语义不变。

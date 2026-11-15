@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
+from jinja2 import ChoiceLoader, FileSystemLoader
 
 from quant_research_engine.gui.engine import list_templates
 from quant_research_engine.gui.lab_result import register_lab_result_routes
@@ -37,6 +38,10 @@ def create_lab_app() -> Flask:
         template_folder=str(gui_app.TEMPLATE_DIR),
         static_folder=str(gui_app.STATIC_DIR),
     )
+    # 本地结果页可直接复用 saas/job.html 等模板；显式 saas/base.html 由 gui 根目录解析。
+    app.jinja_loader = ChoiceLoader([
+        app.jinja_loader, FileSystemLoader(str(gui_app.TEMPLATE_DIR.parent)),
+    ])
     app.config["SECRET_KEY"] = os.urandom(24)
     app.add_template_filter(gui_app._fmtval, "fmtval")
 

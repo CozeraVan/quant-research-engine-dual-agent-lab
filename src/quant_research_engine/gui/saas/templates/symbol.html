@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "saas/templates/base.html" %}
 {# P1 只读分享（QRE-SAAS-READONLY-SHARE）：分享视图的返回链接保留 token #}
 {% set share_qs = '?share=' ~ request.args.get('share') if request.args.get('share') else '' %}
 {% block title %}个股回测详情 · A股回测台{% endblock %}
@@ -157,7 +157,7 @@
 // QRE-SAAS-SYMBOL-UX：数据来自 worker 回传的 per-symbol 产物（ECS 无行情库）；
 // 股票代码一律不显示交易所后缀（dispCode，见 base.html）。
 // P1 只读分享（QRE-SAAS-READONLY-SHARE）：分享视图带 token 访问结果 API 与导航
-const JOB_ID = {{ job_id }};
+const JOB_ID = {{ job_id | tojson }};
 const TS_CODE = {{ ts_code | tojson }};
 const SHARE_TOKEN = (function(){
   try { return new URLSearchParams(location.search).get('share') || ''; } catch (e) { return ''; }

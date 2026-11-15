@@ -1646,6 +1646,50 @@ def _reap_zombie_run(record: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
+def _local_ts_code(record: dict[str, Any], value: str) -> str:
+    """公网列表用短代码跳转；本地按 run 的真实交易代码恢复交易所后缀。"""
+    if "." in value:
+        return value
+    matches = [code for code in _symbol_trade_stats(record) if code.startswith(value + ".")]
+    return matches[0] if len(matches) == 1 else value
+
+
+def _lab_result_summary(run_id: str, record: dict[str, Any]) -> dict[str, Any]:
+    """把本地 run 适配为 SaaS summary 契约，页面与 agent 共用同一数据源。"""
+    summary = {}
+    path = _find_output_file(record, "strategy_performance.json")
+    if path is not None:
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                summary = loaded
+        except (OSError, json.JSONDecodeError):
+            summary = {}
+    return json_safe({
+        "ok": True, "job_id": run_id, "readonly": True, "readonly_kind": "local",
+        "strategy_id": None, "strategy_name": _strategy_name_from_yaml(run_id) or run_id,
+        "strategy": {"name": _strategy_name_from_yaml(run_id) or run_id,
+                     "entry_mode": "yaml", "yaml": _engine.get_run_strategy_yaml(run_id)},
+        "summary": summary, "data_until": record.get("end"),
+        "result_contract": record.get("result_contract"), "result_files": None,
+    })
+
+
+def _lab_run_links(run_id: str) -> dict[str, str]:
+    """视频/自动化 agent 的本地只读入口；相对 URL 不含公网依赖。"""
+    base = f"/lab/runs/{run_id}"
+    api = f"/api/lab/runs/{run_id}"
+    return {
+        "page": base,
+        "overview": api,
+        "chart_data": f"{api}/chart-data",
+        "tag_analysis": f"/api/results/{run_id}/tag-analysis",
+        "risk_analysis": f"/api/results/{run_id}/risk-analysis",
+        "symbols_page": f"{base}/symbols",
+        "symbol_detail": f"{api}/symbol/<ts_code>/detail",
+    }
+
+
 def build_lab_runs_list() -> list[dict[str, Any]]:
     """list_runs() 增强：每条加 strategy_name / symbol_count，按创建时间倒序。
 
@@ -1671,6 +1715,7 @@ def build_lab_runs_list() -> list[dict[str, Any]]:
             "strategy_name": _strategy_name_from_yaml(run_id) or run_id,
             "symbol_count": len(codes) if codes else None,
             "excess_return": _excess_return_of(record),
+            "links": _lab_run_links(run_id),
         })
     items.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     return items
@@ -1682,6 +1727,15 @@ def register_lab_result_routes(app: Flask) -> None:
     @app.route("/api/lab/runs")
     def lab_runs_list():  # type: ignore[no-untyped-def]
         return jsonify({"ok": True, "runs": build_lab_runs_list()})
+
+    @app.route("/api/lab/runs/<run_id>")
+    def lab_run_overview(run_id: str):  # type: ignore[no-untyped-def]
+        record = get_run(run_id)
+        if record is None:
+            return jsonify({"ok": False, "error": f"run {run_id} 不存在"}), 404
+        return jsonify(json_safe({
+            "ok": True, "run": record, "links": _lab_run_links(run_id),
+        }))
 
     @app.route("/api/lab/runs/<run_id>/delete", methods=["POST"])
     def lab_run_delete(run_id: str):  # type: ignore[no-untyped-def]
@@ -1705,7 +1759,8 @@ def register_lab_result_routes(app: Flask) -> None:
         record = get_run(run_id)
         if record is None:
             return render_template("error.html", message=f"Run {run_id} 不存在"), 404
-        return render_template("lab_result.html", run_id=run_id, record=record)
+        return render_template("saas/templates/job.html", job_id=run_id, record=record,
+                               asset_v="local", saas_auth_bypass=True)
 
     @app.route("/api/lab/runs/<run_id>/chart-data")
     def lab_run_chart_data(run_id: str):  # type: ignore[no-untyped-def]
@@ -1733,14 +1788,16 @@ def register_lab_result_routes(app: Flask) -> None:
         record = get_run(run_id)
         if record is None:
             return render_template("error.html", message=f"Run {run_id} 不存在"), 404
-        return render_template("lab_symbols.html", run_id=run_id)
+        return render_template("saas/templates/symbols.html", job_id=run_id,
+                               asset_v="local", saas_auth_bypass=True)
 
     @app.route("/lab/runs/<run_id>/symbol/<ts_code>")
     def lab_run_symbol(run_id: str, ts_code: str):  # type: ignore[no-untyped-def]
         record = get_run(run_id)
         if record is None:
             return render_template("error.html", message=f"Run {run_id} 不存在"), 404
-        return render_template("lab_symbol.html", run_id=run_id, ts_code=ts_code)
+        return render_template("saas/templates/symbol.html", job_id=run_id, ts_code=ts_code,
+                               asset_v="local", saas_auth_bypass=True)
 
     @app.route("/api/lab/runs/<run_id>/symbol/<ts_code>/detail")
     def lab_run_symbol_detail(run_id: str, ts_code: str):  # type: ignore[no-untyped-def]
@@ -1754,3 +1811,101 @@ def register_lab_result_routes(app: Flask) -> None:
         # 在 PG 存的是 NaN 而非 NULL），必须过 json_safe 再出口，否则浏览器
         # resp.json() 抛 SyntaxError，页面只剩「加载失败，请稍后重试」。
         return jsonify(json_safe(data))
+
+
+    # 本地视频/自动化视图：复用公网模板，以下别名让模板中的既有 URL 无需公网。
+    @app.get("/saas/jobs/<run_id>")
+    def local_public_job_page(run_id: str):
+        return lab_run_result(run_id)
+
+    @app.get("/saas/jobs/<run_id>/symbols")
+    def local_public_symbols_page(run_id: str):
+        return lab_run_symbols(run_id)
+
+    @app.get("/saas/jobs/<run_id>/symbols/<ts_code>")
+    def local_public_symbol_page(run_id: str, ts_code: str):
+        return lab_run_symbol(run_id, ts_code)
+
+    def _local_record(run_id: str):
+        record = get_run(run_id)
+        if record is None:
+            return None, (jsonify({"ok": False, "error": f"run {run_id} 不存在"}), 404)
+        return record, None
+
+    @app.get("/api/results/<run_id>/summary")
+    def local_result_summary(run_id: str):
+        record, error = _local_record(run_id)
+        return error or jsonify(_lab_result_summary(run_id, record))
+
+    @app.get("/api/results/<run_id>/chart-data")
+    def local_result_chart(run_id: str):
+        return lab_run_chart_data(run_id)
+
+    @app.get("/api/results/<run_id>/tag-analysis")
+    def local_result_tags(run_id: str):
+        record, error = _local_record(run_id)
+        if error:
+            return error
+        tag = build_lab_chart_data(record).get("tag_analysis")
+        if not tag:
+            return jsonify({"ok": False, "error": "无归因数据"}), 404
+        return jsonify(json_safe(tag))
+
+    @app.get("/api/results/<run_id>/risk-analysis")
+    def local_result_risk(run_id: str):
+        return lab_run_risk_analysis(run_id)
+
+    @app.get("/api/results/<run_id>/symbols")
+    def local_result_symbols(run_id: str):
+        record, error = _local_record(run_id)
+        if error:
+            return error
+        tag = build_lab_chart_data(record).get("tag_analysis") or {}
+        by_symbol = {}
+        for items in (tag.get("layers") or {}).values():
+            for item in items or []:
+                for symbol in item.get("symbols") or []:
+                    current = by_symbol.get(symbol["ts_code"])
+                    if current is None or abs(symbol["total_pnl"]) > abs(current["total_pnl"]):
+                        by_symbol[symbol["ts_code"]] = symbol
+        symbols = sorted(by_symbol.values(), key=lambda item: item["total_pnl"], reverse=True)
+        if not symbols:
+            # 无归因标签时仍须让视频 agent 读取全部交易个股，不从公网补数据。
+            stats = _symbol_trade_stats(record)
+            ordered = sorted(stats.items(), key=lambda item: item[1]["total_pnl"], reverse=True)
+            symbols = [{
+                "ts_code": code, "name": code, "total_pnl": round(stat["total_pnl"], 2),
+                "trades": stat["trades"], "avg_ret": stat["sum_ret"] / stat["trades"],
+                "win_rate": stat["wins"] / stat["trades"], "percentile": rank / len(ordered),
+            } for rank, (code, stat) in enumerate(ordered, 1) if stat["trades"]]
+        return jsonify(json_safe({"ok": True, "job_id": run_id, "symbols": symbols}))
+
+    @app.get("/api/results/<run_id>/symbols/<ts_code>")
+    def local_result_symbol_detail(run_id: str, ts_code: str):
+        record, error = _local_record(run_id)
+        if error:
+            return error
+        return lab_run_symbol_detail(run_id, _local_ts_code(record, ts_code))
+
+    @app.get("/api/saas/jobs/<run_id>/params")
+    def local_result_params(run_id: str):
+        record, error = _local_record(run_id)
+        if error:
+            return error
+        name = _strategy_name_from_yaml(run_id) or run_id
+        strategy = {"name": name, "yaml": _engine.get_run_strategy_yaml(run_id),
+                    "entry_mode": "yaml", "nl_text": None, "wizard_state": None}
+        from quant_research_engine.gui.saas.run_config import build_run_config
+        summary = _lab_result_summary(run_id, record)["summary"]
+        config = build_run_config(
+            job_id=run_id, params=record, input_snapshot=strategy, strategy_name=name,
+            result_summary=summary,
+            artifacts=record.get("artifacts") if isinstance(record.get("artifacts"), list) else [],
+            data_until=record.get("end"),
+        )
+        return jsonify(json_safe({
+            "ok": True, "job_id": run_id, "idempotency_key": run_id,
+            "kind": "local", "status": record.get("status"),
+            "created_at": record.get("created_at"), "params": record,
+            "strategy": strategy, "run_config": config,
+        }))

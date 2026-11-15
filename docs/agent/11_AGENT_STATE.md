@@ -19,6 +19,12 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-15 本地视频 Agent 结果直读 DONE（待验收/提交）
+
+- 8081 可直接发现 run、读取 output_dir/参数/chart/risk/个股 JSON，本地页面复用公网模板与重播。
+- 真实 run 和浏览器三页通过，209 项相关测试通过；手册在 `docs/auxiliary/video/LOCAL_VIDEO_AGENT_API.md`。
+- 公网仅部署共享模板兼容，qre-saas active。未 commit/push；之后继续批准的 1–4。
+
 ### 2026-11-15 Game 候选池持久化已部署，待提交批准
 
 - 生产文件缓存 `/var/lib/qre-game/pool.json` 已接线；同日重启磁盘命中、跨日 stale-while-revalidate、原子写和损坏退化。72 游戏/生产测试 + 47 前端守卫通过。
