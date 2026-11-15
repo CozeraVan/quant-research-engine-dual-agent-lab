@@ -2,9 +2,10 @@
 """F-21：独立重算 ema_250，与因子库存值在 2026-10-12…2026-10-26 窗口对账。
 
 背景（14 号文档 F.3-21）：`ema_250` 在该窗口有 11 点独立重算不一致（max_abs=0.287911）。
-本脚本只读：从 `public.stock_daily` 取原始价 × adj_factor（后复权，与因子库同尺度），
+本脚本只读：从 `public.stock_daily` 读取**全部历史**的原始价 × adj_factor（后复权），
 用 pandas `ewm(span=250, adjust=False)` 重算，与 `factors.stock_daily_overlap_close.ema_250`
-逐日对比，输出 max_abs 与逐日明细。**不写任何表、不重算全库。**
+逐日对比，输出 max_abs 与逐日明细。全历史用于排除 2024 截断造成的种子/暖机误判；
+**不写任何表、不重算全库。**
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ def main() -> int:
         FROM public.stock_daily d
         JOIN factors.stock_daily_overlap_close o
           ON o.ts_code = d.ts_code AND o.trade_date = d.trade_date
-        WHERE d.ts_code = ANY(:codes) AND d.trade_date BETWEEN '2024-01-01' AND '2026-10-30'
+        WHERE d.ts_code = ANY(:codes)
         ORDER BY d.ts_code, d.trade_date
     """)
     df = pd.read_sql(q, eng, params={"codes": CODES}, parse_dates=["trade_date"])

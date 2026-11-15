@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-15 ema_250 口径核查自审
+
+- Review Status：PASS（分析任务），无 Required Fixes。生产公式与独立递推一致，差异并非单纯种子问题。
+- 全历史重算显示稳定个股比例差，指向存值输入快照陈旧；未改数据、未重算、未部署。
+- 验证脚本已从 2024 截断改为全历史，避免错误归因；证据落 `.tmp/ema250-full-history-20261115.txt`。
+
 ## 2026-11-15 output_dir 隔离自审
 
 - Review Status：PASS，无 Required Fixes。每次运行目录唯一，record 与执行器路径一致；111 项相关测试通过。

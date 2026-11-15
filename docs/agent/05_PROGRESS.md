@@ -1,3 +1,5 @@
+2026-11-15 F3-21 ema_250 核查完成：生成端 `pandas_ta.ema` 与 pandas ewm 递推一致；旧 2024 截断复核会混入种子差。改验证脚本读全历史后，当前 hfq 全历史重算与存值仍有稳定个股比例差（600519 约 1.008、601318 约 1.031），不再是种子可解释；指向存值价格/复权快照陈旧，未改任何数据、不全库重算。证据 `.tmp/ema250-full-history-20261115.txt`。
+
 2026-11-15 F2-8 回测 output_dir 隔离完成：`gui/engine.run_backtest` 生成 rid 后把用户 output_dir 解释为父目录，实际执行与 record 统一使用 `<output_dir>/<run_id>`；None 行为不变，CLI 直调不受影响。新增执行器与 record 同路径断言；补本地视频新增路由白名单，相关 **111 passed**。qre-gui-lab 重启后页面正常；未跑回测、无 ECS 变更。
 
 2026-11-15 本地个股短代码 404 修复：用户点击列表后进入权限页、登录 404。日志证实 `/api/results/.../symbols/300308` 缺 `.SZ` 导致详情 404；新增 `_local_ts_code` 按 run 的 round_trips 唯一匹配恢复后缀。真实 `300308 → 300308.SZ` 200、K线3368点；相关 **208 passed / 13 skipped**，qre-gui-lab 已重启。未 commit/push。

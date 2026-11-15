@@ -401,7 +401,7 @@ item3（MACD，50.4 万笔）worker RSS 峰值 **13.97 GB**，MemAvailable 最�
 18. 分钟线落后日线（定时器空转）：**待确认数据源侧**。
 19. `akshare_data` 5.8GB 无消费者：**待用户确认删除**。
 20. 本地无 `tushare_data` 逻辑备份 / 定期 dump 策略：**2026-11-11 用户裁定挂起**——本地单盘备份意义有限，**等全线上云、有多个地点的数据盘可存储后再做**。脚本与 systemd timer 已备（`deploy/cloud/backup-market-db-weekly.sh` + `qre-market-backup.timer`），届时 `systemctl enable --now qre-market-backup.timer` 即可启用。首次试跑的半成品已删除。
-21. `ema_250` 在 2026-10-12…2026-10-26 有 11 点独立重算不一致：**2026-11-11 已独立复核**（`scripts/verify_ema250_recalc.py`，pandas `ewm(span=250, adjust=False)` × 后复权 close）。实测差异为**系统性且随时间递增**（600519.SH 92.94→94.12，约 0.81%；601318.SH 5.51→5.60，约 3.07%），指向 **EMA 播种/递推口径差异**，而非偶发脏数据。**在核对因子生成端的 EMA 约定之前，不按 bug 修、不重算。**下一步：读因子生成脚本的 EMA 实现（adjust/seed），若与 pandas 不同则记为口径差异并文档化。
+21. `ema_250` 口径核查：**2026-11-15 已完成**。生成端 `pandas_ta.ema(length=250)` 与 pandas `ewm(span=250,adjust=False)` 递推一致；全历史重排后仍出现个股稳定比例差（如 600519 约 1.008、601318 约 1.031），并非单纯种子/暖机。指向因子存值所用历史价格/复权因子快照与当前输入不一致，不重算全库；后续归属数据新鲜度/历史复权快照审计。验证脚本已改全历史，证据 `.tmp/ema250-full-history-20261115.txt`。
 22. NL 编译缓存表无自动清理（仅索引）；后处理变化须手动 bump `NL_COMPILER_CACHE_VERSION`。
 23. 游客→注册转化无跨会话关联（口径 `unlinked`，未扩展追踪 schema）；NL 裁判无置信度输出、不做阈值校准结论。
 24. `stock_daily` 中 26 只 `920xxx.BJ` 共 79 行 `low < 0.2×close` 异常**未修**：污染 intrabar 止损与 ATR/波动率类因子，收盘价类信号不受影响；未改任何数据、未跑回测。
