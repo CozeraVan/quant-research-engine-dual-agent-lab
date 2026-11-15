@@ -9,6 +9,8 @@ User=van
 WorkingDirectory=/home/van/quant-workspace/quant-research-engine-dual-agent-lab
 EnvironmentFile=/etc/qre-saas-worker.env
 Environment=QRE_GAME_COOKIE_SECURE=1
+Environment=QRE_GAME_POOL_CACHE=/var/lib/qre-game/pool.json
+StateDirectory=qre-game
 ExecStart=/home/van/quant-workspace/quant-research-engine-dual-agent-lab/.venv/bin/gunicorn --bind 127.0.0.1:8092 --workers 1 --threads 4 --timeout 120 'quant_research_engine.game.server:create_app()'
 Restart=always
 RestartSec=5

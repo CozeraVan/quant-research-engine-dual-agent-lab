@@ -19,6 +19,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+from pathlib import Path
 
 from game_store_source import load_store, resolve_source
 
@@ -37,11 +39,17 @@ def main() -> int:
         parser.error("游戏预览只允许回环地址，禁止对外监听")
 
     source = resolve_source(args.store_source)
-    provider = PostgresGameDataProvider(load_store(source))
+    # 候选池持久化（下一轮）：预览默认落本地 scratch 缓存，重启同日磁盘命中；
+    # QRE_GAME_POOL_CACHE 可覆盖路径，设空字符串则关闭（纯内存）。生产路径由 WSL 接线。
+    default_cache = Path(__file__).resolve().parents[2] / ".tmp" / "game-windows-dev" / "preview_pool_cache.json"
+    cache_env = os.environ.get("QRE_GAME_POOL_CACHE")
+    cache_path = (cache_env if cache_env is not None else str(default_cache)) or None
+    provider = PostgresGameDataProvider(load_store(source), pool_cache_path=cache_path)
     app = create_game_app(provider)
     app.config["TEMPLATES_AUTO_RELOAD"] = True
     print(f"* 我不是股神 Windows 预览: http://{args.host}:{args.port}/game")
     print(f"* 数据源: {source}（零数据库连接）")
+    print(f"* 候选池缓存: {cache_path or '关闭（纯内存）'}")
     app.run(host=args.host, port=args.port, use_reloader=False)
     return 0
 

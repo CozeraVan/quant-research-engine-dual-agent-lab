@@ -12,7 +12,10 @@ from quant_research_engine.game.web import create_game_app
 
 def create_app():
     store = PostgresDataStore(DatabaseSettings.from_env())
-    app = create_game_app(PostgresGameDataProvider(store))
+    provider = PostgresGameDataProvider(
+        store, pool_cache_path=os.environ.get("QRE_GAME_POOL_CACHE") or None,
+    )
+    app = create_game_app(provider)
     app.config["GAME_COOKIE_SECURE"] = os.environ.get("QRE_GAME_COOKIE_SECURE") == "1"
     return app
 

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import os
 import random
+import threading
 import time
 from datetime import date
+from pathlib import Path
 from threading import Lock
 from typing import Any
 
@@ -52,7 +56,8 @@ def bars_from_rows(rows: list[dict[str, Any]]) -> list[Bar]:
 class PostgresGameDataProvider:
     def __init__(self, store: Any, *, warmup_bars: int = 250, game_bars: int = 1250,
                  candidate_limit: int = 20, with_factors: bool = True,
-                 latest_ttl_s: float = 600.0, pool_ttl_s: float = 86400.0) -> None:
+                 latest_ttl_s: float = 600.0, pool_ttl_s: float = 86400.0,
+                 pool_cache_path: str | Path | None = None) -> None:
         self.store = store
         self.factory = GameSessionFactory(warmup_bars=warmup_bars, game_bars=game_bars)
         self.candidate_limit = candidate_limit
@@ -66,6 +71,11 @@ class PostgresGameDataProvider:
         self._cache_lock = Lock()
         self._latest_cache: tuple[date, float] | None = None
         self._pool_cache: tuple[date, list[str], float] | None = None
+        # 候选池持久化（下一轮）：pool_cache_path 非 None 时把候选代码列表落 JSON 文件，
+        # 重启同日磁盘命中（免 22–56s 冷查询）；跨日 stale-while-revalidate（先回最近旧池、
+        # 后台一次性刷新）。默认 None＝关闭，纯内存缓存，向后兼容。生产路径由部署侧接线。
+        self.pool_cache_path = Path(pool_cache_path) if pool_cache_path is not None else None
+        self._refreshing = False
 
     def latest_trade_date(self) -> date:
         if hasattr(self.store, "latest_trade_date"):
@@ -91,10 +101,76 @@ class PostgresGameDataProvider:
             cached = self._pool_cache
             if cached is not None and cached[0] == latest and now < cached[2]:
                 return cached[1]
+        disk = self._disk_load()
+        if disk is not None:
+            d_latest, d_symbols, d_saved = disk
+            age = time.time() - d_saved
+            if age < self.pool_ttl_s:
+                if d_latest == latest:
+                    with self._cache_lock:
+                        self._pool_cache = (latest, d_symbols, now + self.pool_ttl_s)
+                    return d_symbols
+                # 跨日：先回最近旧池（随机标的/窗口语义不变），后台一次性刷新到新 latest。
+                self._refresh_pool_async(latest)
+                return d_symbols
         raw = self.store.list_symbols_with_bars(date(2000, 1, 1), latest)
         with self._cache_lock:
             self._pool_cache = (latest, raw, now + self.pool_ttl_s)
+        self._disk_save(latest, raw)
         return raw
+
+    def _disk_load(self) -> tuple[date, list[str], float] | None:
+        """读磁盘候选池缓存；缺失/损坏/schema 不符一律视为无缓存（退化为冷查询，不抛异常）。"""
+        if self.pool_cache_path is None:
+            return None
+        try:
+            payload = json.loads(self.pool_cache_path.read_text(encoding="utf-8"))
+            if payload.get("schema") != 1:
+                return None
+            latest = date.fromisoformat(payload["latest"])
+            symbols = payload["symbols"]
+            saved_at = float(payload["saved_at"])
+            if not isinstance(symbols, list) or not all(isinstance(s, str) for s in symbols):
+                return None
+            return latest, symbols, saved_at
+        except Exception:
+            return None  # 缓存文件损坏/缺失：退化为冷查询，不影响开局
+
+    def _disk_save(self, latest: date, symbols: list[str]) -> None:
+        """原子写候选池缓存（唯一临时名＋os.replace）：并发写 last-wins，读不见半文件。"""
+        if self.pool_cache_path is None:
+            return
+        try:
+            payload = {"schema": 1, "latest": latest.isoformat(),
+                       "symbols": list(symbols), "saved_at": time.time()}
+            self.pool_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.pool_cache_path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+            tmp.write_text(json.dumps(payload), encoding="utf-8")
+            os.replace(tmp, self.pool_cache_path)
+        except Exception:
+            pass  # 缓存写失败仅退化为内存缓存，不影响开局
+
+    def _refresh_pool_async(self, latest: date) -> None:
+        """跨日后台一次性刷新候选池（_refreshing 闸保证只起一个线程）；失败仅退化下次冷查询。"""
+        with self._cache_lock:
+            if self._refreshing:
+                return
+            self._refreshing = True
+
+        def _work() -> None:
+            try:
+                raw = self.store.list_symbols_with_bars(date(2000, 1, 1), latest)
+                now = time.monotonic()
+                with self._cache_lock:
+                    self._pool_cache = (latest, raw, now + self.pool_ttl_s)
+                self._disk_save(latest, raw)
+            except Exception:
+                pass  # 刷新失败：旧池继续可用，下次请求退化为冷查询
+            finally:
+                with self._cache_lock:
+                    self._refreshing = False
+
+        threading.Thread(target=_work, name="game-pool-refresh", daemon=True).start()
 
     def invalidate_cache(self) -> None:
         """清空缓存（跨日/手动刷新/测试用）。"""

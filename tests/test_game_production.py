@@ -106,3 +106,33 @@ def test_real_symbol_never_becomes_display_code():
     ).create_session(seed=1)
     assert session.symbol == "600000.SH"
     assert session.display_code == "X00001B"
+
+
+def test_pool_disk_cache_survives_restart(tmp_path):
+    class Store:
+        def __init__(self):
+            self.pool_calls = 0
+
+        def list_symbols_with_bars(self, start, end):
+            self.pool_calls += 1
+            return ["600000.SH", "000001.SZ"]
+
+    path = tmp_path / "pool.json"
+    store = Store()
+    first = PostgresGameDataProvider(store, pool_cache_path=path)
+    assert first._pool_cached(date(2026, 1, 6)) == ["600000.SH", "000001.SZ"]
+    restarted = PostgresGameDataProvider(store, pool_cache_path=path)
+    assert restarted._pool_cached(date(2026, 1, 6)) == ["600000.SH", "000001.SZ"]
+    assert store.pool_calls == 1
+
+
+def test_corrupt_pool_disk_cache_falls_back(tmp_path):
+    class Store:
+        def list_symbols_with_bars(self, start, end):
+            return ["000001.SZ"]
+
+    path = tmp_path / "pool.json"
+    path.write_text("not-json", encoding="utf-8")
+    provider = PostgresGameDataProvider(Store(), pool_cache_path=path)
+    assert provider._pool_cached(date(2026, 1, 6)) == ["000001.SZ"]
+    assert '"schema": 1' in path.read_text(encoding="utf-8")

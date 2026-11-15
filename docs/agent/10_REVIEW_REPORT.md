@@ -1,5 +1,12 @@
 # Review Report
 
+## 2026-11-15 Game 候选池持久化自审
+
+- Review Status：**PASS，无 Required Fixes**；已部署 WSL 生产服务，待用户批准 commit/push。
+- 默认 path=None 向后兼容；生产独立 state 文件，原子写、损坏退化、同日命中与跨日后台刷新。72 游戏/生产测试 + 47 前端守卫通过。
+- 同日重启公网开局 8.539s，不再执行全市场 DISTINCT；不作为亚秒结论。
+- 已回补 Windows 基线未包含的 reveal_identity、真实日期 offset=0、快照 display_code 修复；未发生匿名回退。
+
 ## 2026-11-15 Game 冷开局缓存优化自审
 
 - Review Status：**PASS，无 Required Fixes**；用户明确要求 commit/push。

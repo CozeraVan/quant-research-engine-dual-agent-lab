@@ -19,6 +19,12 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-15 Game 候选池持久化已部署，待提交批准
+
+- 生产文件缓存 `/var/lib/qre-game/pool.json` 已接线；同日重启磁盘命中、跨日 stale-while-revalidate、原子写和损坏退化。72 游戏/生产测试 + 47 前端守卫通过。
+- 同日重启后公网开局 8.539s，消除 22–56s DISTINCT，但不宣称亚秒。ECS/nginx/tunnel 未改。
+- 用户尚未批准本轮 commit/push。phase = DEPLOYED_PENDING_ACCEPTANCE。
+
 ### 2026-11-15 Game 冷开局缓存优化 DONE
 
 - provider 候选池/latest 缓存、启动预热、factor_catalog 缓存已发布；70 游戏/生产测试与 47 前端守卫通过。
