@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 
 from quant_research_engine.game.engine import GameRuleError
 from quant_research_engine.gui.factor_registry import (
@@ -63,8 +64,7 @@ def is_overlay(entry) -> bool:
     return "overlap" in entry.table.lower() or bool(_OVERLAY_RE.match(entry.column))
 
 
-def factor_catalog(registry: FactorRegistry | None = None) -> list[dict]:
-    reg = registry or load_registry()
+def _build_catalog(reg: FactorRegistry) -> list[dict]:
     result = []
     for entry in reg.entries.values():
         group = _group_of(entry)
@@ -86,6 +86,19 @@ def factor_catalog(registry: FactorRegistry | None = None) -> list[dict]:
     order = {name: index for index, name in enumerate(GROUP_ORDER)}
     result.sort(key=lambda item: (order[item["group"]], item["label"], item["canonical"]))
     return result
+
+
+@lru_cache(maxsize=1)
+def _cached_default_catalog() -> tuple:
+    # W2：元数据静态，缓存默认目录构建（load_registry＋遍历＋排序 ~5ms）。
+    # 返回 tuple 防外部改列表结构；factor_catalog 再浅拷贝成 list 下发。
+    return tuple(_build_catalog(load_registry()))
+
+
+def factor_catalog(registry: FactorRegistry | None = None) -> list[dict]:
+    if registry is None:
+        return list(_cached_default_catalog())
+    return _build_catalog(registry)
 
 
 def price_scaled_canonicals(canonicals) -> dict[str, bool]:

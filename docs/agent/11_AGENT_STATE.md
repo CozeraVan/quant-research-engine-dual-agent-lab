@@ -19,6 +19,12 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-15 Game 冷开局缓存优化 DONE
+
+- provider 候选池/latest 缓存、启动预热、factor_catalog 缓存已发布；70 游戏/生产测试与 47 前端守卫通过。
+- 公网热开局 2.797s（此前 26.16s），每日 latest 推进仍会刷新；不做窗口读取/计数预过滤。
+- 快照 display_code 错位已修，真实 DB 匿名不变。仅 WSL qre-game 重启；用户批准本轮 commit/push。
+
 ### 2026-11-15 《我不是股神》公网上线 DONE
 
 - 用户解除冻结并明确要求上线、commit/push。入口 `https://aguhuice.com/game`，按需直读 WSL 只读库 + 主动反向隧道；ECS 无行情明细。

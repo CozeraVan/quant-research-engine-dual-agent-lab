@@ -1,5 +1,13 @@
 # Coding Handoff
 
+## 2026-11-15 Game 候选池缓存与预热
+
+- `game/data.py`：`_latest_cached`（600s）/`_pool_cached`（latest key + 24h）使用线程锁；`filter_untrusted_symbols` 返回新 list 后才 shuffle，不污染缓存。`warmup()` 只读预填；`invalidate_cache()` 供日切/测试。
+- `game/web.py`：非 testing 且 provider 支持 warmup 时启动 daemon 预热；失败仅 warning，请求路径仍可冷查询。
+- `game/factors.py`：默认目录 `_cached_default_catalog` tuple + 下发 list；自定义 registry 不缓存。
+- 快照 X 代码同步到 display_code；真实代码保持默认匿名。集成时须保留 WSL reveal_identity、DB offset=0、Secure cookie，不可被 Windows 旧基线覆盖。
+- 实测公网热开局约 2.8s；最新交易日推进后的每日首次仍会刷新池。
+
 ## 2026-11-15 《我不是股神》按需公网接入
 
 - `game/server.py:create_app()` 由本地 `DatabaseSettings.from_env()` 建只读 store；生产服务用单 gunicorn worker + 4 threads，避免内存 registry 跨 worker 分裂。

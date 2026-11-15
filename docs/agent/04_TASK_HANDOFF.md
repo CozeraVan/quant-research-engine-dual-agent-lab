@@ -1,5 +1,12 @@
 # Task Handoff
 
+## Game 冷开局缓存优化（2026-11-15，DONE）
+
+- provider 级 latest/pool 缓存 + 启动后台预热 + factor_catalog 缓存已发布；随机与因子语义不变。
+- 70 游戏/生产测试及 47 前端守卫通过；公网热开局 2.797s（此前 26.16s），不宣称亚秒。
+- 快照 display_code 与抽中匿名标的保持一致，真实 DB 代码仍只在终局 reveal。
+- 仅重启 WSL qre-game；无 ECS 代码变更。用户已批准 commit/push。
+
 ## 《我不是股神》按需公网上线（2026-11-15，DONE）
 
 - 入口 `https://aguhuice.com/game`；Windows 至 `28034a3` 的 S4/换股/终局总结及审计修复已整合，游戏与生产测试 68 passed，前端守卫 47 passed / 13 skipped。

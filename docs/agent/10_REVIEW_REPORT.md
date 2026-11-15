@@ -1,5 +1,13 @@
 # Review Report
 
+## 2026-11-15 Game 冷开局缓存优化自审
+
+- Review Status：**PASS，无 Required Fixes**；用户明确要求 commit/push。
+- 70 游戏/生产测试 + 47 前端守卫全绿；缓存命中、失效、固定 seed、快照/真实匿名均有正式回归。
+- 真实 PG 冷 63.977s → 热 2.088s；公网预热后 6.494s → 2.797s。性能结论只限实测，不写亚秒。
+- 缓存列表不直接 mutate，随机窗口/候选限制/11 因子保持；后台预热异常不阻断服务。
+- 仅重启 WSL qre-game，qre-game-tunnel/nginx/ECS 无改动；未跑回测。
+
 ## 2026-11-15 《我不是股神》按需公网上线自审
 
 - Review Status：**PASS，无 Required Fixes**；用户明确要求上线并 commit/push。

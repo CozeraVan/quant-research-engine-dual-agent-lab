@@ -4,6 +4,10 @@
 > 本文是游戏项目的唯一长期事实来源之一。后续需求、规则、数据口径、实施进度、独立化决策均须回写本文，不以 CLI 对话为长期记忆。
 > 主线 QRE/SaaS 的任务见 `14_LAUNCH_ROADMAP.md`；游戏采用并行推进，不打断主线 backlog。
 
+> **冷开局优化已发布（2026-11-15）**：provider 日级候选池/latest 缓存 + 启动后台预热 + factor_catalog 缓存；70 游戏/生产测试全绿，公网热开局约 2.8s。latest 推进后每日首次仍刷新；窗口读取与计数预过滤暂缓。
+
+> **冷开局 profiling（2026-11-15）**：真实 PG 证实主瓶颈是每局全历史 `SELECT DISTINCT ts_code`（warm 22.4–22.6s，EXPLAIN 23.52s），不是全因子（实时仅 11）或 CPU 加工。候选 bars 53–401ms、因子 SQL 62–210ms。首选日级缓存候选池；窗口读取须另裁随机分布/qfq 锚点。证据 `.tmp/game-profiling/cold_start.json`。
+
 > **2026-11-15 公网已上线**：`https://aguhuice.com/game`。采用按需单股直读 WSL 只读库 + 主动 SSH 反向隧道，不向 ECS 导出全市场快照。S4、8 倍速、成本线、终局总结、换股入口与因子缓存隔离均已集成；68 项游戏/生产测试全绿。公网冷开局约 22–26 秒，后续需 profiling 优化。服务与回滚见 16 号文档。
 
 > **终局身份映射**：`data/game_snapshots/identity.json` 已于 2026-11-14 同步到 Windows；X00001B=鲁抗医药(600789.SH)、X00002B=尚荣医疗(002551.SZ)、X00003B=普利制药(300630.SZ)。该文件只允许在 finished reveal 使用，非终局不得泄露。

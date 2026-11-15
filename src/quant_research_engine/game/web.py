@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
+import threading
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -166,6 +167,19 @@ def create_game_app(provider: object, *, testing: bool = False) -> Flask:
                 static_url_path="/static")
     app.config.update(TESTING=testing, SECRET_KEY=secrets.token_hex(32))
     registry = GameSessionRegistry(provider)
+
+    # 冷开局优化（任务 8ab90dfccb60）：服务启动后台预热候选池＋最新交易日缓存，
+    # 避免重启后首用户吃 22–56s 冷查询。仅非测试模式且 provider 支持 warmup 时启用；
+    # daemon 线程，预热失败仅告警、不影响服务（首请求退化为冷查询）。
+    if not testing and hasattr(provider, "warmup"):
+        def _warmup_background():
+            try:
+                result = provider.warmup()
+                if not result.get("ok"):
+                    app.logger.warning("game pool warmup failed: %s", result.get("error"))
+            except Exception as exc:  # 预热不得拖垮服务启动
+                app.logger.warning("game pool warmup error: %s", exc)
+        threading.Thread(target=_warmup_background, name="game-pool-warmup", daemon=True).start()
 
     @app.get("/game")
     def game_page():
