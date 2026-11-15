@@ -300,6 +300,9 @@ def run_backtest(
     rid = _run_id()
     run_dir = RUNS_DIR / rid
     run_dir.mkdir(parents=True, exist_ok=True)
+    # 每次运行独立产物目录；用户填写的 output_dir 是父目录，不再是多 run 共享终目录。
+    if output_dir:
+        output_dir = str(Path(output_dir) / rid)
 
     strategy_path = run_dir / "strategy.yaml"
     strategy_path.write_text(yaml_text, encoding="utf-8")
@@ -550,6 +553,8 @@ def _run_via_module(
         # 与引擎生效值保持一致，不再依赖前端把表单值注入 YAML holding 节
         # （YAML 自带 max_holding_days 时前端不覆盖，导致落库≠生效）。
         spec = _override_holding_days(spec, max_holding_days)
+        if spec.strategy_type == "chanlun_structure" and mode == "shared":
+            raise ValueError("chanlun_structure 首版仅支持 single/batch 独立资金回测，不支持 shared")
         # 成交价列参数（SaaS 高级参数为权威来源）：vwap 等非默认列需并入
         # market_fields，否则装配出的 frame 缺列。
         entry_price_column, exit_price_column = _resolve_price_columns(entry_price, exit_price)
@@ -625,6 +630,7 @@ def _run_via_module(
                             stop_loss_pct=stop_loss_pct,
                             take_profit_pct=take_profit_pct,
                             trailing_stop_pct=trailing_stop_pct,
+                            chanlun_config=spec.chanlun,
                         ),
                         market_profile=mp,
                         output_dir=output_dir,
@@ -743,18 +749,22 @@ def _execute_engine(
     if mode == "single":
         if not codes:
             raise ValueError("At least one code required for single-symbol backtest")
-        result = SingleSymbolBacktestEngine(mp).run(
-            frame,
-            SingleSymbolBacktestRequest(
-                symbol=codes[0],
-                initial_cash=float(initial_cash) if initial_cash else 100_000.0,
-                entry_signal=spec.signal_expression,
-                exit_signal=spec.exit_signal_expression,
-                holding_days=spec.holding_days,
-                entry_price_column=entry_price_column,
-                exit_price_column=exit_price_column,
-            ),
+        single_request = SingleSymbolBacktestRequest(
+            symbol=codes[0],
+            initial_cash=float(initial_cash) if initial_cash else 100_000.0,
+            entry_signal=spec.signal_expression,
+            exit_signal=spec.exit_signal_expression,
+            holding_days=spec.holding_days,
+            entry_price_column=entry_price_column,
+            exit_price_column=exit_price_column,
+            chanlun_config=spec.chanlun,
         )
+        if spec.strategy_type == "chanlun_structure":
+            from quant_research_engine.portfolio.single_symbol_vectorized import SingleSymbolVectorizedEngine
+
+            result = SingleSymbolVectorizedEngine(mp).run(frame, single_request)
+        else:
+            result = SingleSymbolBacktestEngine(mp).run(frame, single_request)
         print(f"strategy={spec.name}")
         print(f"symbol={codes[0]}")
         print(f"orders={len(result.orders)}")
@@ -781,6 +791,7 @@ def _execute_engine(
                 stop_loss_pct=stop_loss_pct,
                 take_profit_pct=take_profit_pct,
                 trailing_stop_pct=trailing_stop_pct,
+                chanlun_config=spec.chanlun,
             ),
         )
         print(f"strategy={spec.name}")

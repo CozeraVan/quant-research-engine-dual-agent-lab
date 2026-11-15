@@ -320,7 +320,10 @@ def test_run_backtest_module_executor_single(monkeypatch, tmp_path):
     monkeypatch.setattr("quant_research_engine.gui.engine.TEMPLATES_DIR", tmp_path / "templates")
     monkeypatch.setattr("quant_research_engine.gui.engine.GUI_BASE_DIR", tmp_path)
 
+    captured = {}
+
     def fake_run_via_module(**kwargs):
+        captured.update(kwargs)
         kwargs["stdout_path"].write_text("strategy=test\norders=0\n", encoding="utf-8")
         kwargs["stderr_path"].write_text("", encoding="utf-8")
 
@@ -336,6 +339,9 @@ def test_run_backtest_module_executor_single(monkeypatch, tmp_path):
     )
     assert result["status"] == "completed"
     assert result["mode"] == "single"
+    expected = str(tmp_path / "outputs" / result["run_id"])
+    assert result["output_dir"] == expected
+    assert captured["output_dir"] == expected
 
 
 # --- max_holding_days 参数透传（SaaS 高级参数 = 落库 = 引擎生效） ---

@@ -404,7 +404,13 @@ def test_create_app_routes_unchanged():
                 "/api/lab/factor-requests",             # QRE-SAAS-011（缺因子申请，JSONL）
                 "/api/lab/universes",                     # QRE-SAAS-012（标的范围归类）
                 "/api/lab/universes/members",
-                "/lab/runs/<run_id>/symbols"}               # QRE-LAB-UI-LANDING（个股明细列表）
+                "/lab/runs/<run_id>/symbols",              # QRE-LAB-UI-LANDING（个股明细列表）
+                "/api/lab/runs/<run_id>",
+                "/api/results/<run_id>/summary", "/api/results/<run_id>/chart-data",
+                "/api/results/<run_id>/tag-analysis", "/api/results/<run_id>/risk-analysis",
+                "/api/results/<run_id>/symbols", "/api/results/<run_id>/symbols/<ts_code>",
+                "/api/saas/jobs/<run_id>/params", "/saas/jobs/<run_id>",
+                "/saas/jobs/<run_id>/symbols", "/saas/jobs/<run_id>/symbols/<ts_code>"}
     assert lab_rules - lab_only <= full_rules
     assert lab_only & full_rules == set()  # 8080 不挂新路由
     # 主控制台专有规律犹在（因子创建/补周期 API 自 QRE-GUI-CONSOL-039 起两应用共享）

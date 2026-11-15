@@ -1,3 +1,5 @@
+2026-11-15 F2-8 回测 output_dir 隔离完成：`gui/engine.run_backtest` 生成 rid 后把用户 output_dir 解释为父目录，实际执行与 record 统一使用 `<output_dir>/<run_id>`；None 行为不变，CLI 直调不受影响。新增执行器与 record 同路径断言；补本地视频新增路由白名单，相关 **111 passed**。qre-gui-lab 重启后页面正常；未跑回测、无 ECS 变更。
+
 2026-11-15 本地个股短代码 404 修复：用户点击列表后进入权限页、登录 404。日志证实 `/api/results/.../symbols/300308` 缺 `.SZ` 导致详情 404；新增 `_local_ts_code` 按 run 的 round_trips 唯一匹配恢复后缀。真实 `300308 → 300308.SZ` 200、K线3368点；相关 **208 passed / 13 skipped**，qre-gui-lab 已重启。未 commit/push。
 
 2026-11-15 本地视频结果直读与公网页面复现已部署：8081 `/api/lab/runs` 每项新增 links，新增 run overview；本地结果/列表/个股页直接复用 SaaS `job/symbols/symbol` 模板与 replay/因子/K线，本地别名 `/api/results/<run_id>` 和 params/run_config 直读 run 产物。无归因时个股列表从 round_trips 构建，不绕公网。真实 run `20261114T051744140231` 全链路通过，个股 300308.SZ K线3368点；浏览器三页 200/零 pageerror/零横溢，截图 `.tmp/local-video-browser/`。相关 **209 passed / 13 skipped**。使用手册 `docs/auxiliary/video/LOCAL_VIDEO_AGENT_API.md`。公网仅同步共享模板/loader/run_config 兼容修复，qre-saas active，回滚 `/tmp/qre-deploy-20261115T095534Z.bak`。未跑回测、未 commit/push；下一顺序仍为用户批准的 output_dir、EMA、安全、NL清理。

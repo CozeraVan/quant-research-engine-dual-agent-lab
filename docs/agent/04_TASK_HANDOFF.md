@@ -1,5 +1,10 @@
 # Task Handoff
 
+## F2-8 output_dir 隔离（2026-11-15，DONE）
+
+- 每次 GUI run 的实际产物目录为 `<用户 output_dir>/<run_id>`，避免共享目录覆盖；record、CLI 参数、执行器、结果页使用同一路径。
+- 111 项相关测试通过；无历史目录迁移、无真实回测、无 ECS 变更。下一项 EMA 口径核查。
+
 ## 本地视频 Agent 结果直读（2026-11-15，已部署待验收）
 
 - 视频 agent 从 `http://127.0.0.1:8081/api/lab/runs` 发现 completed run，按 links 读取 overview/chart/risk/symbol，不经 ECS。

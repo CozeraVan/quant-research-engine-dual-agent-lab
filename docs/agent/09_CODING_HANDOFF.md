@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-15 output_dir 隔离
+
+- `run_backtest` 在 rid 生成后立即归一实际目录；后续 `_build_cli_command`、record、exec_kwargs 共用归一值。
+- 用户输入由“最终目录”改为“父目录”；空 None 不变，历史 run 的 status/output_dir 不重写。
+- 验证 `tests/test_gui_engine.py tests/test_gui_strategy_create.py tests/test_gui_lab.py` 111 passed。
+
 ## 2026-11-15 本地结果直读与 SaaS 模板复用
 
 - `lab_result._lab_run_links` 是 agent URL 唯一目录；`GET /api/lab/runs/<id>` 返回 run record/output_dir/links。

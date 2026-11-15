@@ -1,5 +1,10 @@
 # Review Report
 
+## 2026-11-15 output_dir 隔离自审
+
+- Review Status：PASS，无 Required Fixes。每次运行目录唯一，record 与执行器路径一致；111 项相关测试通过。
+- 不改历史 run、不迁移产物、不跑回测；仅 GUI 新建 run 生效，worker/ECS 无变化。
+
 ## 2026-11-15 本地视频结果直读自审
 
 - Review Status：**PASS，无 Required Fixes**；已部署本地与公网共享兼容层，待用户验收及 commit 批准。
