@@ -15,6 +15,8 @@ EXPECTED_JOB_ID_GET_ROUTES = {
     "/saas/jobs/<int:job_id>/symbols/<ts_code>",
     "/api/jobs/<int:job_id>",
     "/api/saas/jobs/<int:job_id>",
+    # 参数快照与详情/结果页同权限：_load_job_for_user / 游客会话归属校验。
+    "/api/saas/jobs/<int:job_id>/params",
     "/api/results/<int:job_id>/summary",
     "/api/results/<int:job_id>/chart-data",
     "/api/results/<int:job_id>/tag-analysis",

@@ -1,3 +1,5 @@
+2026-11-15 F2-12 安全审计复核完成：security sandbox/Tushare/SaaS access/IDOR/页面 XSS/静默失败共 **244 passed**。修复过期测试契约：params 端点纳入权限路由冻结；profile 分享 harness 只抽分享段并补分页/DOM stub，游客 401 断言对齐当前登录提示。未发现本轮新增生产安全漏洞；本地新增结果接口均只读，真实 SQL 仍参数化。未改生产代码、未跑回测。
+
 2026-11-15 F3-21 ema_250 核查完成：生成端 `pandas_ta.ema` 与 pandas ewm 递推一致；旧 2024 截断复核会混入种子差。改验证脚本读全历史后，当前 hfq 全历史重算与存值仍有稳定个股比例差（600519 约 1.008、601318 约 1.031），不再是种子可解释；指向存值价格/复权快照陈旧，未改任何数据、不全库重算。证据 `.tmp/ema250-full-history-20261115.txt`。
 
 2026-11-15 F2-8 回测 output_dir 隔离完成：`gui/engine.run_backtest` 生成 rid 后把用户 output_dir 解释为父目录，实际执行与 record 统一使用 `<output_dir>/<run_id>`；None 行为不变，CLI 直调不受影响。新增执行器与 record 同路径断言；补本地视频新增路由白名单，相关 **111 passed**。qre-gui-lab 重启后页面正常；未跑回测、无 ECS 变更。

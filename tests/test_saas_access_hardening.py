@@ -977,7 +977,7 @@ def _job_readonly_branch(html: str) -> str:
 
 
 def _profile_share_source(html: str) -> str:
-    match = re.search(r"(// --- P1 只读分享[\s\S]*?)\nbindShareRevoke\(\);", html)
+    match = re.search(r"(// --- P1 只读分享[\s\S]*?)\n// --- 个人中心子页面切换", html)
     assert match, "未找到 profile.html 分享脚本段"
     return match.group(1)
 
@@ -1144,10 +1144,17 @@ function createProfileShareHarness(options){
     return qsaCache.buttons;
   };
   const calls = {requests: []};
-  const document = {getElementById(id){ return elements[id]; }};
+  const document = {
+    getElementById(id){ return elements[id]; },
+    querySelector(selector){ return elements[selector]; },
+    querySelectorAll(selector){ return []; },
+  };
   const labui = options.labui === null ? {} : {LabUI: options.labui || {fmtLocalTime: realFmtLocalTime}};
   const context = vm.createContext(Object.assign({
     console, document,
+    window: {addEventListener(){}}, location: {hash: ''},
+    setProfileText(id, text){ elements[id].textContent = text; },
+    renderNumericPager(){},
     escH(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); },
     apiFetch(url, opts){ calls.requests.push({url, options: opts}); return options.fetchImpl(url, opts); },
   }, labui));
@@ -1425,6 +1432,6 @@ class TestProfileShareJs:
   });
   vm.runInContext(source, h.context);
   await vm.runInContext('loadShares()', h.context);
-  assert.ok(h.elements['share-card'].classList.contains('hidden'), '未登录不展示我的分享');
+  assert.match(h.elements['share-list'].innerHTML, /登录后可查看分享链接/);
 })().catch(error => { console.error(error); process.exit(1); });
 """)

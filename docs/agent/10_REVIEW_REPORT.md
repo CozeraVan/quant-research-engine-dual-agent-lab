@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-15 安全审计复核自审
+
+- Review Status：PASS，无 Required Fixes。244 项安全/权限/页面测试全绿。
+- 修复测试基础设施而非放松生产权限：参数快照纳入 IDOR 路由冻结；profile 分享测试不再误抽个人中心脚本。
+- 本地新增接口只读；未发现需部署的生产代码改动。未跑回测。
+
 ## 2026-11-15 ema_250 口径核查自审
 
 - Review Status：PASS（分析任务），无 Required Fixes。生产公式与独立递推一致，差异并非单纯种子问题。
