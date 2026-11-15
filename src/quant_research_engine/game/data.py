@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import random
+import time
 from datetime import date
+from threading import Lock
 from typing import Any
 
 import pandas as pd
@@ -49,11 +51,21 @@ def bars_from_rows(rows: list[dict[str, Any]]) -> list[Bar]:
 
 class PostgresGameDataProvider:
     def __init__(self, store: Any, *, warmup_bars: int = 250, game_bars: int = 1250,
-                 candidate_limit: int = 20, with_factors: bool = True) -> None:
+                 candidate_limit: int = 20, with_factors: bool = True,
+                 latest_ttl_s: float = 600.0, pool_ttl_s: float = 86400.0) -> None:
         self.store = store
         self.factory = GameSessionFactory(warmup_bars=warmup_bars, game_bars=game_bars)
         self.candidate_limit = candidate_limit
         self.with_factors = with_factors
+        # 冷开局优化（任务 8ab90dfccb60）：候选池全表 DISTINCT 在 TimescaleDB 上热查询 ~22s。
+        # provider 级日级缓存：缓存「候选代码列表」与「最新交易日」，每请求仍 shuffle＋随机窗口，
+        # 随机标的/随机历史区间语义不变。latest_ttl_s 控制最新交易日重查频率（探测新交易日），
+        # pool_ttl_s 为候选池最长缓存时长；候选池另按 latest  keyed，latest 推进即刷新。
+        self.latest_ttl_s = latest_ttl_s
+        self.pool_ttl_s = pool_ttl_s
+        self._cache_lock = Lock()
+        self._latest_cache: tuple[date, float] | None = None
+        self._pool_cache: tuple[date, list[str], float] | None = None
 
     def latest_trade_date(self) -> date:
         if hasattr(self.store, "latest_trade_date"):
@@ -61,6 +73,44 @@ class PostgresGameDataProvider:
         table = self.store.qualified_table(self.store.settings.tables.market_daily_table)
         with self.store.market_engine.begin() as conn:
             return conn.execute(text(f"SELECT max(trade_date) FROM {table}")).scalar_one()
+
+    def _latest_cached(self) -> date:
+        now = time.monotonic()
+        with self._cache_lock:
+            cached = self._latest_cache
+            if cached is not None and now < cached[1]:
+                return cached[0]
+        value = self.latest_trade_date()
+        with self._cache_lock:
+            self._latest_cache = (value, now + self.latest_ttl_s)
+        return value
+
+    def _pool_cached(self, latest: date) -> list[str]:
+        now = time.monotonic()
+        with self._cache_lock:
+            cached = self._pool_cache
+            if cached is not None and cached[0] == latest and now < cached[2]:
+                return cached[1]
+        raw = self.store.list_symbols_with_bars(date(2000, 1, 1), latest)
+        with self._cache_lock:
+            self._pool_cache = (latest, raw, now + self.pool_ttl_s)
+        return raw
+
+    def invalidate_cache(self) -> None:
+        """清空缓存（跨日/手动刷新/测试用）。"""
+        with self._cache_lock:
+            self._latest_cache = None
+            self._pool_cache = None
+
+    def warmup(self) -> dict:
+        """启动后台预热：预填最新交易日＋候选池缓存，避免服务重启后首用户吃 22–56s 冷查询。
+        只读；异常吞掉（预热失败不影响服务，首请求退化为冷查询）。"""
+        try:
+            latest = self._latest_cached()
+            self._pool_cached(latest)
+            return {"ok": True, "latest": latest.isoformat()}
+        except Exception as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
     def load_raw_bars(self, symbol: str, start: date, end: date) -> list[dict[str, Any]]:
         table = self.store.qualified_table(self.store.settings.tables.market_daily_table)
@@ -78,15 +128,14 @@ class PostgresGameDataProvider:
         factory = self.factory
         if game_bars is not None and game_bars != self.factory.game_bars:
             factory = GameSessionFactory(warmup_bars=self.factory.warmup_bars, game_bars=game_bars)
-        latest = self.latest_trade_date()
+        latest = self._latest_cached()
         # QRE-UNIVERSE-NEEQ-LEGACY：候选池剔除北交所三板残留代码。游戏要「上市足够久」
         # 的股票，而 920%.BJ 的 2021-11-15 之前历史正是脏数据（close 恒 1、30 股成交），
         # 不排除就会随机抽到它们并展示错尺度 K 线（源数据只读，故在池侧设闸）。
         from quant_research_engine.data.universe_rules import filter_untrusted_symbols
 
-        symbols = filter_untrusted_symbols(
-            self.store.list_symbols_with_bars(date(2000, 1, 1), latest),
-            load_start=date(2000, 1, 1))
+        # 候选池走 provider 级缓存（_pool_cached）；filter 返回新列表，下方 shuffle 不改缓存。
+        symbols = filter_untrusted_symbols(self._pool_cached(latest), load_start=date(2000, 1, 1))
         rng = random.Random(seed)
         rng.shuffle(symbols)
         required = factory.warmup_bars + factory.game_bars
