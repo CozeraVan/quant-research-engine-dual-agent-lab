@@ -19,6 +19,11 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-15 批准的四项主线全部 DONE
+
+- output_dir 隔离、EMA 口径核查、安全审计、NL TTL 清理全部完成并分别验证；本地视频直读已验收提交。
+- NL 清理已部署 ECS，qre-saas active；无全量回测、无挂起项解禁。
+
 ### 2026-11-15 本地视频 Agent 结果直读 DONE（待验收/提交）
 
 - 8081 可直接发现 run、读取 output_dir/参数/chart/risk/个股 JSON，本地页面复用公网模板与重播。

@@ -1,5 +1,14 @@
 # Task Handoff
 
+## 2026-11-15 批准的四项主线全部完成
+
+1. output_dir 按 run 隔离：111 测试，commit bcc625d。
+2. ema_250 全历史口径核查：确认非单纯种子问题，未改数据，commit 14ab61e。
+3. 安全复核：244 测试，commit a617313。
+4. NL 缓存/限流自动清理：206 测试，已部署 ECS；管理台 TTL 与真实计数同源。
+
+本地视频直读已另行 commit 0b1f1b1。无全量回测、无挂起项解禁。
+
 ## F2-8 output_dir 隔离（2026-11-15，DONE）
 
 - 每次 GUI run 的实际产物目录为 `<用户 output_dir>/<run_id>`，避免共享目录覆盖；record、CLI 参数、执行器、结果页使用同一路径。

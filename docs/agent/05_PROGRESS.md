@@ -1,3 +1,5 @@
+2026-11-15 F3-22 NL 缓存自动清理已完成并部署：`cleanup_nl_tables` 删除 90 天未命中 cache、7 天未更新 rate limit；ensure 每进程每自然日最多一次，失败不影响编译并下次重试。管理台 nl 读同一 TTL 常量及真实行/命中计数。新增真实 PG 过期/保留测试，相关 **206 passed**。ECS 部署 active，回滚 `/tmp/qre-deploy-20261115T104833Z.bak`；公网 new 200。另恢复先前 uv sync 误删的短信 SDK 等本地环境包，测试恢复全绿。未跑回测。
+
 2026-11-15 F2-12 安全审计复核完成：security sandbox/Tushare/SaaS access/IDOR/页面 XSS/静默失败共 **244 passed**。修复过期测试契约：params 端点纳入权限路由冻结；profile 分享 harness 只抽分享段并补分页/DOM stub，游客 401 断言对齐当前登录提示。未发现本轮新增生产安全漏洞；本地新增结果接口均只读，真实 SQL 仍参数化。未改生产代码、未跑回测。
 
 2026-11-15 F3-21 ema_250 核查完成：生成端 `pandas_ta.ema` 与 pandas ewm 递推一致；旧 2024 截断复核会混入种子差。改验证脚本读全历史后，当前 hfq 全历史重算与存值仍有稳定个股比例差（600519 约 1.008、601318 约 1.031），不再是种子可解释；指向存值价格/复权快照陈旧，未改任何数据、不全库重算。证据 `.tmp/ema250-full-history-20261115.txt`。

@@ -4923,6 +4923,8 @@ def create_saas_app() -> Flask:
                             "member_minute": MEMBER_NL_MINUTE_LIMIT,
                             "admin": "不限",
                             "cache_version": _nls.NL_COMPILER_CACHE_VERSION,
+                            "cache_ttl_days": _nls.NL_CACHE_TTL_DAYS,
+                            "rate_ttl_days": _nls.NL_RATE_TTL_DAYS,
                             "rate_limit_rows": int(nl_rate["rows"]),
                             "rate_limit_hits": int(nl_rate["hits"]),
                             "cache_entries": int(nl_cache["entries"]),

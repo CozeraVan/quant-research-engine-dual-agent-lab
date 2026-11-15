@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-15 NL 缓存 TTL 清理自审
+
+- Review Status：PASS，无 Required Fixes。206 项相关测试通过，生产 active。
+- TTL 与执行/管理台同源；清理按日限次、失败不阻断编译，真实 PG 过期/保留用例通过。
+- 无 schema 变更、无回测。部署回滚 `/tmp/qre-deploy-20261115T104833Z.bak`。
+
 ## 2026-11-15 安全审计复核自审
 
 - Review Status：PASS，无 Required Fixes。244 项安全/权限/页面测试全绿。

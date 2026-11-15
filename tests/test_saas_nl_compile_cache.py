@@ -560,3 +560,39 @@ class TestSchemaAndGrants:
         for table in ("nl_rate_limits", "nl_compile_cache"):
             for priv in ("SELECT", "INSERT", "UPDATE", "DELETE"):
                 assert (table, priv) in granted, f"{table} 缺 {priv}"
+
+
+def test_nl_cache_and_rate_ttl_cleanup(app):
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import text
+    from quant_research_engine.gui.saas import nl_compile_support as nls
+    from quant_research_engine.gui.saas.app import _get_engine
+
+    engine = _get_engine(app)
+    assert nls.ensure_nl_tables(engine)
+    now = datetime.now(timezone.utc)
+    old = now - timedelta(days=120)
+    with engine.begin() as conn:
+        for key, when in (("old-cache", old), ("fresh-cache", now)):
+            conn.execute(text(
+                "INSERT INTO nl_compile_cache "
+                "(cache_key, description, result, model, prompt_hash, cache_version, last_hit_at) "
+                "VALUES (:k, 'd', CAST('{}' AS JSONB), 'm', 'p', 'v', :t)"
+            ), {"k": key, "t": when})
+        for subject, when in (("old-rate", old), ("fresh-rate", now)):
+            conn.execute(text(
+                "INSERT INTO nl_rate_limits "
+                "(scope, subject_hash, window_start, hits, updated_at) "
+                "VALUES ('guest_daily', :s, :t, 1, :t)"
+            ), {"s": subject, "t": when})
+    result = nls.cleanup_nl_tables(engine, now=now)
+    assert result == {"cache_deleted": 1, "rate_deleted": 1}
+    with engine.connect() as conn:
+        assert conn.execute(text(
+            "SELECT cache_key FROM nl_compile_cache WHERE cache_key IN "
+            "('old-cache', 'fresh-cache') ORDER BY cache_key"
+        )).scalars().all() == ["fresh-cache"]
+        assert conn.execute(text(
+            "SELECT subject_hash FROM nl_rate_limits WHERE subject_hash IN "
+            "('old-rate', 'fresh-rate')"
+        )).scalars().all() == ["fresh-rate"]

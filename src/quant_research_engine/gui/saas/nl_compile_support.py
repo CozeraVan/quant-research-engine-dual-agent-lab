@@ -16,7 +16,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import unicodedata
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import text
@@ -36,6 +36,24 @@ SCOPE_MEMBER_MINUTE = "member_minute"
 # 进程 guard；ECS 上表 owner 是 postgres，懒自愈只兜底本地/测试库）。
 _NL_TABLES_ENSURED: set[int] = set()
 _NL_TABLES_OK: dict[int, bool] = {}
+_NL_CLEANUP_DAY: dict[int, date] = {}
+NL_CACHE_TTL_DAYS = 90
+NL_RATE_TTL_DAYS = 7
+
+
+def cleanup_nl_tables(engine: Engine, *, now: datetime | None = None) -> dict[str, int]:
+    """清理过期 NL 缓存/限流行；由 ensure 在每个自然日最多触发一次。"""
+    current = now or datetime.now(timezone.utc)
+    with engine.begin() as conn:
+        cache = conn.execute(
+            text("DELETE FROM nl_compile_cache WHERE last_hit_at < :cutoff"),
+            {"cutoff": current - timedelta(days=NL_CACHE_TTL_DAYS)},
+        ).rowcount
+        rate = conn.execute(
+            text("DELETE FROM nl_rate_limits WHERE updated_at < :cutoff"),
+            {"cutoff": current - timedelta(days=NL_RATE_TTL_DAYS)},
+        ).rowcount
+    return {"cache_deleted": int(cache), "rate_deleted": int(rate)}
 
 
 def normalize_description(description: str) -> str:
@@ -88,11 +106,24 @@ def member_subject_hash(uid: int, salt: str) -> str:
     return hashlib.sha256(f"nl:user:{uid}:{salt}".encode()).hexdigest()[:32]
 
 
+def _cleanup_daily(key: int, engine: Engine) -> None:
+    today = date.today()
+    if _NL_CLEANUP_DAY.get(key) == today:
+        return
+    try:
+        cleanup_nl_tables(engine)
+    except Exception:
+        return  # 清理失败不影响编译，下一请求重试
+    _NL_CLEANUP_DAY[key] = today
+
+
 def ensure_nl_tables(engine: Engine) -> bool:
     """幂等确保两表存在（信息架构查询 + 进程 guard；建表失败返回 False 降级）。"""
     key = id(engine)
     if key in _NL_TABLES_ENSURED:
-        return _NL_TABLES_OK.get(key, False)
+        if _NL_TABLES_OK.get(key, False):
+            _cleanup_daily(key, engine)
+        return _NL_TABLES_OK[key]
     ok = True
     try:
         with engine.begin() as conn:
@@ -134,6 +165,8 @@ def ensure_nl_tables(engine: Engine) -> bool:
         ok = False
     _NL_TABLES_ENSURED.add(key)
     _NL_TABLES_OK[key] = ok
+    if ok:
+        _cleanup_daily(key, engine)
     return ok
 
 

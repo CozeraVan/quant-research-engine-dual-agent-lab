@@ -1,5 +1,12 @@
 # Coding Handoff
 
+## 2026-11-15 NL 缓存 TTL 清理
+
+- `nl_compile_support.cleanup_nl_tables(engine, now=None)` 返回两类真实删除数；cache 90 天按 last_hit_at，rate 7 天按 updated_at。
+- `_cleanup_daily` 每 engine/自然日一次；失败不阻断编译且不写成功日，下请求重试。
+- `app.py` console nl 增 cache_ttl_days/rate_ttl_days，和执行共用常量；原 rows/hits 不改。
+- 真实 PG 测试 206 passed；生产只同步 app.py/nl_compile_support.py，无 schema 变更。
+
 ## 2026-11-15 output_dir 隔离
 
 - `run_backtest` 在 rid 生成后立即归一实际目录；后续 `_build_cli_command`、record、exec_kwargs 共用归一值。
