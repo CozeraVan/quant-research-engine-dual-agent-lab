@@ -1,5 +1,16 @@
 # Coding Handoff
 
+## 2026-11-16 会员中心
+
+- membership.html + `/saas/membership`；payments.py 新增本人 orders 列表；base 下拉入口。
+- 99 项相关测试通过/14 skipped，真实登录与375px无横溢。回滚 `/tmp/qre-deploy-20261116T091553Z.bak`。
+
+## 2026-11-16 微信 Native 适配层
+
+- wechat_native.py + payments 真实 native 分支、notify/query-payment；fulfill_order 与模拟支付共用。
+- 配置只从 QRE_WECHAT_* 读取；无配置不发起交易。241 项相关测试通过，回滚 `/tmp/qre-deploy-20261116T091054Z.bak`。
+- 平台证书轮换需运维更新公钥；真实支付/退款/对账尚未验收。
+
 ## 2026-11-16 模拟支付订单闭环
 
 - payments.py PRODUCTS/orders routes；SAAS_PAYMENT_SIMULATOR 仅测试显式开启。订单本人归属、价格服务端常量、支付履约事务。

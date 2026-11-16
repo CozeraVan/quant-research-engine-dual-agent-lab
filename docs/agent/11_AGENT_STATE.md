@@ -19,7 +19,19 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
-### 2026-11-16 会员模拟支付 HTTP 已部署（待验收/提交）
+### 2026-11-16 会员中心已部署（待验收/提交）
+
+- `/saas/membership` 展示当前权益/套餐/本人订单；购买明确未开放。新增本人 orders 列表与个人中心入口。
+- 99 项相关测试通过/14 skipped，真实登录与375px通过；无真实支付/回测。
+- Native 提交尚未 commit；本轮建议 `feat(membership): 增加会员中心与订单记录`。
+
+### 2026-11-16 微信 Native 适配层已部署（待验收/提交）
+
+- 实现商户签名、Native下单/code_url、主动查单、回调验签+AES解密；校验金额/商户/状态，复用幂等履约。
+- 241 项相关测试通过/14 skipped；生产无凭证时 notify=404，未发真实交易。
+- 上一提交 `607f224` 已 push；本轮未 commit。建议 `feat(payments): 接入微信 Native 支付适配层`。真实小额支付/退款/证书轮换待商户配置。
+
+### 2026-11-16 会员模拟支付 HTTP 已部署（已提交并推送）
 
 - payments.py + membership_orders/payment_events：商品/下单/本人查询/开关模拟支付；支付履约与会员生效同事务，重复不顺延。
 - 237 项相关测试通过/14 skipped；生产 products=200、orders=0、模拟开关关，无真实支付/回测。

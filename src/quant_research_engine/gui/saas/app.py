@@ -1592,6 +1592,10 @@ def create_saas_app() -> Flask:
             total_return_basis=TOTAL_RETURN_BASIS,
         )
 
+    @app.get("/saas/membership")
+    def saas_membership_page() -> str:
+        return render_template("membership.html")
+
     @app.get("/saas/mcp-guide")
     def saas_mcp_guide_page() -> str:
         return render_template("mcp_guide.html")

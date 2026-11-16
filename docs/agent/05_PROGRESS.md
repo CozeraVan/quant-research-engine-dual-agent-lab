@@ -1,3 +1,7 @@
+2026-11-16 会员中心已上线：/saas/membership 当前权益/套餐/本人订单，购买未开放；新增 orders 列表与导航。99 项相关测试通过/14 skipped，真实登录和375px通过，无支付/回测，未 commit/push。
+
+2026-11-16 微信 Native 适配层已部署：商户签名、下单/code_url、查单、回调验签+AES解密，金额/商户/SUCCESS校验并复用幂等履约。241 项相关测试通过/14 skipped；生产无凭证回调404，无真实交易/回测，未 commit/push。
+
 2026-11-16 会员模拟支付 HTTP 已部署：payments.py + orders/events 表，服务端商品/下单/查询/模拟支付，事务生效且重复不顺延；237 项测试通过/14 skipped。生产开关关、orders0、products200，无真实支付/回测，未 commit/push。
 
 2026-11-16 付费分池扣次与订单状态机已部署：新三档/因子/全量次数，jobs.quota_pool 仅 large 扣次，支付周期滚动；个人中心与9090同步。orders.py 含支付/履约/退款/非法迁移。233+3 测试通过，生产 active，无真实支付/回测，未 commit/push。

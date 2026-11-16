@@ -1,5 +1,15 @@
 # Review Report
 
+## 2026-11-16 会员中心自审
+
+- Review Status：PASS，无 Required Fixes。订单列表本人隔离，购买未开放，无误导真实支付。
+- 99 项相关测试通过/14 skipped；真实登录与375px无横溢，无回测。
+
+## 2026-11-16 微信 Native 适配层自审
+
+- Review Status：PASS（实现与模拟验收），无 Required Fixes；真实渠道未测，不声称收费上线。
+- 241 项相关测试通过，含签名/解密/回调/查单/幂等；生产无配置回调404，无回测。
+
 ## 2026-11-16 模拟支付订单闭环自审
 
 - Review Status：PASS，无 Required Fixes。237 项相关测试通过，金额/归属/开关/幂等覆盖；生产无订单、无真实支付。

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}会员中心 · A股回测台{% endblock %}
+{% block description %}A股回测台会员中心：查看会员档位、当前权益、回测额度与订单记录。{% endblock %}
+{% block body %}
+<div class="wrap">
+  <div class="page-head"><h1>会员中心</h1><p>查看当前账号权益、会员档位与订单记录。支付渠道尚未开放。</p></div>
+  <section class="card" id="membership-current">
+    <h2>当前权益</h2>
+    <div class="metric-strip">
+      <div class="metric-card"><div class="m-label">当前档位</div><div class="m-value" id="member-tier">—</div></div>
+      <div class="metric-card"><div class="m-label">本周期已用</div><div class="m-value" id="member-used">—</div></div>
+      <div class="metric-card"><div class="m-label">本周期剩余</div><div class="m-value" id="member-remaining">—</div></div>
+      <div class="metric-card"><div class="m-label">会员到期</div><div class="m-value" id="member-expire">—</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h2>会员档位</h2>
+    <table class="tbl" id="membership-plans"><thead><tr><th>档位</th><th>月费</th><th>股票范围</th><th>时间</th><th>因子字段</th><th>全量额度</th><th>状态</th></tr></thead><tbody>
+      <tr><td>初级会员</td><td>29.9元</td><td>全市场</td><td>全期</td><td>5</td><td>每支付周期3次</td><td rowspan="3">尚未开放购买</td></tr>
+      <tr><td>高级会员</td><td>69.9元</td><td>全市场</td><td>全期</td><td>8</td><td>每支付周期10次</td></tr>
+      <tr><td>钻石会员</td><td>199元</td><td>全市场</td><td>全期</td><td>20</td><td>每支付周期30次</td></tr>
+    </tbody></table>
+  </section>
+  <section class="card">
+    <h2>订单记录</h2>
+    <div id="membership-orders"><div class="chart-empty">加载中…</div></div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function membershipText(id,value){document.getElementById(id).textContent=value;}
+function membershipDate(value){return value ? String(value).slice(0,10) : '—';}
+async function loadMembershipCenter(){
+  try {
+    const r=await apiFetch('/api/saas/membership',{redirectOn401:false});
+    const d=await r.json();
+    if(!r.ok||!d.ok) throw new Error('请先登录后查看当前权益');
+    const m=d.membership,q=m.daily_full||{};
+    membershipText('member-tier',m.tier_label||m.tier);
+    membershipText('member-used',String(q.used||0)+' 次');
+    membershipText('member-remaining',q.unlimited?'不限':String(q.remaining??0)+' 次');
+    membershipText('member-expire',membershipDate(m.member_expire_at));
+  } catch(e){membershipText('member-tier',e.message||'加载失败');}
+}
+async function loadMembershipOrders(){
+  const box=document.getElementById('membership-orders');
+  try {
+    const r=await apiFetch('/api/saas/membership/orders',{redirectOn401:false});
+    const d=await r.json();
+    if(!r.ok||!d.ok) throw new Error('登录后可查看订单记录');
+    const items=d.orders||[];
+    if(!items.length){box.innerHTML='<div class="chart-empty">暂无订单记录</div>';return;}
+    const labels={pending:'待支付',fulfilled:'已生效',refunded:'已退款',expired:'已过期',closed:'已关闭'};
+    box.innerHTML='<table class="tbl"><thead><tr><th>订单</th><th>档位</th><th>金额</th><th>状态</th><th>创建时间</th></tr></thead><tbody>'
+      +items.map(o=>'<tr><td>'+escH(o.id)+'</td><td>'+escH(o.sku)+'</td><td>'+(Number(o.price_cents)/100).toFixed(2)+' 元</td><td>'+escH(labels[o.status]||o.status)+'</td><td>'+escH(String(o.created_at).replace('T',' ').slice(0,19))+'</td></tr>').join('')+'</tbody></table>';
+  } catch(e){box.innerHTML='<div class="chart-empty">'+escH(e.message||'订单加载失败')+'</div>';}
+}
+loadMembershipCenter();
+loadMembershipOrders();
+</script>
+{% endblock %}
