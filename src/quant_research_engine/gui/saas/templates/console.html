@@ -61,6 +61,10 @@
         <div class="metric-strip" id="ov-nl"></div>
       </div>
       <div class="card">
+        <h2>范围限制 <button type="button" class="tip-trigger" data-tip="全量/大规模与中小任务分池；自然语言文本不能覆盖服务端参数闸。" aria-label="范围限制说明">?</button></h2>
+        <div class="metric-strip" id="ov-scope-policy"></div>
+      </div>
+      <div class="card">
         <h2>外部 Agent API <button type="button" class="tip-trigger" data-tip="第四入口（供用户自带的外部 AI Agent 调用）的开关、默认限额与访问令牌清点。接口未启用时全部路由返回 404；启用后每个令牌仍受每日提交数、在飞任务数、每分钟请求数约束，且默认只在夜间窗口被认领，避免挤占真人时段。令牌不明文存储，吊销后立即失效。" aria-label="外部Agent说明">?</button></h2>
         <div class="metric-strip" id="ov-agent"></div>
       </div>
@@ -295,6 +299,7 @@
         metric('Worker 在线', w.online + ' / ' + w.total, '在线 / 已接入总数') +
         metric('待审因子', d.pending_factor_requests);
       renderNlCompile(d.nl || {});
+      renderScopePolicy(d.scope_policy || {});
       renderAgentApi(d.agent_api || {});
       var sv = d.server || {};
       var disk = sv.disk ? ('产物盘 ' + (sv.disk.used / 1073741824).toFixed(1) + ' / ' + (sv.disk.total / 1073741824).toFixed(1) + ' GB') : '不可用';
@@ -318,6 +323,14 @@
       metric('缓存条目', num(nl.cache_entries), '只缓存编译成功的结果；命中不调用大模型也不占配额') +
       metric('缓存累计命中', num(nl.cache_hits), '所有缓存条目的累计命中次数') +
       metric('限流计数', num(nl.rate_limit_rows) + ' 行 / ' + num(nl.rate_limit_hits) + ' 次', '当前各窗口内的计数行与累计编译次数');
+  }
+
+  function renderScopePolicy(scope){
+    var el = document.getElementById('ov-scope-policy');
+    if (!el) return;
+    el.innerHTML = metric('随机股票上限', Number(scope.max_random_n || 0) + ' 只', '所有入口的服务端硬上限') +
+      metric('大规模覆盖阈值', Math.round(Number(scope.large_scale_coverage || 0) * 100) + '%', '达到该覆盖比例进入全量次数池') +
+      metric('额度分池', scope.separate_pools ? '已启用' : '未启用', '全量与中小任务不相互兑换');
   }
 
   // --- AGENT-API M1 + R-ADMIN-001：外部 Agent API 开关/默认限额/令牌清点 ---

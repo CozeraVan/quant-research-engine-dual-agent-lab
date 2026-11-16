@@ -3055,6 +3055,11 @@ def create_saas_app() -> Flask:
             "max_fields": int(factor_pol.get("max_factor_fields", 20)),
             "max_tables": int(factor_pol.get("max_factor_tables", 3)),
         }
+        scope_issue = membership.validate_scope_policy(
+            params_raw, factor_pol, logged_in=uid is not None,
+        )
+        if scope_issue:
+            return jsonify({"ok": False, "error": scope_issue}), 403
 
         # --- 游客通道（15 号文档 D 阶段定稿；2026-10-03 限额参数化读 tier_policies；
         #     2026-10-04 内测调整：最多 10 只（自选不足自动随机补齐）/近 10 年/日 1 次不变；
@@ -3757,8 +3762,10 @@ def create_saas_app() -> Flask:
         metering.ensure_usage_ledger(engine)
         with engine.begin() as conn:
             job = conn.execute(
-                text("SELECT jobs.*, strategies.yaml AS strategy_yaml FROM jobs "
-                     "JOIN strategies ON strategies.id=jobs.strategy_id WHERE jobs.id = :id FOR UPDATE"),
+                text("SELECT jobs.*, strategies.yaml AS strategy_yaml, "
+                     "users.tier, users.member_since FROM jobs "
+                     "JOIN strategies ON strategies.id=jobs.strategy_id "
+                     "LEFT JOIN users ON users.id=jobs.user_id WHERE jobs.id = :id FOR UPDATE OF jobs"),
                 {"id": job_id},
             ).mappings().first()
             if job is None:
@@ -4938,6 +4945,11 @@ def create_saas_app() -> Flask:
                             "rate_limit_hits": int(nl_rate["hits"]),
                             "cache_entries": int(nl_cache["entries"]),
                             "cache_hits": int(nl_cache["hits"]),
+                        },
+                        "scope_policy": {
+                            "max_random_n": membership.MAX_RANDOM_UNIVERSE,
+                            "large_scale_coverage": membership.LARGE_SCALE_COVERAGE,
+                            "separate_pools": True,
                         },
                         # AGENT-API M1 + R-ADMIN-001：外部 Agent API 开关/默认限额/令牌清点。
                         # 限额读执行侧默认常量（agent_api.AGENT_DEFAULTS），不另写一套数字；

@@ -1,5 +1,17 @@
 # Coding Handoff
 
+## 2026-11-16 会员规模分池与范围闸
+
+- membership.quota_pool + validate_scope_policy；MAX_RANDOM_UNIVERSE=2000、LARGE_SCALE_COVERAGE=.8。
+- api_create_job 在游客专属逻辑前统一调用；登录按 tier_policies，游客原行为保留。重复 codes 先规范化去重再计数。
+- 9090 scope_policy 从执行常量读取并展示；212 项相关测试通过/14 skipped。回滚 `/tmp/qre-deploy-20261116T075821Z.bak`。
+
+## 2026-11-16 支付周期影子额度
+
+- metering.period_window/_add_month/allowance_su/cycle_usage；result/meta join users.tier/member_since。
+- backtest_usage 加 cycle_start/end/allowance_su，schema 与懒迁移一致。到期日进入下一周期，月末按目标月天数收敛。
+- 150 项相关测试通过；生产0行。回滚 `/tmp/qre-deploy-20261116T073519Z.bak`。
+
 ## 2026-11-16 会员 SU 影子计量
 
 - `gui/saas/metering.py`：calculate_su/usage_from_result/ensure_usage_ledger/record_shadow_usage；FULL_SCALE_REFERENCE_SU=470493。

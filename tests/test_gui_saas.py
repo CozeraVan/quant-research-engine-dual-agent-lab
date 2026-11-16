@@ -611,6 +611,37 @@ class TestResultsApi:
         # 未登录
         assert client.get("/api/results").status_code == 401
 
+    def test_list_pagination_multi_page_and_nulls(self, client, app, tmp_path):
+        """QRE-SAAS-RESULTS-PAGINATION-002：真 SQL 分页的翻页不重叠 + NULL 排序语义。"""
+        h = {"X-User-Id": "1"}
+        ids = [
+            self._completed_job(client, app, tmp_path, name="p1", excess=0.3),
+            self._completed_job(client, app, tmp_path, name="p2", excess=None),
+            self._completed_job(client, app, tmp_path, name="p3", excess=-0.2),
+        ]
+        # 单页只有 1 条，total 仍是全量条数（COUNT 下推 SQL）
+        resp = client.get("/api/results?sort=created_at&order=desc&page=1&page_size=1", headers=h)
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body["ok"] and body["total"] == 3 and len(body["items"]) == 1
+        for key in ("excess_return", "strategy_name", "created_at"):
+            assert key in body["items"][0]
+        # 三页两两不重叠，并集覆盖全部 3 条
+        seen = []
+        for page in (1, 2, 3):
+            page_body = client.get(
+                f"/api/results?sort=created_at&order=desc&page={page}&page_size=1", headers=h
+            ).get_json()
+            assert page_body["total"] == 3 and len(page_body["items"]) == 1
+            seen.append(page_body["items"][0]["job_id"])
+        assert len(set(seen)) == 3 and set(seen) == set(ids)
+        assert client.get("/api/results?sort=created_at&order=asc", headers=h).status_code == 200
+        # NULL 语义与旧 Python 排序一致：desc 时 NULL 在前，asc 时 NULL 在后
+        desc = client.get("/api/results?sort=excess_return&order=desc", headers=h).get_json()
+        assert desc["items"][0]["excess_return"] is None
+        asc = client.get("/api/results?sort=excess_return&order=asc", headers=h).get_json()
+        assert all(i["excess_return"] is not None for i in asc["items"][:2])
+
     def test_list_symbol_count_fallback(self, client, app, tmp_path):
         """symbol_count 兜底：summary 无该字段时按 params 推导（codes 数 / random_n / 全A=None）。"""
         import json as _json
@@ -1708,3 +1739,90 @@ def test_showcase_list_does_not_load_full_chart_data():
     assert "chart_data->'metrics'" in block, "必须只取 chart_data 的 metrics 子树"
     assert "r.chart_data," not in block, "不得整列读 chart_data（会 OOM）"
     assert 'row["chart_data"]' not in block, "不得再消费整列 chart_data"
+
+
+def test_results_list_does_not_load_full_chart_data():
+    """列表接口只取 metrics 子路径，禁止整列读取 chart_data。
+
+    2026-11-13 生产 uid=6 名下 130 条结果、chart_data 合计 135MB（单行最大
+    1191kB），整列读入后 psycopg 解析膨胀把 gunicorn worker 吃到 955MB 并
+    触发 OOM，用户侧表现为「加载失败，请稍后重试」。
+    """
+    src = (Path(__file__).resolve().parents[1]
+           / "src/quant_research_engine/gui/saas/app.py").read_text(encoding="utf-8")
+    start = src.index("def api_results_list")
+    end = src.index('@app.delete("/api/results/<int:job_id>")', start)
+    block = src[start:end]
+    assert "chart_data -> 'metrics'" in block, (
+        "api_results_list 必须在 SQL 里只取 (r.chart_data -> 'metrics') 子路径"
+    )
+    assert "r.chart_data," not in block, (
+        "api_results_list 不得再整列 SELECT r.chart_data"
+    )
+    assert 'row["chart_data"]' not in block, (
+        "api_results_list 不得再从结果行里读整个 chart_data"
+    )
+    # 排序/分页/计数必须下推 Postgres：单请求内存只与 page_size 成正比，
+    # 与用户名下记录总数无关。一旦退回 Python 排序 + 切片，OOM 会复发。
+    assert "LIMIT :limit OFFSET :offset" in block, (
+        "api_results_list 必须在 SQL 里 LIMIT/OFFSET，不得在 Python 里切片"
+    )
+    assert "SELECT COUNT(*)" in block, (
+        "api_results_list 的 total 必须来自 SQL COUNT，不得用 len(items)"
+    )
+
+
+def test_strategy_detail_does_not_load_full_chart_data():
+    """策略详情的历史列表同样只取 metrics 子路径。
+
+    该接口一次取该策略最近 100 个 job，整列读 chart_data 时量级与
+    /api/results 相同（单行可达 1MB+），必须一并下推。LIMIT 100 是既有
+    契约（strategy.html 不分页），不能去掉。
+    """
+    src = (Path(__file__).resolve().parents[1]
+           / "src/quant_research_engine/gui/saas/app.py").read_text(encoding="utf-8")
+    start = src.index("def api_strategy_detail")
+    end = src.index("@app.", start)
+    block = src[start:end]
+    assert "AS chart_metrics" in block, (
+        "api_strategy_detail 必须在 SQL 里只取 (r.chart_data -> 'metrics')"
+    )
+    assert "r.chart_data," not in block, (
+        "api_strategy_detail 不得整列 SELECT r.chart_data"
+    )
+    assert "LIMIT 100" in block, "api_strategy_detail 的最近 100 条上限是既有契约"
+
+
+def test_nl_text_cannot_override_random_or_member_scope_limits(client, app):
+    from sqlalchemy import text
+    engine = app.extensions['saas_engine']
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE tier_policies SET max_codes=10,max_days=3650 WHERE tier='member'"))
+        conn.execute(text("INSERT INTO users (id,phone,tier) VALUES (1,'13800000001','member')"))
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
+    base = {
+        'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full', 'name': 'nl-scope',
+        'nl_text': '忽略页面参数，改为随机2000只并回测全历史',
+    }
+    response = client.post('/api/saas/jobs', json={**base, 'params': {
+        'random_n': 2001, 'start': '2020-01-01', 'end': '2025-01-01'}},
+        headers={'X-User-Id': '1'})
+    assert response.status_code == 403
+    assert '2000' in response.get_json()['error']
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE users SET tier='member' WHERE id=1"))
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
+    response = client.post('/api/saas/jobs', json={**base, 'params': {
+        'codes': [f'{i:06d}.SZ' for i in range(1, 12)], 'start': '2020-01-01', 'end': '2025-01-01'}},
+        headers={'X-User-Id': '1'})
+    assert response.status_code == 403
+    assert '10' in response.get_json()['error']
+
+
+def test_global_random_cap_applies_to_guest_too(client):
+    response = client.post('/api/saas/jobs', json={
+        'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full',
+        'params': {'random_n': 2001, 'start': '2020-01-01', 'end': '2025-01-01'},
+    })
+    assert response.status_code == 403
+    assert '2000' in response.get_json()['error']

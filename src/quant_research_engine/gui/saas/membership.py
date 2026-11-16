@@ -85,3 +85,57 @@ def is_watch_exceeded(policy: object, watch_count: int) -> bool:
     if max_watches <= 0:
         return False
     return bool(int(watch_count or 0) >= max_watches)
+
+# 分池与规模闸：全量/大规模次数不与中小任务 SU 互换。
+MAX_RANDOM_UNIVERSE = 2000
+LARGE_SCALE_COVERAGE = 0.8
+
+
+def quota_pool(params: dict, available_symbols: int | None = None) -> str:
+    """large=全量/板块/≥2000随机/≥80%覆盖；其余为 small。"""
+    if params.get("all_market") or params.get("whole_market") or params.get("universe"):
+        return "large"
+    random_n = params.get("random_n")
+    if random_n is not None and int(random_n) >= MAX_RANDOM_UNIVERSE:
+        return "large"
+    codes = params.get("codes") or []
+    if isinstance(codes, str):
+        codes = [code.strip() for code in codes.split(",") if code.strip()]
+    if available_symbols and len(codes) / available_symbols >= LARGE_SCALE_COVERAGE:
+        return "large"
+    return "small"
+
+
+def validate_scope_policy(params: dict, policy: dict, *, logged_in: bool) -> str | None:
+    """服务端统一标的/区间闸；NL 文本不参与 params，直接构造请求也必须经过。"""
+    random_n = params.get("random_n")
+    if random_n is not None:
+        try:
+            random_value = int(random_n)
+        except (TypeError, ValueError):
+            return "随机股票数量须为整数"
+        if random_value < 1:
+            return "随机股票数量须为正整数"
+        if random_value > MAX_RANDOM_UNIVERSE:
+            return f"随机股票数量最多 {MAX_RANDOM_UNIVERSE} 只"
+    if not logged_in:
+        return None  # 游客保留既有专属错误与自动补齐逻辑
+    max_codes = int(policy.get("max_codes") or 0)
+    codes = params.get("codes") or []
+    if isinstance(codes, str):
+        codes = [code.strip() for code in codes.split(",") if code.strip()]
+    if max_codes > 0 and (len(codes) > max_codes or (random_n is not None and int(random_n) > max_codes)):
+        return f"当前账号每次最多回测 {max_codes} 只股票"
+    if max_codes > 0 and (params.get("universe") or params.get("all_market") or params.get("whole_market")):
+        return "当前账号未开放板块或全市场范围"
+    max_days = int(policy.get("max_days") or 0)
+    if max_days > 0:
+        from datetime import date
+        try:
+            start = date.fromisoformat(str(params.get("start")))
+            end = date.fromisoformat(str(params.get("end")))
+        except (TypeError, ValueError):
+            return "请填写合法的回测开始/结束日期"
+        if start > end or (end - start).days > max_days:
+            return f"当前账号单次最多回测 {max_days} 天，且不允许全期"
+    return None

@@ -31,6 +31,33 @@ def years_between(start: str, end: str) -> float:
     return max(days / 365.25, 1 / 365.25)
 
 
+FULL_SCALE_CYCLES = {"starter": 3, "advanced": 10, "diamond": 30}
+
+
+def _add_month(day: date) -> date:
+    import calendar
+
+    year, month = divmod(day.year * 12 + day.month, 12)
+    month += 1
+    return date(year, month, min(day.day, calendar.monthrange(year, month)[1]))
+
+
+def period_window(tier: str, at: date, member_since: date | None = None) -> tuple[date, date]:
+    """游客=自然日，登录=自然月，付费=从会员生效日起的支付周期。"""
+    if tier == "guest":
+        return at, at
+    if tier == "member":
+        return at.replace(day=1), _add_month(at.replace(day=1))
+    start = member_since or at
+    while _add_month(start) <= at:
+        start = _add_month(start)
+    return start, _add_month(start)
+
+
+def allowance_su(tier: str) -> int:
+    return FULL_SCALE_CYCLES.get(tier, 0) * FULL_SCALE_REFERENCE_SU
+
+
 def usage_from_result(job: dict[str, Any], summary: dict[str, Any], strategy_yaml: str) -> dict[str, Any] | None:
     params = job.get("params") or {}
     strategy = yaml.safe_load(strategy_yaml) or {}
@@ -85,10 +112,18 @@ def ensure_usage_ledger(engine) -> bool:
                     estimated_su BIGINT NOT NULL,
                     actual_su BIGINT NOT NULL,
                     mode TEXT NOT NULL DEFAULT 'shadow',
+                    cycle_start DATE,
+                    cycle_end DATE,
+                    allowance_su BIGINT NOT NULL DEFAULT 0,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                     settled_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 )
             """))
+            for column, definition in (("cycle_start", "DATE"), ("cycle_end", "DATE"),
+                                       ("allowance_su", "BIGINT NOT NULL DEFAULT 0")):
+                conn.execute(text(
+                    f"ALTER TABLE backtest_usage ADD COLUMN IF NOT EXISTS {column} {definition}"
+                ))
             conn.execute(text(
                 "CREATE INDEX IF NOT EXISTS idx_backtest_usage_user ON backtest_usage (user_id, created_at DESC)"
             ))
@@ -108,16 +143,37 @@ def record_shadow_usage(conn, job: dict[str, Any], summary: dict[str, Any], stra
         return  # 旧策略文本或不完整结果不参与影子计量，不能阻断主结果
     if usage is None:
         return
+    created = job.get("created_at")
+    at = created.date() if hasattr(created, "date") else date.today()
+    tier = str(job.get("tier") or ("guest" if job.get("user_id") is None else "member"))
+    cycle_start, cycle_end = period_window(tier, at, job.get("member_since"))
+    usage.update({"cycle_start": cycle_start, "cycle_end": cycle_end,
+                  "allowance_su": allowance_su(tier)})
     conn.execute(text("""
         INSERT INTO backtest_usage (
             job_id,user_id,symbol_count,years,factor_fields,factor_tables,trades,
-            estimated_su,actual_su,mode
+            estimated_su,actual_su,mode,cycle_start,cycle_end,allowance_su
         ) VALUES (
             :job_id,:user_id,:symbol_count,:years,:factor_fields,:factor_tables,:trades,
-            :estimated_su,:actual_su,'shadow'
+            :estimated_su,:actual_su,'shadow',:cycle_start,:cycle_end,:allowance_su
         ) ON CONFLICT (job_id) DO UPDATE SET
             symbol_count=EXCLUDED.symbol_count,years=EXCLUDED.years,
             factor_fields=EXCLUDED.factor_fields,factor_tables=EXCLUDED.factor_tables,
             trades=EXCLUDED.trades,estimated_su=EXCLUDED.estimated_su,
-            actual_su=EXCLUDED.actual_su,settled_at=now()
+            actual_su=EXCLUDED.actual_su,cycle_start=EXCLUDED.cycle_start,
+            cycle_end=EXCLUDED.cycle_end,allowance_su=EXCLUDED.allowance_su,settled_at=now()
     """), {"job_id": job["id"], "user_id": job.get("user_id"), **usage})
+
+
+def cycle_usage(conn, user_id: int, cycle_start: date, cycle_end: date) -> dict[str, int]:
+    """读取指定账号/周期的真实影子用量；仅供内部运营与后续额度闸。"""
+    from sqlalchemy import text
+
+    row = conn.execute(text("""
+        SELECT count(*) AS jobs,coalesce(sum(estimated_su),0) AS estimated,
+               coalesce(sum(actual_su),0) AS actual,max(allowance_su) AS allowance
+        FROM backtest_usage
+        WHERE user_id=:uid AND cycle_start=:start AND cycle_end=:end AND mode='shadow'
+    """), {"uid": user_id, "start": cycle_start, "end": cycle_end}).mappings().one()
+    return {"jobs": int(row["jobs"]), "estimated_su": int(row["estimated"]),
+            "actual_su": int(row["actual"]), "allowance_su": int(row["allowance"])}

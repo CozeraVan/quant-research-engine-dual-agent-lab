@@ -57,3 +57,35 @@ def test_usage_from_result_and_idempotent_upsert():
     assert "ON CONFLICT (job_id) DO UPDATE" in conn.calls[0][0]
     assert conn.calls[0][1]["job_id"] == 22
     assert conn.calls[0][1]["mode"] == "shadow"
+
+
+def test_period_windows_and_allowances():
+    from datetime import date
+    from quant_research_engine.gui.saas.metering import allowance_su, period_window
+
+    assert period_window('guest', date(2026, 11, 16)) == (date(2026, 11, 16), date(2026, 11, 16))
+    assert period_window('member', date(2026, 11, 16)) == (date(2026, 11, 1), date(2026, 12, 1))
+    assert period_window('starter', date(2026, 12, 16), date(2026, 11, 16)) == (
+        date(2026, 12, 16), date(2027, 1, 16))  # 到期日当天进入下一周期
+    assert period_window('diamond', date(2027, 1, 16), date(2026, 11, 30)) == (
+        date(2026, 12, 30), date(2027, 1, 30))
+    assert allowance_su('starter') == 3 * FULL_SCALE_REFERENCE_SU
+    assert allowance_su('advanced') == 10 * FULL_SCALE_REFERENCE_SU
+    assert allowance_su('diamond') == 30 * FULL_SCALE_REFERENCE_SU
+    assert allowance_su('member') == 0
+
+
+def test_cycle_usage_reads_real_aggregate():
+    from datetime import date
+    from quant_research_engine.gui.saas.metering import cycle_usage
+
+    class Result:
+        def mappings(self): return self
+        def one(self): return {'jobs': 2, 'estimated': 100, 'actual': 150, 'allowance': 1000}
+    class Conn:
+        def execute(self, sql, params):
+            assert params == {'uid': 6, 'start': date(2026, 11, 1), 'end': date(2026, 12, 1)}
+            assert "mode='shadow'" in str(sql)
+            return Result()
+    assert cycle_usage(Conn(), 6, date(2026, 11, 1), date(2026, 12, 1)) == {
+        'jobs': 2, 'estimated_su': 100, 'actual_su': 150, 'allowance_su': 1000}

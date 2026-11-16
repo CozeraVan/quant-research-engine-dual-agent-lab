@@ -1,5 +1,15 @@
 # Review Report
 
+## 2026-11-16 会员规模分池与范围闸自审
+
+- Review Status：PASS，无 Required Fixes。解决全量−1套利合同；NL不生成 params，直接伪造请求仍过服务端闸。
+- 212 项相关测试通过/14 skipped；含自定义 tier 限额、游客随机上限、重复代码去重和9090同源。无回测。
+
+## 2026-11-16 支付周期影子额度自审
+
+- Review Status：PASS，无 Required Fixes。周期边界/月末/额度/聚合有测试，150 项相关全绿。
+- 仍只影子记录，不拦截/收费；生产0行、无新回测，schema幂等且服务active。
+
 ## 2026-11-16 会员分层与 SU 影子计量自审
 
 - Review Status：PASS，无 Required Fixes。影子记录不影响现有权限、收费或用户页面；参考值与实际日期值明确区分。
