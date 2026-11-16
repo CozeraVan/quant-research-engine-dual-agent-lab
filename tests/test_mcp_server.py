@@ -93,17 +93,30 @@ def test_all_tools_map_to_agent_api():
     tools = server._tool_manager._tools
     assert set(tools) == {
         "get_capabilities", "get_strategy_schema", "validate_strategy",
-        "get_backtest_result", "get_backtest_chart_data",
+        "create_research_run", "submit_backtest", "get_backtest_status",
+        "get_backtest_aggregate", "get_backtest_result", "get_backtest_chart_data",
     }
-    tools["get_capabilities"].fn()
-    tools["get_strategy_schema"].fn()
-    tools["validate_strategy"].fn(yaml="signal: {}", params={"random_n": 2})
-    tools["get_backtest_result"].fn(job_id=7)
-    tools["get_backtest_chart_data"].fn(job_id=7)
+    tools["get_capabilities"].fn(ctx=None)
+    tools["get_strategy_schema"].fn(ctx=None)
+    tools["validate_strategy"].fn(yaml="signal: {}", params={"random_n": 2}, ctx=None)
+    tools["create_research_run"].fn(title="test", boundary_text="small", budget={"max_jobs": 1}, ctx=None)
+    tools["submit_backtest"].fn(
+        research_run_id=3, yaml="signal: {}", params={"random_n": 2},
+        idempotency_key="test-key", ctx=None,
+    )
+    tools["get_backtest_status"].fn(sweep_id=5, ctx=None)
+    tools["get_backtest_aggregate"].fn(sweep_id=5, sort_by="sharpe", ctx=None)
+    tools["get_backtest_result"].fn(job_id=7, ctx=None)
+    tools["get_backtest_chart_data"].fn(job_id=7, ctx=None)
     assert [(c["method"], c["url"].split("/api/agent/v1")[-1]) for c in session.calls] == [
         ("GET", "/capabilities"), ("GET", "/schema/strategy"), ("POST", "/validate"),
+        ("POST", "/research-runs"), ("POST", "/sweeps"), ("GET", "/sweeps/5"),
+        ("GET", "/sweeps/5/aggregate?sort_by=sharpe"),
         ("GET", "/jobs/7/result"), ("GET", "/jobs/7/result/chart-data"),
     ]
+    sweep_payload = session.calls[4]["json"]
+    assert sweep_payload["stage"] == "screen" and sweep_payload["grid"] == {}
+    assert sweep_payload["idempotency_key"] == "test-key"
 
 
 def test_stdio_initialize_and_list_tools():
@@ -125,7 +138,7 @@ async def main():
         async with ClientSession(read, write) as session:
             await session.initialize()
             result = await session.list_tools()
-            assert len(result.tools) == 5
+            assert len(result.tools) == 9
             print("MCP_STDIO_OK", ",".join(sorted(t.name for t in result.tools)))
 
 anyio.run(main)
@@ -135,3 +148,25 @@ anyio.run(main)
     )
     assert result.returncode == 0, result.stderr
     assert "MCP_STDIO_OK" in result.stdout
+
+
+def test_public_mode_requires_and_forwards_caller_token(monkeypatch):
+    from types import SimpleNamespace
+    from quant_research_engine.mcp_server.server import _bearer_token
+
+    with pytest.raises(AgentAPIError, match="自己的 QRE Agent"):
+        _bearer_token(SimpleNamespace(headers={}))
+    assert _bearer_token(SimpleNamespace(headers={"authorization": "Bearer caller-token"})) == "caller-token"
+
+    seen = []
+    monkeypatch.setenv("QRE_API_BASE_URL", "http://127.0.0.1:8090")
+    monkeypatch.setattr(
+        AgentAPIClient,
+        "request",
+        lambda self, method, path, payload=None: seen.append((self.config.token, method, path)) or {"ok": True},
+    )
+    server = create_server(public=True)
+    tool = server._tool_manager._tools["get_capabilities"]
+    assert tool.fn(ctx=SimpleNamespace(headers={"authorization": "Bearer caller-a"})) == {"ok": True}
+    tool.fn(ctx=SimpleNamespace(headers={"authorization": "Bearer caller-b"}))
+    assert seen == [("caller-a", "GET", "/capabilities"), ("caller-b", "GET", "/capabilities")]

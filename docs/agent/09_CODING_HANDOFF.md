@@ -1,5 +1,18 @@
 # Coding Handoff
 
+## 2026-11-16 MCP M2 异步小样本提交
+
+- 新工具映射既有 POST `/research-runs`、POST `/sweeps`（固定 screen/grid空/幂等）、GET 状态与 aggregate；排序键白名单。
+- 合计 9 工具，86 项 MCP+Agent API 测试通过；已部署 qre-mcp，公网 list=9。
+- 首测已完成：因浏览器会话持续 401，改用既有令牌散列函数在 ECS 创建 1 天/2提交/1在飞专用 token，全程未输出明文；job360 成功后已吊销并删除临时凭证。
+- 真实 MCP 全链路和结果读取通过；证据 `.tmp/mcp-first-result.json`。ema_20 首次校验失败属正确因子闸行为，最终用 ema_200。
+
+## 2026-11-16 MCP M1 公网接入
+
+- `create_server(public=True)` 不读取共享 token，工具从当前 HTTP Context 的 Authorization 提取调用方 Bearer；私有 stdio 行为不变。
+- `deploy/mcp/qre-mcp.service`：回环 8093、512MiB、PYTHONPATH src；nginx 仅 `/mcp`，正式域名 Host 白名单保留 DNS 重绑定保护。
+- 86 项相关测试通过；公网匿名/无效 token 工具调用均拒绝。有效 token 正向与千问待验收。未 commit/push。
+
 ## 2026-11-16 MCP M0 只读适配层
 
 - `mcp_server/client.py`：基址归一到 `/api/agent/v1`，Bearer 来自 `QRE_AGENT_TOKEN`；30s 超时、32MiB 响应上限、上游 HTTP/JSON 错误安全转换。

@@ -19,7 +19,21 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
-### 2026-11-16 付费 Remote MCP：M0 只读适配层 DONE（待验收/提交）
+### 2026-11-16 MCP M2 首次真实回测 DONE（待验收/提交）
+
+- 新增 4 个异步工具，合计 9；86 项测试通过。首次公网 MCP 完整链路 validate→run→submit→poll→result 成功。
+- job360 / run_id=20261116T052448889708：600519.SH+000001.SZ、2026-05-18~11-13、EMA5/200，4 笔、总收益 +4.1248%、最大回撤 -3.3257%、买入持有 +8.7787%、超额 -4.6539%。仅管线验证，不作策略有效性结论。
+- 首次 ema_20 校验被正确拒绝，改已存在 ema_200 后通过。专用 token id=1 已吊销，服务器临时凭证已删除；结果证据 `.tmp/mcp-first-result.json`。
+- M1/M2 未 commit/push；phase = DEPLOYED_PENDING_ACCEPTANCE。
+
+### 2026-11-16 Remote MCP M1 已部署（待有效 token 与千问验收、未 commit）
+
+- M0 已提交 `a8fedfb`（未 push）。M1 公网地址 `https://aguhuice.com/mcp`，独立 qre-mcp 8093，客户端 Bearer 透传，无共享 token。
+- 86 项测试通过；公网通用 SDK 匿名/无效 token 均 initialize/list 成功、call 正确拒绝，SaaS/nginx/qre-mcp active。
+- 修复 Host 白名单但保留 DNS 重绑定保护；nginx 1MiB/60rpm/5连接。有效 token 正向调用和千问平台接入尚未验收。
+- phase = DEPLOYED_PENDING_ACCEPTANCE；M2 异步提交未启动。
+
+### 2026-11-16 付费 Remote MCP：M0 只读适配层 DONE（已提交）
 
 - 路线定稿于 `47_PAID_MCP_ROADMAP_2026-11-16.md`：复用第四入口 Agent API；M0 只读、M1 公网客户端、M2 异步提交、M3 计费、M4 规模化。
 - 新增 `mcp_server` 五工具与 stdio/Streamable HTTP 启动；上游 Bearer/权限/限流不变，不直连 DB、不建回测。

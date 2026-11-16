@@ -1,5 +1,18 @@
 # Task Handoff
 
+## 2026-11-16 MCP M2 首次回测（DONE，待验收/提交）
+
+- 公网 MCP 九工具完整真实链路通过；job360 completed/progress=100，结果 `.tmp/mcp-first-result.json`。
+- 2 股近 6 个月 EMA5/200：4 笔、总收益 4.1248%、回撤 -3.3257%、超额 -4.6539%；只证明管线，不证明策略有效。
+- 本次 token id=1 已吊销并清理临时文件。M1/M2 未 commit/push；建议 `feat(mcp): 支持公网异步小样本回测`。
+
+## 2026-11-16 Remote MCP M1（已部署待验收）
+
+- M0 已提交 `a8fedfb`；M1 已上线 `https://aguhuice.com/mcp`，仅五只读工具、每用户 Bearer 透传。
+- 86 项测试通过；公网通用 SDK 匿名/无效 token 正确拒绝。有效 token 正向调用与千问平台仍需用户侧凭证/配置验收。
+- M1 建议提交 `feat(mcp): 部署多用户 Remote MCP 服务`，待用户批准；push 未授权。
+- M2 异步提交只有在 M1 正向验收后启动。
+
 ## 2026-11-16 付费 Remote MCP M0（待验收/提交）
 
 - 路线和 CR 已落盘；只读五工具 MVP 已实现，复用生产 Agent API，不新增算力写入口。

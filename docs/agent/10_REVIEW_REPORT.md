@@ -1,5 +1,17 @@
 # Review Report
 
+## 2026-11-16 MCP M2 异步提交自审
+
+- Review Status：PASS，无 Required Fixes；首次真实公网 MCP 端到端已完成。
+- 新提交只走 screen，幂等键必填，上游预算/scope/在飞限制不变；aggregate 排序白名单防查询拼接。
+- 86 项相关测试通过；job360 completed，结果读取与数值字段齐全。专用 token 已吊销、临时凭证清理。
+
+## 2026-11-16 MCP M1 公网接入自审
+
+- Review Status：PASS（部署与负向验收），无 Required Fixes；有效 token 正向与千问属待验收入口，不伪称通过。
+- 无共享凭证、无新增任务/支付/配额；调用方 token 只透传至权威 API。服务仅回环，公网仅 `/mcp`，DNS 重绑定保护未关闭。
+- 86 项测试通过；公网匿名/无效 token initialize/list/call 符合拒绝预期。生产首启缺 PYTHONPATH和 Host 421 已修复并复验 active。
+
 ## 2026-11-16 MCP M0 只读适配层自审
 
 - Review Status：**PASS，无 Required Fixes**。MCP 仅代理五个既有 Agent API 端点，无数据库、worker、策略或结果合同改动。

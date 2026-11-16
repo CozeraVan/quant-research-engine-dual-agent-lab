@@ -1,0 +1,23 @@
+[Unit]
+Description=QRE Remote MCP backtest adapter
+After=network-online.target qre-saas.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/srv/aguhuice/qre
+Environment=QRE_API_BASE_URL=http://127.0.0.1:8090
+Environment=PYTHONPATH=/srv/aguhuice/qre/src
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/srv/aguhuice/qre/.venv/bin/python -m quant_research_engine.mcp_server --transport streamable-http --host 127.0.0.1 --port 8093 --public
+Restart=always
+RestartSec=5
+MemoryMax=512M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

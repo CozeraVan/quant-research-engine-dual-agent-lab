@@ -1,5 +1,19 @@
 # Implementation Brief
 
+## 2026-11-16 MCP M2：首次异步小样本回测
+
+- 用户明确批准用当前 Kimi Code 做首次 MCP 回测。新增 create research run、单个 screen 提交、状态轮询、聚合四工具；既有校验/结果工具复用。
+- 提交固定 `stage=screen/grid={}`，强制幂等键；上游令牌 scope、日/在飞/夜间/研究预算不变。不开放 confirm 或全市场。
+- 首测用 2–5 只、近 6 个月，先 validate 再提交；用真实 SDK 驱动公网 `/mcp`，不直接绕过 MCP 调 API。
+- 若缺有效 Agent token，只记录阻塞，不读取/打印生产凭证或自建后门。
+
+## 2026-11-16 付费 Remote MCP：M1 公网只读接入
+
+- M0 已提交 `a8fedfb`；M1 将 HTTP 改为每请求使用客户端自己的 Bearer token，服务端无共享 token。
+- 新增独立 ECS 8093 服务与 nginx `/mcp`，仅五个只读工具；1MiB 请求体、60rpm、每 IP 5 连接，不暴露其他内部端口。
+- 验证：本地公网模式 token 缺失/透传测试、真实 HTTP 客户端、ECS systemd/nginx、公网无凭证拒绝与通用客户端 initialize/list/call。无真实回测。
+- 千问平台接入和结算不作为代码完成条件；不能实测时明确记录。
+
 ## 2026-11-16 付费 Remote MCP：M0 只读适配层
 
 - 路线与边界：`47_PAID_MCP_ROADMAP_2026-11-16.md`；复用 `/api/agent/v1/*` 的鉴权、配额和结果权限，MCP 不直连数据库、不调用模型、不做投资建议。

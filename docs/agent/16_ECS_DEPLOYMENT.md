@@ -1,3 +1,7 @@
+**Remote MCP M2 首次回测（2026-11-16，已部署待验收/未 commit）**：九个工具，job360 真实公网 MCP 全链路完成；专用 token 已吊销。M2 代码回滚 `/tmp/qre-deploy-20261116T051322Z.bak`。
+
+**Remote MCP M1（2026-11-16，已部署待验收/未 commit）**：`https://aguhuice.com/mcp` → nginx → 回环 8093 `qre-mcp.service` → 回环 8090 `/api/agent/v1/*`。多用户 Bearer 透传，无共享 token；仅五只读工具，1MiB/60rpm/5连接。SDK 公网匿名与无效 token initialize/list/call 通过且调用均被拒绝；有效 token 正向及千问验收待做。代码回滚 `/tmp/qre-deploy-20261116T050403Z.bak`、`/tmp/qre-deploy-20261116T050637Z.bak`，nginx 回滚 `/tmp/qre-mcp-nginx-pre-20261116/`。
+
 **Game 候选池持久化（2026-11-15，未 commit）**：WSL qre-game 使用 `/var/lib/qre-game/pool.json`（StateDirectory 自动建目录），同日重启磁盘命中、跨日后台刷新。72 游戏测试通过；同日重启后公网开局 8.539s。只改 WSL 服务，ECS 配置不变。
 
 **《我不是股神》公网上线（2026-11-15，QRE-GAME-ONDEMAND-PUBLIC）**：`https://aguhuice.com/game` 已可用。链路为 nginx `/game` → ECS 回环 8092 → WSL `qre-game-tunnel.service` 主动 SSH 反向隧道 → WSL `qre-game.service`（回环 8092）→ 本地只读行情库；ECS 无行情明细，家庭无公网入站。按需只读抽中单股和所需因子，真实身份仅终局揭示。两服务 enabled/active，游戏 MemoryMax=1G；公网开局/回合/隔离与 SaaS 回归通过。nginx 回滚备份 `/tmp/aguhuice.pre-game-20261115T013507` 和 `/tmp/aguhuice-enabled.pre-game-20261115`。冷开局实测约 22–26 秒，性能优化另列，不宣称亚秒。
