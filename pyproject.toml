@@ -9,6 +9,7 @@ dependencies = [
   "flask>=3.0.0",
   "gunicorn>=23.0.0",
   "matplotlib>=3.7.0",
+  "mcp>=2.3.0,<3",
   "openpyxl>=3.1.0",
   "pandas>=2.3.0",
   "psycopg[binary]>=3.2.0",
@@ -22,6 +23,7 @@ dependencies = [
 
 [project.scripts]
 qre = "quant_research_engine.apps.cli:main"
+qre-mcp = "quant_research_engine.mcp_server.__main__:main"
 
 [build-system]
 requires = ["hatchling"]

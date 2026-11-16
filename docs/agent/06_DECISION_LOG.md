@@ -1,3 +1,16 @@
+### 2026-11-16: 付费 MCP 复用第四入口 Agent API，协议层与执行层分离（QRE-PAID-MCP-M0）
+
+- Decision: 新增独立 MCP 薄适配层调用 `/api/agent/v1/*`，不在 MCP 内复制鉴权、任务、回测或数据库访问。M0 只读，M2 才开放异步提交，M3 才接计费。
+- Rationale: 复用已验证的 token/scope/限流/预算/幂等/归属；长任务不阻塞 MCP 请求；避免公开付费前绕过容量闸。
+- Verification: 85 项 MCP+Agent API 测试；stdio 与回环 HTTP SDK 握手/list 通过，无真实回测。
+- Owner: KIMI_CODE；用户明确要求设计路线并开始实施。
+
+### 2026-11-15: Game S6 全历史 GROUP BY 计数预过滤不实施
+
+- Decision: 不在 provider/store 增加 `HAVING usable_count>=N` 候选池查询；保留持久化文件缓存与跨日后台刷新。
+- Rationale: 真实 PG 实测该查询 28.469s（5576 eligible，latest=2026-11-13），比 DISTINCT 热查询 22–23s 更慢，仍扫全历史；增加口径复杂度而无收益。
+- Verification: 只读 SELECT 实测；无代码、DB、ECS 变更。长期方向是 ingestion 维护股票目录/物化清单，不在开局重复聚合。
+
 ### 2026-11-15: Game 公网采用按需单股直读 + WSL 主动反向隧道（QRE-GAME-ONDEMAND-PUBLIC）
 
 - Decision: 不上传全市场快照，不让 ECS 直连行情库。浏览器 `/game` 经 ECS nginx → 回环 8092 → WSL 主动 SSH 反向隧道 → 家庭只读 PG；仅抽中的单股与所需因子进入内存会话。真实身份只在 finished reveal 下发，DB 会话日期偏移为 0。

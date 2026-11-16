@@ -19,6 +19,13 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-16 付费 Remote MCP：M0 只读适配层 DONE（待验收/提交）
+
+- 路线定稿于 `47_PAID_MCP_ROADMAP_2026-11-16.md`：复用第四入口 Agent API；M0 只读、M1 公网客户端、M2 异步提交、M3 计费、M4 规模化。
+- 新增 `mcp_server` 五工具与 stdio/Streamable HTTP 启动；上游 Bearer/权限/限流不变，不直连 DB、不建回测。
+- 85 项 MCP+Agent API 测试通过；stdio 与 HTTP 真实 SDK initialize/list 通过。HTTP 仅回环冒烟，未公网部署；无真实 token/ECS 调用。
+- 使用手册 `docs/auxiliary/mcp/README.md`。phase = IMPLEMENTED_PENDING_ACCEPTANCE；commit/push 待用户批准。
+
 ### 2026-11-15 批准的四项主线全部 DONE
 
 - output_dir 隔离、EMA 口径核查、安全审计、NL TTL 清理全部完成并分别验证；本地视频直读已验收提交。

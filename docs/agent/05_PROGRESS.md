@@ -1,3 +1,5 @@
+2026-11-16 付费 Remote MCP M0 完成：新增路线 `47_PAID_MCP_ROADMAP_2026-11-16.md`、CR、独立 `mcp_server` 包和使用手册。五工具覆盖 capabilities/schema/validate/result/chart-data，复用 Agent API 的 token、权限、限流和结果归属；不建任务。官方 MCP SDK 2.3，stdio 与回环 HTTP initialize/list 实测通过；`tests/test_mcp_server.py tests/test_saas_agent_api.py` **85 passed**。未公网部署、未接支付、未跑回测；待用户验收和提交批准。
+
 2026-11-15 F3-22 NL 缓存自动清理已完成并部署：`cleanup_nl_tables` 删除 90 天未命中 cache、7 天未更新 rate limit；ensure 每进程每自然日最多一次，失败不影响编译并下次重试。管理台 nl 读同一 TTL 常量及真实行/命中计数。新增真实 PG 过期/保留测试，相关 **206 passed**。ECS 部署 active，回滚 `/tmp/qre-deploy-20261115T104833Z.bak`；公网 new 200。另恢复先前 uv sync 误删的短信 SDK 等本地环境包，测试恢复全绿。未跑回测。
 
 2026-11-15 F2-12 安全审计复核完成：security sandbox/Tushare/SaaS access/IDOR/页面 XSS/静默失败共 **244 passed**。修复过期测试契约：params 端点纳入权限路由冻结；profile 分享 harness 只抽分享段并补分页/DOM stub，游客 401 断言对齐当前登录提示。未发现本轮新增生产安全漏洞；本地新增结果接口均只读，真实 SQL 仍参数化。未改生产代码、未跑回测。

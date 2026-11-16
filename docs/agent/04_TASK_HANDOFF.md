@@ -1,5 +1,12 @@
 # Task Handoff
 
+## 2026-11-16 付费 Remote MCP M0（待验收/提交）
+
+- 路线和 CR 已落盘；只读五工具 MVP 已实现，复用生产 Agent API，不新增算力写入口。
+- `85 passed`；stdio 与回环 Streamable HTTP 真实 initialize/list 均通过。未使用真实 token、未调 ECS、未跑回测。
+- 用户验收后建议提交信息：`feat(mcp): 增加回测只读 MCP 适配层`；push 需用户明确要求。
+- 下一轮 M1：独立公网服务、用户 token/OAuth、nginx 限制、千问与通用客户端实测；不在 M0 自动开放提交或收费。
+
 ## 2026-11-15 批准的四项主线全部完成
 
 1. output_dir 按 run 隔离：111 测试，commit bcc625d。

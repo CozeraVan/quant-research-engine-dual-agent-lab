@@ -1,5 +1,13 @@
 # Implementation Brief
 
+## 2026-11-16 付费 Remote MCP：M0 只读适配层
+
+- 路线与边界：`47_PAID_MCP_ROADMAP_2026-11-16.md`；复用 `/api/agent/v1/*` 的鉴权、配额和结果权限，MCP 不直连数据库、不调用模型、不做投资建议。
+- 新增官方 MCP SDK 依赖及独立 `mcp_server` 包；以环境变量注入基址和用户 token。
+- 本轮五工具：capabilities、strategy schema、validate（不执行）、result、chart-data；支持 stdio/HTTP，但 HTTP 默认回环，不公网开放。
+- 验证：上游全部 mock；真实 SDK 协议 initialize/list/call；错误不泄露 token；不建真实回测、不跑全量。
+- 后续 M1 才做 ECS 公网服务/OAuth/平台验收，M2 开放异步提交，M3 接套餐与计费。
+
 ## 2026-11-15 本地视频结果直读与公网页面复现
 
 - 目标：视频 agent 在 WSL 直接发现 run、读取结果/个股详情并获得本地页面 URL，不经 ECS、公网账号或人工复制。

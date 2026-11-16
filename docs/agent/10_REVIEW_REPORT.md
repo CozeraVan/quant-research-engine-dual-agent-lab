@@ -1,5 +1,12 @@
 # Review Report
 
+## 2026-11-16 MCP M0 只读适配层自审
+
+- Review Status：**PASS，无 Required Fixes**。MCP 仅代理五个既有 Agent API 端点，无数据库、worker、策略或结果合同改动。
+- token 只从环境变量进入 Authorization；错误摘要不含 token；基址仅 http(s)，job_id 为 int；响应有 32MiB 上限。HTTP 默认回环，未误开公网。
+- 六个 MCP 测试覆盖 URL/Bearer/HTTP错误/非JSON/大小限制/五工具映射/真实 stdio；另做真实 HTTP initialize/list。MCP+Agent API 共 **85 passed**。
+- 未真实调用收费平台或生产 API，未开放回测提交、未跑回测。待用户验收；不宣称已具备商店上架或自动结算能力。
+
 ## 2026-11-15 NL 缓存 TTL 清理自审
 
 - Review Status：PASS，无 Required Fixes。206 项相关测试通过，生产 active。

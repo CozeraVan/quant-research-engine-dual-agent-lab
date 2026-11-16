@@ -1,5 +1,12 @@
 # Coding Handoff
 
+## 2026-11-16 MCP M0 只读适配层
+
+- `mcp_server/client.py`：基址归一到 `/api/agent/v1`，Bearer 来自 `QRE_AGENT_TOKEN`；30s 超时、32MiB 响应上限、上游 HTTP/JSON 错误安全转换。
+- `mcp_server/server.py`：五个只读工具；validate 不建 job。`__main__.py` 与 `qre-mcp` 支持 stdio/HTTP，HTTP 默认 127.0.0.1:8093。
+- 依赖 `mcp>=2.3.0,<3`；v2 使用 `MCPServer`，不是旧 FastMCP API。stdio/HTTP 真实 SDK 握手和工具发现通过，85 项相关测试通过。
+- 无生产部署、无新权限/配额、无 DB/schema/回测变化。下一步 M1 才做公网与客户端验收。
+
 ## 2026-11-15 NL 缓存 TTL 清理
 
 - `nl_compile_support.cleanup_nl_tables(engine, now=None)` 返回两类真实删除数；cache 90 天按 last_hit_at，rate 7 天按 updated_at。
