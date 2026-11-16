@@ -191,10 +191,10 @@ def test_batch_backtest_summary_includes_buy_hold_fields():
     # buy-and-hold fields flow through from single-symbol summary
     assert "buy_hold_return" in result.summary.columns
     assert "excess_return_vs_buy_hold" in result.summary.columns
-    # 000001.SZ: first open=10.0, last close=11.3 → 0.13
-    assert result.summary.loc[0, "buy_hold_return"] == pytest.approx(0.13)
-    # 000002.SZ: first open=20.0, last close=18.5 → -0.075
-    assert result.summary.loc[1, "buy_hold_return"] == pytest.approx(-0.075)
+    # 000001.SZ: first close=10.1, last close=11.3
+    assert result.summary.loc[0, "buy_hold_return"] == pytest.approx(11.3 / 10.1 - 1)
+    # 000002.SZ: first close=19.9, last close=18.5
+    assert result.summary.loc[1, "buy_hold_return"] == pytest.approx(18.5 / 19.9 - 1)
 
 
 def test_batch_backtest_summary_metrics_includes_buy_hold_aggregates():
@@ -217,7 +217,6 @@ def test_batch_backtest_summary_metrics_includes_buy_hold_aggregates():
     assert "median_buy_hold_return" in metrics
     assert "mean_excess_return_vs_buy_hold" in metrics
     assert "median_excess_return_vs_buy_hold" in metrics
-    # mean of (0.13, -0.075) = 0.0275
-    assert metrics["mean_buy_hold_return"] == pytest.approx(0.0275)
-    # median of (0.13, -0.075) = 0.0275
-    assert metrics["median_buy_hold_return"] == pytest.approx(0.0275)
+    expected = ((11.3 / 10.1 - 1) + (18.5 / 19.9 - 1)) / 2
+    assert metrics["mean_buy_hold_return"] == pytest.approx(expected)
+    assert metrics["median_buy_hold_return"] == pytest.approx(expected)

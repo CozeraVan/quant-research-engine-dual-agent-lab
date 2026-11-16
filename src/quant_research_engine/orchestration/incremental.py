@@ -198,8 +198,8 @@ def _update_summary_inputs(
         }
         entry = {
             "first_trade_date": str(pd.Timestamp(first["trade_date"]).date()),
-            # 持有基准固定首开盘/末收盘；策略成交价参数不改变基准。
-            "first_entry_price": float(first["open"]),
+            # 持有基准固定首收盘/末收盘；策略成交价参数不改变基准。
+            "first_entry_price": float(first["close"]),
             "first_mark_price": float(first["close"]),
             "metadata": metadata,
         }

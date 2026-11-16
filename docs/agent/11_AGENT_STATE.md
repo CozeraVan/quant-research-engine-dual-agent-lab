@@ -19,6 +19,12 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-16 首收盘基准与118经典迁移已部署（待验收/提交）
+
+- 新回测统一首有效复权收盘→末有效复权收盘；经典结果仅重算基准，不重跑交易。115个全期基准+148.1659%，3个实际短区间+1.7668%，本地/生产118项对账通过。
+- CF005索引/showcase由smoke233改全期232；生产备份 `.tmp/classic-buy-hold-production-backup.jsonl.gz`。静态HTML/XLSX未重生。
+- 建议 `fix(backtest): 采用首收盘持有基准并迁移经典结果`，未commit/push。
+
 ### 2026-11-16 NL 千帆主模型 + OpenCode 备用已部署（待验收/提交）
 
 - 替换401旧凭证；千帆 `deepseek-v4.1-flash-1017` 主、OpenCode Go `deepseek-v4.1-flash` 备，异常自动切换。真实直连与断主切换均成功，308项相关测试通过，无回测。

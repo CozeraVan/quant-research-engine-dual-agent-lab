@@ -217,10 +217,11 @@ def test_single_symbol_backtest_summary_includes_buy_hold_return():
     result = engine.run(make_frame(), request)
     summary = result.summary
 
-    # first open=10.0, last close=11.3 → buy_hold_return = 11.3/10.0 - 1 = 0.13
-    assert summary["buy_hold_return"] == pytest.approx(0.13)
+    # first close=10.1, last close=11.3 → buy_hold_return = 11.3/10.1 - 1
+    expected = 11.3 / 10.1 - 1
+    assert summary["buy_hold_return"] == pytest.approx(expected)
     # strategy total_return is ~0.0772, so excess is negative
-    assert summary["excess_return_vs_buy_hold"] == pytest.approx(0.077216944 - 0.13)
+    assert summary["excess_return_vs_buy_hold"] == pytest.approx(0.077216944 - expected)
 
 
 def test_buy_hold_return_is_independent_of_strategy_price_columns():
@@ -235,8 +236,8 @@ def test_buy_hold_return_is_independent_of_strategy_price_columns():
     )
     result = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile()).run(make_frame(), request)
 
-    # 基准始终是首根开盘 10.0 → 末根收盘 11.3，与策略 close/open 参数无关。
-    assert result.summary["buy_hold_return"] == pytest.approx(0.13)
+    # 基准始终是首根收盘 10.1 → 末根收盘 11.3，与策略价格参数无关。
+    assert result.summary["buy_hold_return"] == pytest.approx(11.3 / 10.1 - 1)
 
 
 def test_single_symbol_backtest_buy_hold_return_is_none_for_empty_frame():

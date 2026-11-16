@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-16 首收盘基准与经典迁移
+
+- `single_symbol.py`/`incremental.py` 首边界改close；shared帮助函数本已close→close。相关69项测试通过，扩大回归273 passed/14 skipped。
+- `.tmp/recompute_classic_buy_hold.py` 用 `(ts_code,trade_date)` 索引 LATERAL 点查首末价，避免全表扫描；118项本地原子更新并备份。
+- 生产事务更新 results.summary/chart_data.metrics 与CF005 showcase，118项对账一致；备份和验证证据均在 `.tmp/classic-buy-hold-*`。
+
 ## 2026-11-16 NL 主备模型
 
 - `nl_compiler.py` 新增 `nl_configs` 和 `QRE_NL_LLM_BACKUP_*`，异常时主→备；`call_llm` 增加 `qre-nl-compiler/1.0` 与稳定 `x-opencode-session`。

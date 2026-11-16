@@ -166,6 +166,8 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **NL 管理台同步已部署（2026-10-26，QRE-SAAS-NL-A2A3 续，R-ADMIN-001，待人工验收）**：`api_console_overview` 新增 `nl` 对象（guest_daily/member_minute 读执行常量 `GUEST_NL_DAILY_LIMIT`/`MEMBER_NL_MINUTE_LIMIT`、admin=不限、cache_version、`nl_rate_limits`/`nl_compile_cache` 真实行数与 hits）；console.html 总览在 Worker 资源卡前新增「自然语言编译」卡（metric 卡 + tip-trigger，无灰色小字）。仅同步 app.py 与 console.html 并重启 qre-saas，无 schema 变更、未重启 worker、未跑真实回测。9090 隧道临时 admin session 验证 overview nl 字段与常量/表计数一致（匿名/错 token 401），临时账号与会话已清理。全量 2731 passed + 6 skipped。回滚备份 `/tmp/qre-nl-console-pre-20261026/`（app.py + console.html）。
 
+**经典策略首收盘持有基准迁移（2026-11-16）**：生产118个CF结果 summary/chart_data.metrics 已按首有效复权收盘→末有效复权收盘迁移，showcase CF005由233改232；事务逐项UPDATE 1并复核对账。备份 `.tmp/classic-buy-hold-production-backup.jsonl.gz`，公网showcase 200。代码回滚 `/tmp/qre-deploy-20261116T112053Z.bak`。无回测、未commit/push。
+
 **NL 千帆主备配置（2026-11-16）**：生产替换为千帆 Token Plan OpenAI 兼容主通道 + OpenCode Go 备用；`nl_compiler.py` 支持异常切换和真实客户端/会话头。密钥仅在 `/etc/qre-saas.env`，未读取输出；env备份 `/etc/qre-saas.env.bak-nl-models-20261116`，代码回滚 `/tmp/qre-deploy-20261116T105240Z.bak`。两组真实编译与断主切换通过，308项相关测试通过；qre-saas active。无回测，未commit/push。
 
 **NL DeepSeek V4.1 Flash 配置（2026-10-25）**：生产 `QRE_NL_LLM_BASE_URL=https://api.deepseek.com`，正确模型 ID 为 `QRE_NL_LLM_MODEL=deepseek-flash`（最新 V4.1 Flash；`deepseek-v4.1-flash` 不是可用 ID，真实编译 400）。已用 MACD 金叉死叉纯编译验证成功，未创建回测。改前 env 备份 `/etc/qre-saas.env.bak-deepseek-v41-20261025`（0600）。

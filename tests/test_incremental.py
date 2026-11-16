@@ -99,7 +99,7 @@ def master_frame() -> pd.DataFrame:
     )
 
 
-def test_summary_inputs_use_fixed_open_close_buy_hold_edges():
+def test_summary_inputs_use_fixed_close_close_buy_hold_edges():
     inputs = {}
     _update_summary_inputs(
         inputs,
@@ -109,7 +109,7 @@ def test_summary_inputs_use_fixed_open_close_buy_hold_edges():
         mark_price_column="open",
     )
     expected = master_frame().query("ts_code == 'A.SZ'")
-    assert inputs["A.SZ"]["first_entry_price"] == expected.iloc[0]["open"]
+    assert inputs["A.SZ"]["first_entry_price"] == expected.iloc[0]["close"]
     assert inputs["A.SZ"]["last_mark_price"] == expected.iloc[-1]["close"]
 
 

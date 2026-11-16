@@ -62,6 +62,12 @@
 
 持有基准的合同为：对给定数据快照、回测区间和股票宇宙，每股取区间内首个有效交易日的复权开盘价与最后一个有效交易日的复权收盘价，`R_i = P_last_close_adj / P_first_open_adj - 1`，再对全部有有效边界的股票等权算术平均。无交易股票必须包含；停牌/退市导致末日无交易时使用其最后有效收盘并保留数据边界含义；新股从上市后的首个有效交易日开始。它只在相同宇宙、区间和行情快照下固定，不承诺跨不同日期或数据更新后仍相同。
 
+## 首收盘定稿与经典策略迁移
+
+用户随后批准改为首个有效复权收盘→最后有效复权收盘，代码、增量与shared帮助链均已统一。经典策略不重跑交易，只按现有宇宙和实际结果区间重算基准：115个全期任务均为 +148.1659386%，CF-044～046实际短区间为 +1.7667619%；118项有效边界均5200只。本地 summary/symbol performance/JSON/Markdown 与生产 summary/chart_data.metrics 已逐项对账。
+
+迁移还发现并修复 CF-005 索引误链：job233是smoke，真实全期为job232，索引和生产showcase均已改。静态HTML/XLSX历史报告未重生；未修改交易收益、未重跑回测。生产字段备份 `.tmp/classic-buy-hold-production-backup.jsonl.gz`，逐股本地备份 `.tmp/classic-buy-hold-backup/`。
+
 ## 当前 NL API 实测（2026-11-16 18:40）
 
 `POST http://127.0.0.1:8081/api/nl_compile` 返回 HTTP 200、耗时0.198s，但业务体为 `ok=false, code=llm_error`：`LLM 调用失败：HTTP Error 401: Authorization Required`。即 8081 路由和进程正常，当前 NL 上游模型凭证/授权无效，无法生成 YAML；没有启动回测。证据 `.tmp/nl-api-live-check.json`。这证明当前故障点在上游认证，但不能反推历史目标 run 当时也是同一原因。

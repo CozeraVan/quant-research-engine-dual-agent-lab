@@ -95,9 +95,9 @@
   },
   {
    "cf_id": "CF-005",
-   "strategy_id": "CF-005-memory-fix-smoke",
-   "job_id": 233,
-   "title": "CF-005-memory-fix-smoke",
+   "strategy_id": "bo04a_darvas_box_breakout",
+   "job_id": 232,
+   "title": "CF-005_bo04a_darvas_box_breakout",
    "total_trade_count": 2690,
    "result_contract": "verified",
    "period": {
@@ -106,10 +106,10 @@
    },
    "owner": "17157845743",
    "urls": {
-    "page": "https://aguhuice.com/saas/jobs/233",
-    "params_snapshot": "https://aguhuice.com/api/saas/jobs/233/params",
-    "chart_data": "https://aguhuice.com/api/results/233/chart-data",
-    "symbols": "https://aguhuice.com/api/results/233/symbols",
+    "page": "https://aguhuice.com/saas/jobs/232",
+    "params_snapshot": "https://aguhuice.com/api/saas/jobs/232/params",
+    "chart_data": "https://aguhuice.com/api/results/232/chart-data",
+    "symbols": "https://aguhuice.com/api/results/232/symbols",
     "showcase": "https://aguhuice.com/saas/showcase"
    }
   },

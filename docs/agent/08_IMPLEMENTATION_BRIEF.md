@@ -1,5 +1,12 @@
 # Implementation Brief
 
+## 2026-11-16 买入持有首收盘口径与经典结果迁移
+
+- 按用户批准，单股/批量/增量/shared 统一为区间内首个有效复权收盘→最后有效复权收盘；不含交易成本，股票宇宙与策略解耦。
+- 经典策略不重跑交易；从现有 summary 的股票集合与结果实际日期读取首末价，重算 buy_hold/excess 及中位数。先3个 dry-run/apply 小样本，再覆盖118个。
+- 本地写入逐文件备份+原子替换；生产 results 先备份再事务更新。CF-005 索引误链 job233 改指真实全期 job232；CF-044～046 结果实际从2025-06-26开始，按实际区间重算并单列，不冒充全期。
+- 静态 HTML/XLSX 属于历史报告快照，本轮只更新 Web/结构化 JSON/CSV/Markdown；不重跑回测，不改行情。
+
 ## 2026-11-16 NL 千帆主模型与 OpenCode Go 备用
 
 - 替换旧失效凭证；千帆 Token Plan 使用 OpenAI 兼容 `/v2/tokenplan/personal`，模型 `deepseek-v4.1-flash-1017`；OpenCode Go 使用官方 `/inference/go/openai/v1`，模型 `deepseek-v4.1-flash`。

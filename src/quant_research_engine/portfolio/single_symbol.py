@@ -68,10 +68,10 @@ def build_single_symbol_summary(
 
     buy_hold_return = None
     excess_return_vs_buy_hold = None
-    # 同宇宙同区间的持有基准必须与策略无关：固定首根开盘 → 末根收盘，
+    # 同宇宙同区间的持有基准必须与策略无关：固定首根收盘 → 末根收盘，
     # 不跟随策略的 entry/exit/mark 价格参数。
-    if not frame.empty and "open" in frame.columns and "close" in frame.columns:
-        first_entry_price = float(frame.iloc[0]["open"])
+    if not frame.empty and "close" in frame.columns:
+        first_entry_price = float(frame.iloc[0]["close"])
         last_mark_price = float(frame.iloc[-1]["close"])
         if first_entry_price > 0:
             buy_hold_return = last_mark_price / first_entry_price - 1.0
