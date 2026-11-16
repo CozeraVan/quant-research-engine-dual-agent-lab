@@ -1,3 +1,7 @@
+2026-11-16 MCP 本地紧凑导出已上线：新增 `qre-mcp-export`，核心文件 + result/local manifest，SHA-256、partial 清理、原子改名、不覆盖；真实 job360 12 文件已复制本机 `.tmp/mcp-export-job360/job_360/` 复核通过。结果读取从“本 token/人工”改为“同账号全部历史”，他人仍 404；9090 显示同源可见范围。119 项测试通过/13 skipped。专用 token id=3 已吊销，云端产物/TTL不变，无新回测，未 commit/push。
+
+2026-11-16 MCP token 自助管理已上线：个人中心新增 MCP 接入页，创建/单次明文/复制/清除/列表/吊销完整可用。真实浏览器 token id=2 已创建并吊销，明文未记录；224 项相关测试通过、13 skipped。9090 复用现有同源令牌计数，无权限/schema变化。纠正此前误判：SaaS 会话为 Authorization Bearer，手工 fetch 未带头才 401，登录代码无需修复。仅 profile.html 部署，未跑回测，未 commit/push。
+
 2026-11-16 MCP 首次真实回测完成：公网 `/mcp` 经官方 SDK 完成 validate→create research run→submit screen→poll→result。job360 completed，产物 run `20261116T052448889708`；2 股近 6 个月 EMA5/200，4 笔、总收益 +4.1248%、最大回撤 -3.3257%、买入持有 +8.7787%、超额 -4.6539%。初次 ema_20 被因子校验正确拦截，改 ema_200 后执行。专用 token 已吊销、服务器临时凭证删除，证据 `.tmp/mcp-first-result.json`。仅管线验证，非策略结论。
 
 2026-11-16 MCP M2 异步提交已部署：新增 create_research_run/submit_backtest/get_backtest_status/get_backtest_aggregate，合计 9 工具；86 项测试通过，公网发现 9。首次 2 股 6 个月计划尚未建单：浏览器 `/api/saas/me` 401，专用 token 签发同样 401；已打开登录页等用户操作。未读/打印 token、未跑回测、未 commit/push。

@@ -91,3 +91,29 @@ class AgentAPIClient:
             if not isinstance(data, dict):
                 raise AgentAPIError("QRE 上游 JSON 顶层必须是对象", code="invalid_upstream_response")
             return data
+
+    def download_artifact(self, job_id: int, name: str) -> bytes:
+        """下载单个顶层产物；禁止路径片段，响应大小仍受统一上限约束。"""
+        import re
+
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", name):
+            raise AgentAPIError("产物文件名不合法", code="invalid_artifact_name")
+        try:
+            response = self.session.request(
+                "GET", f"{self.config.base_url}/jobs/{job_id}/artifacts/{name}",
+                headers={"Authorization": f"Bearer {self.config.token}"},
+                timeout=self.config.timeout_seconds, stream=True,
+            )
+        except requests.RequestException as exc:
+            raise AgentAPIError("QRE 产物下载连接失败", code="upstream_unavailable") from exc
+        with response:
+            if response.status_code >= 400:
+                raise AgentAPIError(f"产物下载失败（HTTP {response.status_code}）",
+                                    status=response.status_code, code="artifact_download_error")
+            content_length = response.headers.get("Content-Length")
+            if content_length and int(content_length) > self.config.max_response_bytes:
+                raise AgentAPIError("产物超过下载大小限制", code="response_too_large")
+            content = response.content
+            if len(content) > self.config.max_response_bytes:
+                raise AgentAPIError("产物超过下载大小限制", code="response_too_large")
+            return content

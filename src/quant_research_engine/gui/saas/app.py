@@ -1261,6 +1261,7 @@ def _agent_api_console_view(app, engine) -> dict[str, Any]:
         "defaults": _agent.AGENT_DEFAULTS,
         "tokens_total": 0,
         "tokens_active": 0,
+        "result_visibility": _agent.JOB_RESULT_VISIBILITY,
         "tokens": [],
     }
     from sqlalchemy import text

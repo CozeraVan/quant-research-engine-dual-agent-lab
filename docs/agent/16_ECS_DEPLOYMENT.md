@@ -1,3 +1,7 @@
+**MCP 本地紧凑导出（2026-11-16，已部署待验收/未 commit）**：qre-mcp-export + 账号级历史结果读取 + 9090 可见范围。job360 真实 12 文件本机验证；token id=3 已吊销。回滚 `/tmp/qre-deploy-20261116T054554Z.bak`、`/tmp/qre-deploy-20261116T054847Z.bak`、`/tmp/qre-deploy-20261116T055033Z.bak`。
+
+**MCP token 自助管理（2026-11-16，已部署待验收/未 commit）**：个人中心 profile.html 新增创建/列表/吊销；真实 UI token id=2 创建后吊销。224 测试通过。回滚 `/tmp/qre-deploy-20261116T053803Z.bak`。
+
 **Remote MCP M2 首次回测（2026-11-16，已部署待验收/未 commit）**：九个工具，job360 真实公网 MCP 全链路完成；专用 token 已吊销。M2 代码回滚 `/tmp/qre-deploy-20261116T051322Z.bak`。
 
 **Remote MCP M1（2026-11-16，已部署待验收/未 commit）**：`https://aguhuice.com/mcp` → nginx → 回环 8093 `qre-mcp.service` → 回环 8090 `/api/agent/v1/*`。多用户 Bearer 透传，无共享 token；仅五只读工具，1MiB/60rpm/5连接。SDK 公网匿名与无效 token initialize/list/call 通过且调用均被拒绝；有效 token 正向及千问验收待做。代码回滚 `/tmp/qre-deploy-20261116T050403Z.bak`、`/tmp/qre-deploy-20261116T050637Z.bak`，nginx 回滚 `/tmp/qre-mcp-nginx-pre-20261116/`。

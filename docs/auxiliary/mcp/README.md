@@ -58,4 +58,18 @@ Authorization: Bearer <自己的 QRE Agent token>
 - `get_backtest_result(job_id)`：读取本人已完成任务摘要。
 - `get_backtest_chart_data(job_id)`：按需读取图表数据，默认上限 32MiB。
 
+## 导出到本地电脑
+
+Agent 在 MCP 中得到 completed 的 `job_id` 后，可调用本机命令保存紧凑结果包：
+
+```bash
+export QRE_AGENT_TOKEN='<自己的 agent token>'
+export QRE_API_BASE_URL='https://aguhuice.com'
+uv run qre-mcp-export 360 --output ./qre-results
+```
+
+输出为 `./qre-results/job_360/`，含 `local_manifest.json`、`result.json`、核心指标、收益/回撤、交易汇总和 HTML 报告。默认不下载逐股目录、图片和 Excel；每个下载文件校验上游 SHA-256，失败清理 partial，不覆盖已有目录。
+
+此命令由用户本机 Agent 调用，远程 MCP 服务器不会直接写用户磁盘。当前不改变网页、云端产物和 TTL；本地导出不代表云端已删除，也不作为删除授权。
+
 所有权限、任务归属、限流和免责声明由 `/api/agent/v1/*` 保持权威。历史回测结果不构成投资建议。

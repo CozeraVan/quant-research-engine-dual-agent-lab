@@ -343,6 +343,7 @@
       metric('接口开关', ag.enabled ? '已启用' : '未启用（路由 404）', '由 QRE_AGENT_API_ENABLED 控制；未启用时所有 /api/agent/v1/* 返回 404') +
       metric('令牌总数', num(ag.tokens_total), '含已吊销与已过期') +
       metric('有效令牌', num(ag.tokens_active), '未吊销且未过期') +
+      metric('结果可见范围', ag.result_visibility === 'account' ? '同账号全部历史任务' : num(ag.result_visibility), '与 Agent 结果读取归属策略同源；其他账号仍不可见') +
       metric('默认每日提交上限', num((ag.defaults || {}).daily_submit_limit) + ' 次', '按令牌计数，超限 429') +
       metric('默认在飞上限', num((ag.defaults || {}).in_flight_limit), '同时在队的任务数上限，超限 429') +
       metric('默认每分钟请求', num((ag.defaults || {}).rate_per_minute) + ' 次', '超限 429 并带 Retry-After') +

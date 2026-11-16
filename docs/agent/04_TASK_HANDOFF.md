@@ -1,5 +1,18 @@
 # Task Handoff
 
+## 2026-11-16 MCP 本地导出（已部署待验收）
+
+- `qre-mcp-export <job_id> --output ./qre-results` 可供本机 Agent 保存紧凑包；job360 已真实验证并复制本机。
+- 权限调整为账号级历史结果，9090 已显示；他人隔离不变。专用 token 已吊销。
+- 119 项测试通过/13 skipped；未 commit/push。建议 `feat(mcp): 支持回测结果本地紧凑导出`。
+- 后续可选：导出确认后的云端 TTL 策略，必须另行授权，当前不自动删除。
+
+## 2026-11-16 MCP token 自助管理（已部署待验收）
+
+- 用户可从个人中心 → MCP 接入自助创建和吊销 token；真实 UI 验收通过，测试令牌已吊销。
+- 224 项测试通过；无登录修复，因为 401 根因是诊断探针漏带 Authorization，不是生产缺陷。
+- 未 commit/push；建议 `feat(saas): 增加 MCP 令牌自助管理`。下一项为千问自定义 MCP 实际配置验收。
+
 ## 2026-11-16 MCP M2 首次回测（DONE，待验收/提交）
 
 - 公网 MCP 九工具完整真实链路通过；job360 completed/progress=100，结果 `.tmp/mcp-first-result.json`。

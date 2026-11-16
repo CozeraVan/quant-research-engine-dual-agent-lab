@@ -19,7 +19,21 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
-### 2026-11-16 MCP M2 首次真实回测 DONE（待验收/提交）
+### 2026-11-16 MCP 本地紧凑结果包已部署（待验收/提交）
+
+- `qre-mcp-export` 默认导出核心 12 文件；SHA-256/原子落盘/不覆盖，无 Base64 大响应。网页与云端 TTL 不变，不自动删云端。
+- job360 真实导出已复制本机 `.tmp/mcp-export-job360/job_360/` 并逐文件复核；token id=3 已吊销，无新回测。
+- 结果归属调整为同账号全部历史任务，支持 token 轮换；他人 404 不变，9090 新增同源“结果可见范围”。119 项测试通过/13 skipped。
+- phase = DEPLOYED_PENDING_ACCEPTANCE；建议 `feat(mcp): 支持回测结果本地紧凑导出`。
+
+### 2026-11-16 MCP token 自助管理已部署（待验收/提交）
+
+- 个人中心新增「MCP 接入」：创建、有效期、夜间开关、单次明文复制/清除、列表、吊销；复用既有 API 和 9090 同源计数。
+- 224 项测试通过/13 skipped；真实浏览器 token id=2 创建→清除→吊销通过。无新回测。
+- 重要纠错：此前 401 是手工 fetch 未带 Authorization Bearer 会话头，不是登录 bug；未改认证代码。
+- phase = DEPLOYED_PENDING_ACCEPTANCE；建议 `feat(saas): 增加 MCP 令牌自助管理`。
+
+### 2026-11-16 MCP M2 首次真实回测 DONE（已提交）
 
 - 新增 4 个异步工具，合计 9；86 项测试通过。首次公网 MCP 完整链路 validate→run→submit→poll→result 成功。
 - job360 / run_id=20261116T052448889708：600519.SH+000001.SZ、2026-05-18~11-13、EMA5/200，4 笔、总收益 +4.1248%、最大回撤 -3.3257%、买入持有 +8.7787%、超额 -4.6539%。仅管线验证，不作策略有效性结论。

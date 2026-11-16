@@ -1,5 +1,17 @@
 # Review Report
 
+## 2026-11-16 MCP 本地紧凑导出自审
+
+- Review Status：PASS，无 Required Fixes。默认范围紧凑，无 Base64；文件白名单、大小/hash、原子落盘和不覆盖均有测试。
+- 同账号跨 token 读取是本次为轮换/导出明确调整的合同，9090 同源展示；他人仍 404 并有测试。
+- job360 真实 12 文件本机复核通过，专用 token 吊销；未改变云端 TTL，未跑新回测。119 项测试通过/13 skipped。
+
+## 2026-11-16 MCP token 自助管理自审
+
+- Review Status：PASS，无 Required Fixes。既有 token API/权限/配额不变，9090 已同源展示真实计数，无第二配置源。
+- 前端只在创建响应接触明文，列表不渲染 hash/plaintext；复制后用户可清除。真实创建/清除/吊销通过。
+- 224 项相关测试通过、13 skipped；ECS 仅 profile.html。纠正先前 401 探针误判，未对认证做无谓修改。
+
 ## 2026-11-16 MCP M2 异步提交自审
 
 - Review Status：PASS，无 Required Fixes；首次真实公网 MCP 端到端已完成。

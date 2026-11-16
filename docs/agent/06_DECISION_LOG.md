@@ -1,3 +1,10 @@
+### 2026-11-16: Agent 结果读取按账号归属，支持本地紧凑导出（QRE-MCP-LOCAL-EXPORT）
+
+- Decision: 同账号有效 token 可读取该账号全部历史 job，不再限本 token；新增本地 compact 导出，云端 TTL 不变。
+- Rationale: token 是同一用户的客户端凭证，轮换 token/换电脑不应失去旧结果；其他账号仍 404。
+- Verification: 119 项相关测试通过；job360 12 文件本机 hash 复核，9090 可见范围同源，专用 token 吊销。
+- Owner: KIMI_CODE；用户批准本地导出方案。
+
 ### 2026-11-16: 付费 MCP 复用第四入口 Agent API，协议层与执行层分离（QRE-PAID-MCP-M0）
 
 - Decision: 新增独立 MCP 薄适配层调用 `/api/agent/v1/*`，不在 MCP 内复制鉴权、任务、回测或数据库访问。M0 只读，M2 才开放异步提交，M3 才接计费。

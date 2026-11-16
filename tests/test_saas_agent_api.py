@@ -1273,3 +1273,26 @@ class TestDiscoveryDocuments:
         assert re.match(pattern, "factors.stock_daily_ta.ema5")
         assert not re.match(pattern, "ema5")
         assert not re.match(pattern, "Factors.Ema5")
+
+
+def test_same_account_new_token_can_read_existing_agent_job(client, app):
+    from sqlalchemy import text
+
+    from quant_research_engine.gui.saas.agent_api import _load_agent_job
+
+    session = _login(client, app)
+    uid = client.get('/api/saas/me', headers=session).get_json()['user']['id']
+    first = _create_token(client, session, name='first')['token']['id']
+    second = _create_token(client, session, name='second')['token']['id']
+    engine = app.extensions['saas_engine']
+    with engine.begin() as conn:
+        strategy_id = conn.execute(text(
+            "INSERT INTO strategies (user_id,name,yaml) VALUES (:uid,'test','signal: {}') RETURNING id"
+        ), {'uid': uid}).scalar_one()
+        job_id = conn.execute(text(
+            "INSERT INTO jobs (user_id,strategy_id,kind,params,token_id) VALUES "
+            "(:uid,:sid,'full','{}',:tid) RETURNING id"
+        ), {'uid': uid, 'sid': strategy_id, 'tid': first}).scalar_one()
+    with app.app_context():
+        assert _load_agent_job(engine, job_id, {'user_id': uid, 'id': second})['id'] == job_id
+        assert _load_agent_job(engine, job_id, {'user_id': uid + 1000, 'id': second}) is None

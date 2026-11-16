@@ -47,6 +47,7 @@ DISCLAIMER = "本研究结果仅供研究使用，不构成投资建议。"
 
 DEFAULT_SCOPES = ("jobs:submit", "jobs:read", "results:read", "factors:read")
 KNOWN_SCOPES = DEFAULT_SCOPES  # M2–M5 新增 scope 时同步扩充，未知 scope 一律 400
+JOB_RESULT_VISIBILITY = "account"  # 同账号令牌可读取历史结果；9090 展示与此常量同源
 
 # 成本信封（设计文档 §5）。数值来源 14_LAUNCH_ROADMAP.md §10 容量基线、
 # docs/agent/27_STRESS_TEST_2026-11-02.md 全期全量压测、以及 2026-11-03 M6 实测。
@@ -1516,17 +1517,17 @@ AGENT_ARTIFACT_TTL_DAYS = 15
 
 
 def _load_agent_job(engine, job_id: int, token_row):
-    """按令牌归属读 job：本令牌创建的 job，或同属主的人工 job（令牌代表用户行事）。
+    """按用户归属读 job：同一账号的有效令牌可读取该账号全部历史任务。
 
-    他人/不存在一律 None（路由层统一 404，不泄露存在性）。
+    令牌是同一用户的独立客户端凭证，不是彼此隔离的租户；他人/不存在一律 None
+    （路由层统一 404，不泄露存在性）。这样用户换电脑或轮换 token 后仍可导出旧结果。
     """
     from sqlalchemy import text
 
     with engine.connect() as conn:
         return conn.execute(
-            text("SELECT * FROM jobs WHERE id = :id AND user_id = :uid "
-                 "AND (token_id = :tid OR token_id IS NULL)"),
-            {"id": job_id, "uid": token_row["user_id"], "tid": token_row["id"]},
+            text("SELECT * FROM jobs WHERE id = :id AND user_id = :uid"),
+            {"id": job_id, "uid": token_row["user_id"]},
         ).mappings().first()
 
 

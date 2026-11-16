@@ -1,5 +1,17 @@
 # Coding Handoff
 
+## 2026-11-16 MCP 本地紧凑导出
+
+- `mcp_server/export.py` + `qre-mcp-export`：compact 白名单、SHA-256、partial/原子 rename、不覆盖；client.download_artifact 禁嵌套路径。
+- `_load_agent_job` 现仅按 user_id 过滤，支持同账号 token 轮换；其他账号 None。`JOB_RESULT_VISIBILITY=account` 同步 9090。
+- job360 本机证据 `.tmp/mcp-export-job360/job_360/`；云端不删、网页不变。119 项测试通过，13 skipped。
+
+## 2026-11-16 MCP token 自助管理
+
+- 仅改 `saas/templates/profile.html`：新增 #mcp 子页、表单和令牌列表；请求必须走 `apiFetch` 自动带会话 Bearer。
+- 明文只读创建响应 `d.token.plaintext`；列表不读 plaintext/hash；「我已保存」清空并隐藏。吊销后刷新真实状态。
+- 9090 无需代码改动，既有 `_agent_api_console_view` 已给真实 total/active/rows/usage。224 测试和真实创建/吊销通过。
+
 ## 2026-11-16 MCP M2 异步小样本提交
 
 - 新工具映射既有 POST `/research-runs`、POST `/sweeps`（固定 screen/grid空/幂等）、GET 状态与 aggregate；排序键白名单。
