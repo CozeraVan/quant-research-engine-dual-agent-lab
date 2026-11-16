@@ -1,5 +1,10 @@
 # Coding Handoff
 
+## 2026-11-16 付费分池扣次与订单状态机
+
+- 新档 defaults/CHECK；jobs.quota_pool + `_quota_user_row` 周期计数，仅 large；console 档位授予与 member_since 初始化。
+- orders.py 为纯状态机，无真实支付路由/订单表。233+3 测试通过。回滚 `/tmp/qre-deploy-20261116T084842Z.bak`、`/tmp/qre-deploy-20261116T085017Z.bak`。
+
 ## 2026-11-16 免费层周期额度
 
 - membership 默认与 USED_QUOTA_SQL：member自然月，其余自然日；daily_full_limit 是历史字段名。

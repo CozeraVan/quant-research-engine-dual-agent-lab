@@ -6,7 +6,8 @@
 
 from __future__ import annotations
 
-TIER_LABELS = {"guest": "游客", "member": "内测会员", "paid": "付费会员"}
+TIER_LABELS = {"guest": "游客", "member": "内测会员", "paid": "付费会员",
+               "starter": "初级会员", "advanced": "高级会员", "diamond": "钻石会员"}
 
 POLICY_KEYS = ("daily_full_limit", "max_codes", "max_days", "max_factor_fields", "max_factor_tables")
 POLICY_BOOL_KEYS = ("scan_enabled",)
@@ -21,6 +22,12 @@ TIER_POLICY_DEFAULTS: dict[str, dict[str, object]] = {
                "max_factor_fields": 3, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
     "paid":   {"daily_full_limit": 0, "max_codes": 0, "max_days": 0,
                "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
+    "starter": {"daily_full_limit": 3, "max_codes": 0, "max_days": 0,
+                "max_factor_fields": 5, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
+    "advanced": {"daily_full_limit": 10, "max_codes": 0, "max_days": 0,
+                 "max_factor_fields": 8, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
+    "diamond": {"daily_full_limit": 30, "max_codes": 0, "max_days": 0,
+                "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
 }
 
 # 周期用量（要求外层 users 表别名 u）：member=自然月，其余=自然日；付费支付周期由后续订单模型接管。

@@ -301,7 +301,8 @@ class TestMembershipEndpoint:
         assert "member_since" in mb and "member_expire_at" in mb
 
         tiers = body["tiers"]
-        assert [t["tier"] for t in tiers] == ["guest", "member", "paid"]
+        assert [t["tier"] for t in tiers] == [
+            "guest", "member", "paid", "advanced", "diamond", "starter"]
         guest = tiers[0]
         assert guest["label"] == "游客"
         assert guest["daily_full_limit"] == 1

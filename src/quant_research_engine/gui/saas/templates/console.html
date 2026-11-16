@@ -594,7 +594,7 @@
       var html = d.users.map(function(u){
         var acct = esc(u.email || u.phone || ('#' + u.id));
         var tierSel = '<select data-uid="' + u.id + '" class="tier-sel">' +
-          ['member', 'paid'].map(function(t){ return '<option value="' + t + '"' + (u.tier === t ? ' selected' : '') + '>' + (t === 'member' ? '会员' : '付费') + '</option>'; }).join('') + '</select>';
+          [['member','会员'],['paid','付费'],['starter','初级'],['advanced','高级'],['diamond','钻石']].map(function(t){ return '<option value="' + t[0] + '"' + (u.tier === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select>';
         var stBadge = u.status === 'active' ? '<span class="badge ok">正常</span>' : '<span class="badge fail">已禁用</span>';
         var btn = u.status === 'active'
           ? '<button class="btn-sm" data-act="disable" data-uid="' + u.id + '">禁用</button>'

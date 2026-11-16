@@ -450,6 +450,28 @@ def _get_policy(app: Flask, engine: Engine, tier: str) -> dict[str, int]:
     return policy
 
 
+def _quota_user_row(conn, uid: int):
+    """统一周期用量：新付费档按会员生效日滚动，且仅 large 任务占全量次数。"""
+    from datetime import date
+
+    from quant_research_engine.gui.saas import metering
+
+    user = conn.execute(
+        text("SELECT tier,role,member_since FROM users WHERE id=:uid"), {"uid": uid},
+    ).mappings().one()
+    tier = str(user["tier"] or "member")
+    since = user["member_since"]
+    since = since.date() if hasattr(since, "date") else since
+    start, _end = metering.period_window(tier, date.today(), since)
+    used = conn.execute(
+        text("SELECT count(*) FROM jobs WHERE user_id=:uid AND kind='full' "
+             "AND created_at >= :start "
+             + ("AND quota_pool='large'" if tier in metering.FULL_SCALE_CYCLES else "")),
+        {"uid": uid, "start": start},
+    ).scalar_one()
+    return {"tier": tier, "role": user["role"], "used_today": int(used)}
+
+
 # --- R2 多租户弹性调度：任务轻重分级（2026-10-03，依据 N3 容量基线） ---
 # 内存 ≈ 标的数 × 天数 × 因子表数：全A×2年峰值 5.79G（重），单股/小范围 ~1.5G（轻）。
 # 轻任务走专属槽位，避免游客单股测试被全市场任务堵死。
@@ -469,6 +491,19 @@ def _ensure_weight_class_column(engine: Engine) -> None:
             "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS weight_class TEXT NOT NULL DEFAULT 'heavy'"
         ))
     _WEIGHT_CLASS_ENSURED.add(key)
+
+
+_QUOTA_POOL_ENSURED: set[int] = set()
+
+
+def _ensure_quota_pool_column(engine: Engine) -> None:
+    key = id(engine)
+    if key in _QUOTA_POOL_ENSURED:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS quota_pool TEXT"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_quota_pool ON jobs (user_id, quota_pool, created_at)"))
+    _QUOTA_POOL_ENSURED.add(key)
 
 
 # workers.status/status_at 懒自愈（同 weight_class 模式：进程级标记防重复 ALTER）。
@@ -2933,7 +2968,8 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "用户不存在"}), 401
         item = _jsonable(dict(user))
         item["is_admin"] = item.get("role") == "admin"
-        # admin 不限回测次数（QRE-SAAS-PROFILE）；2026-10-05 内测调整：注册用户不限次数
+        with engine.connect() as conn:
+            item["used_today"] = _quota_user_row(conn, uid)["used_today"]
         pol = _get_policy(app, engine, str(item.get("tier") or "member"))
         view = membership.quota_view(pol, item.get("used_today") or 0, item["is_admin"])
         item["quota_limit"] = view["limit"]
@@ -2984,11 +3020,13 @@ def create_saas_app() -> Flask:
         else:
             watches = {"limit": max_watches, "used": watches_used,
                        "remaining": max(0, max_watches - watches_used), "unlimited": False}
+        with engine.connect() as conn:
+            used_in_cycle = _quota_user_row(conn, uid)["used_today"]
         item = {
             "tier": tier,
             "tier_label": membership.tier_label(tier),
             "is_admin": is_admin,
-            "daily_full": membership.quota_view(policy, user["used_today"], is_admin),
+            "daily_full": membership.quota_view(policy, used_in_cycle, is_admin),
             "watches": watches,
             "scan_enabled": bool(policy.get("scan_enabled", True)),
             "member_since": user["member_since"],
@@ -3130,6 +3168,7 @@ def create_saas_app() -> Flask:
         nl_text = data.get("nl_text")
         idem = str(data.get("idempotency_key") or "").strip() or None
         _ensure_weight_class_column(engine)
+        _ensure_quota_pool_column(engine)
         # CR-2026-10-04 模块一：提交链路落创建入口模式与向导快照（游客不入策略库）
         entry_mode = _infer_entry_mode(data.get("entry_mode"), nl_text)
         wizard_state = _norm_wizard_state(data.get("wizard_state"))
@@ -3142,6 +3181,7 @@ def create_saas_app() -> Flask:
         _ensure_strategy_asset_columns(engine)
         _ensure_job_input_snapshot_column(engine)
         weight_class = classify_job_weight(kind, params)
+        quota_pool = membership.quota_pool(params, available_symbols=5201)
 
         with engine.begin() as conn:
             # 幂等去重（17 协议 §4.4）：同用户同 key 返回既有 job（游客不开放）
@@ -3161,15 +3201,8 @@ def create_saas_app() -> Flask:
                     ),
                     {"id": uid, "phone": f"pending_{uid}"},
                 )
-                # 登录用户自然月 10 次；游客走独立日闸；付费支付周期由订单模型接管
-                quota_row = conn.execute(
-                    text(
-                        "SELECT tier, role, "
-                        f"{membership.USED_TODAY_SQL} AS used_today "
-                        "FROM users u WHERE u.id = :uid"
-                    ),
-                    {"uid": uid},
-                ).mappings().one()
+                # 登录自然月；新付费档按支付周期且仅 large 任务扣次
+                quota_row = _quota_user_row(conn, uid)
                 # admin 不限测试次数（运营/开发者账号）；限额参数化读 tier_policies
                 pol = _get_policy(app, engine, str(quota_row["tier"] or "member"))
                 if kind == "full" and membership.is_quota_exceeded(
@@ -3207,13 +3240,13 @@ def create_saas_app() -> Flask:
             job_id = conn.execute(
                 text(
                     "INSERT INTO jobs (user_id, strategy_id, kind, params, input_snapshot, "
-                    "idempotency_key, guest_key, weight_class) "
+                    "idempotency_key, guest_key, weight_class, quota_pool) "
                     "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), CAST(:snapshot AS jsonb), "
-                    ":idem, :gk, :wc) RETURNING id"
+                    ":idem, :gk, :wc, :qp) RETURNING id"
                 ),
                 {"uid": uid, "sid": strategy_id, "kind": kind,
                  "params": json.dumps(params), "snapshot": json.dumps(input_snapshot, ensure_ascii=False),
-                 "idem": idem, "gk": guest_key, "wc": weight_class},
+                 "idem": idem, "gk": guest_key, "wc": weight_class, "qp": quota_pool},
             ).scalar_one()
         resp: dict[str, Any] = {"ok": True, "job_id": job_id, "strategy_id": strategy_id,
                                 "status": "queued", "weight_class": weight_class}
@@ -4989,11 +5022,13 @@ def create_saas_app() -> Flask:
             return denied
         data = request.get_json(silent=True) or {}
         tier = str(data.get("tier") or "").strip()
-        if tier not in ("member", "paid"):
-            return jsonify({"ok": False, "error": "tier 须为 member/paid"}), 400
+        if tier not in ("member", "paid", "starter", "advanced", "diamond"):
+            return jsonify({"ok": False, "error": "tier 须为 member/paid/starter/advanced/diamond"}), 400
         with engine.begin() as conn:
             row = conn.execute(
-                text("UPDATE users SET tier = :tier WHERE id = :uid RETURNING id"),
+                text("UPDATE users SET tier = :tier, "
+                     "member_since = CASE WHEN :tier IN ('starter','advanced','diamond') "
+                     "THEN COALESCE(member_since,now()) ELSE member_since END WHERE id = :uid RETURNING id"),
                 {"tier": tier, "uid": user_id},
             ).first()
         if row is None:

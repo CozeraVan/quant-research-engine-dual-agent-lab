@@ -486,3 +486,35 @@ class TestConsolePageNlCard:
         assert "nl.guest_daily" in html and "nl.member_minute" in html
         # 卡片位于 Worker 资源卡之前
         assert html.index('id="ov-nl"') < html.index('id="ov-worker-res"')
+
+
+def test_paid_tier_counts_only_large_tasks_in_payment_cycle(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050009')
+    engine = app.extensions['saas_engine']
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE users SET tier='starter',member_since=now() WHERE id=:uid"), {'uid': uid})
+    for _ in range(10):
+        response = client.post('/api/saas/jobs', json={
+            'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full', 'name': 'small',
+            'params': {'codes': ['000001.SZ'], 'start': '2025-01-01', 'end': '2025-12-31'}},
+            headers={'X-User-Id': str(uid)})
+        assert response.status_code == 200
+        assert response.get_json()['job_id']
+    for expected in (200, 200, 200):
+        response = client.post('/api/saas/jobs', json={
+            'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full', 'name': 'large',
+            'params': {'universe': {'group': 'market', 'key': 'all'},
+                       'start': '2020-01-01', 'end': '2025-12-31'}},
+            headers={'X-User-Id': str(uid)})
+        assert response.status_code == expected, response.get_json()
+    response = client.post('/api/saas/jobs', json={
+        'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full', 'name': 'large-4',
+        'params': {'universe': {'group': 'market', 'key': 'all'},
+                   'start': '2020-01-01', 'end': '2025-12-31'}},
+        headers={'X-User-Id': str(uid)})
+    assert response.status_code == 403
+    membership = client.get('/api/saas/membership', headers={'X-User-Id': str(uid)}).get_json()
+    assert membership['membership']['tier_label'] == '初级会员'
+    assert membership['membership']['daily_full']['used'] == 3
+    assert membership['membership']['daily_full']['remaining'] == 0

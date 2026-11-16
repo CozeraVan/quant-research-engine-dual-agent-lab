@@ -1,5 +1,10 @@
 # Review Report
 
+## 2026-11-16 付费分池扣次与订单状态机自审
+
+- Review Status：PASS，无 Required Fixes。新档只 large 扣次，支付周期与个人中心/管理台一致；历史 paid 不变。
+- 233 项权限回归+3订单测试通过；生产 schema active，无真实支付或新回测。
+
 ## 2026-11-16 免费层周期额度自审
 
 - Review Status：PASS，无 Required Fixes。232 项相关测试通过/14 skipped；自然月边界、超限、smoke例外和旧协议夹具分离。

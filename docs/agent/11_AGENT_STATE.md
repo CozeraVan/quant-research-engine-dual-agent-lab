@@ -19,7 +19,14 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
-### 2026-11-16 免费层周期额度已部署（待验收/提交）
+### 2026-11-16 付费分池扣次与订单状态机已部署（待验收/提交）
+
+- starter/advanced/diamond=3/10/30次、5/8/20字段；jobs.quota_pool 仅 large 扣次，按 member_since 滚动周期。
+- `_quota_user_row` 统一执行/个人中心；9090可选档与真实策略；orders.py 纯状态机含退款/非法迁移。
+- 233 项权限回归 +3订单测试通过，生产 schema active；无真实支付、无新回测。未 commit/push。
+- 建议 `feat(membership): 实现付费分池扣次与订单状态机`。
+
+### 2026-11-16 免费层周期额度已部署（已提交并推送）
 
 - 游客每日1次/1只/1826天/3因子；登录用户自然月10次/10只/3653天/3因子；paid不变。
 - 个人中心/9090同步；生产仅迁移旧默认行，备份 `/tmp/tier-policies-pre-20261116.csv`。232 项测试通过/14 skipped，无回测。

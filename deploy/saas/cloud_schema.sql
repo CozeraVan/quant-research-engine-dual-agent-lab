@@ -639,3 +639,15 @@ BEGIN
     GRANT SELECT, INSERT, UPDATE, DELETE ON backtest_usage TO aguhuice;
   END IF;
 END $$;
+
+
+-- QRE-PAID-TIER-CYCLE-QUOTA（2026-11-16）：新档仅在管理员/订单授予后生效。
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS quota_pool TEXT;
+CREATE INDEX IF NOT EXISTS idx_jobs_quota_pool ON jobs (user_id, quota_pool, created_at);
+INSERT INTO tier_policies (tier,daily_full_limit,max_codes,max_days,max_factor_fields,max_factor_tables) VALUES
+    ('starter',3,0,0,5,3),('advanced',10,0,0,8,3),('diamond',30,0,0,20,3)
+ON CONFLICT (tier) DO NOTHING;
+
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_tier_check;
+ALTER TABLE users ADD CONSTRAINT users_tier_check
+CHECK (tier IN ('guest','member','paid','starter','advanced','diamond'));
