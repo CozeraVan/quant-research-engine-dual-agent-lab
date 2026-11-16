@@ -168,6 +168,8 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **经典策略首收盘持有基准迁移（2026-11-16）**：生产118个CF结果 summary/chart_data.metrics 已按首有效复权收盘→末有效复权收盘迁移，showcase CF005由233改232；事务逐项UPDATE 1并复核对账。备份 `.tmp/classic-buy-hold-production-backup.jsonl.gz`，公网showcase 200。代码回滚 `/tmp/qre-deploy-20261116T112053Z.bak`。无回测、未commit/push。
 
+**NL持仓与卖出执行语义（2026-11-16）**：部署确定性期限/收盘卖出规范化与execution执行配置，492项相关测试通过；真实模型结果5日+close，无回测。回滚 `/tmp/qre-deploy-20261116T133717Z.bak`，qre-saas/worker active，未commit/push。
+
 **NL 千帆主备配置（2026-11-16）**：生产替换为千帆 Token Plan OpenAI 兼容主通道 + OpenCode Go 备用；`nl_compiler.py` 支持异常切换和真实客户端/会话头。密钥仅在 `/etc/qre-saas.env`，未读取输出；env备份 `/etc/qre-saas.env.bak-nl-models-20261116`，代码回滚 `/tmp/qre-deploy-20261116T105240Z.bak`。两组真实编译与断主切换通过，308项相关测试通过；qre-saas active。无回测，未commit/push。
 
 **NL DeepSeek V4.1 Flash 配置（2026-10-25）**：生产 `QRE_NL_LLM_BASE_URL=https://api.deepseek.com`，正确模型 ID 为 `QRE_NL_LLM_MODEL=deepseek-flash`（最新 V4.1 Flash；`deepseek-v4.1-flash` 不是可用 ID，真实编译 400）。已用 MACD 金叉死叉纯编译验证成功，未创建回测。改前 env 备份 `/etc/qre-saas.env.bak-deepseek-v41-20261025`（0600）。

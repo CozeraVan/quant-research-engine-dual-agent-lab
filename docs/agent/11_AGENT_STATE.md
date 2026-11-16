@@ -31,6 +31,12 @@ This file is the source of truth for single-agent workflow recovery.
 - 本地/生产env已受限更新，密钥未入文档；回滚见04。建议 `feat(nl): 增加千帆与 OpenCode 主备编译通道`，未commit/push。
 - 独立语义待修：两供应商实测均曾把明确5日持仓写成0，不能以连接成功替代语义验收。
 
+### 2026-11-16 NL 持仓与卖出执行语义已部署（待验收/提交）
+
+- 用户转向非支付任务。明确N日后卖出与收盘价卖出由确定性规则写入YAML，execution贯通Spec/GUI/CLI/安全白名单。
+- 492项相关测试通过，真实模型最终holding=5/exit=close，无回测。回滚 `/tmp/qre-deploy-20261116T133717Z.bak`。
+- 建议 `fix(nl): 固化持仓期限与卖出价格执行语义`，未commit/push；真实支付仍等营业执照。
+
 ### 2026-11-16 NL 错配与持有基准修复已部署（待验收/提交）
 
 - 8081 运行入口自动编译当前NL，失败即停止，不再要求用户另行点击生成；run记录原文和最终YAML hash。因子left join保留完整行情，持有基准固定首开盘→末收盘，shared覆盖完整回测宇宙。

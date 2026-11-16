@@ -34,6 +34,7 @@ MAX_FACTOR_TABLES = 3
 # 顶层节白名单（对齐 strategies/spec.py 读取的节）
 _TOP_LEVEL_KEYS = frozenset({
     "experiment", "data", "signal", "evaluation", "holding", "risk", "portfolio", "universe",
+    "execution", "strategy_type", "chanlun",
 })
 _SECTION_KEYS: dict[str, frozenset[str]] = {
     "experiment": frozenset({"name", "market_profile", "frequency"}),
@@ -41,6 +42,7 @@ _SECTION_KEYS: dict[str, frozenset[str]] = {
     "signal": frozenset({"entry", "exit"}),
     "evaluation": frozenset({"forward_return_horizons", "quantiles"}),
     "holding": frozenset({"max_holding_days"}),
+    "execution": frozenset({"entry_price", "exit_price"}),
     "risk": frozenset({"stop_loss_pct", "take_profit_pct", "trailing_stop_pct"}),
     "portfolio": frozenset({"weight_model", "score_column", "volatility_column", "rebalance_interval_days"}),
     "universe": frozenset({"exclude_st", "exclude_suspended", "exclude_risk_warning",

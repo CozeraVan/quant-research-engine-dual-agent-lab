@@ -254,6 +254,28 @@ def test_compile_mixed_cross_and_state_sides():
     assert len(calls) == 1
 
 
+def test_compile_explicit_holding_and_close_exit_are_deterministic():
+    """明确5日后收盘卖出：不得由模型写成0或开盘价；直接规范化为执行合同。"""
+    mapping = _spec("rsi_14 < 20", rsi_14="factors.stock_daily_momentum_close.rsi_14")
+    http, calls = _http([yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False)])
+    result = compile_nl("RSI小于20买入，持仓5个交易日后以收盘价卖出", env=ENV,
+                        http_post=http, column_lookup=_lookup())
+    assert result["ok"] is True, result
+    compiled = yaml.safe_load(result["yaml"])
+    assert compiled["holding"]["max_holding_days"] == 5
+    assert compiled["execution"]["exit_price"] == "close"
+    assert len(calls) == 1
+
+
+def test_strategy_spec_exposes_execution_price_columns():
+    from quant_research_engine.strategies.spec import StrategySpec
+    mapping = _spec("rsi_14 < 20")
+    mapping["execution"] = {"entry_price": "open", "exit_price": "close"}
+    spec = StrategySpec.from_mapping(mapping)
+    assert spec.entry_price == "open"
+    assert spec.exit_price == "close"
+
+
 # --- canonical 输出 ---
 
 

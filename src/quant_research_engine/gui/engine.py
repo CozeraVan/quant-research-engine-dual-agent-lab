@@ -555,8 +555,10 @@ def _run_via_module(
         spec = _override_holding_days(spec, max_holding_days)
         if spec.strategy_type == "chanlun_structure" and mode == "shared":
             raise ValueError("chanlun_structure 首版仅支持 single/batch 独立资金回测，不支持 shared")
-        # 成交价列参数（SaaS 高级参数为权威来源）：vwap 等非默认列需并入
-        # market_fields，否则装配出的 frame 缺列。
+        # 显式回测参数优先；未指定时读取策略 execution.entry_price/exit_price。
+        entry_price = entry_price or spec.entry_price
+        exit_price = exit_price or spec.exit_price
+        # vwap 等非默认列需并入 market_fields，否则装配出的 frame 缺列。
         entry_price_column, exit_price_column = _resolve_price_columns(entry_price, exit_price)
         market_fields = _extend_market_fields(
             spec.market_fields, entry_price_column, exit_price_column

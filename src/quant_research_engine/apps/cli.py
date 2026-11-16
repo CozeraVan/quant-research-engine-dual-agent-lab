@@ -1113,6 +1113,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     entry_signal=spec.signal_expression,
                     exit_signal=spec.exit_signal_expression,
                     holding_days=spec.holding_days,
+                entry_price_column=spec.entry_price or "open",
+                exit_price_column=spec.exit_price,
                 ),
             )
         except Exception as exc:
@@ -1180,6 +1182,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 entry_signal=spec.signal_expression,
                 exit_signal=spec.exit_signal_expression,
                 holding_days=spec.holding_days,
+                entry_price_column=spec.entry_price or "open",
+                exit_price_column=spec.exit_price,
                 summary_metadata_columns=args.group_by,
             )
 
@@ -1348,6 +1352,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     entry_signal=spec.signal_expression,
                     exit_signal=spec.exit_signal_expression,
                     holding_days=spec.holding_days,
+                entry_price_column=spec.entry_price or "open",
+                exit_price_column=spec.exit_price,
                     max_positions=args.max_positions,
                     **weight_controls,
                     **risk_controls,

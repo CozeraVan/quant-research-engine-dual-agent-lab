@@ -32,6 +32,8 @@ class StrategySpec:
     min_listing_days: int | None = None
     min_amount: float | None = None
     market_profile: str | None = None
+    entry_price: str | None = None
+    exit_price: str | None = None
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "StrategySpec":
@@ -63,6 +65,12 @@ class StrategySpec:
             universe = {}
         if not isinstance(universe, dict):
             raise ValueError("universe section must be a mapping when provided")
+
+        execution = raw.get("execution", {})
+        if execution is None:
+            execution = {}
+        if not isinstance(execution, dict):
+            raise ValueError("execution section must be a mapping when provided")
 
         factor_fields_raw = data.get("factor_fields", {})
         if not isinstance(factor_fields_raw, dict):
@@ -103,6 +111,8 @@ class StrategySpec:
             min_listing_days=_optional_int(universe, "min_listing_days"),
             min_amount=_optional_float(universe, "min_amount"),
             market_profile=_optional_str(experiment, "market_profile"),
+            entry_price=_optional_str(execution, "entry_price"),
+            exit_price=_optional_str(execution, "exit_price"),
         )
 
 

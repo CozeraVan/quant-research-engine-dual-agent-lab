@@ -420,26 +420,38 @@ def _fixup_prompt(description: str, bad_yaml: str, hints: list[dict[str, Any]],
 
 
 def _with_default_holding(yaml_text: str, description: str) -> str:
-    """未明确持仓期限时统一为 0，覆盖模型自行补出的天数。"""
+    """明确期限/收盘价卖出直接规范化；未明确期限时统一为 0。"""
     import re
     import yaml as _yaml
 
     mapping = _yaml.safe_load(yaml_text)
     if not isinstance(mapping, dict):
         return yaml_text
+    text = description or ""
+    explicit = re.search(
+        r"(\d+)\s*(?:个)?(?:交易日|天|日)\s*(?:后|之后)[^，。；]{0,16}(?:卖出|离场|平仓)",
+        text,
+    )
     has_instruction = bool(re.search(
         r"持仓|持有|持股|最长|最多|至多|不超过|不得超过|\d+\s*(?:个)?(?:交易日|天|日|周|月|年)后(?:卖出|离场|平仓)",
-        description or "",
+        text,
     ))
     holding = mapping.get("holding")
-    if isinstance(holding, dict) and holding.get("max_holding_days") is not None and not has_instruction:
-        return re.sub(r"(?m)^(\s*max_holding_days\s*:\s*).*$", r"\g<1>0", yaml_text, count=1)
-    if holding is None:
-        mapping["holding"] = {"max_holding_days": 0}
-    elif isinstance(holding, dict) and holding.get("max_holding_days") is None:
-        holding["max_holding_days"] = 0
+    if not isinstance(holding, dict):
+        holding = {}
+        mapping["holding"] = holding
+    if explicit:
+        holding["max_holding_days"] = int(explicit.group(1))
+    elif has_instruction:
+        pass  # 有期限但无法确定天数时保留模型结果，由结构校验继续检查。
     else:
-        return yaml_text
+        holding["max_holding_days"] = 0
+    if re.search(r"收\s*盘\s*(?:价|时)?\s*(?:卖出|离场|平仓)", text):
+        execution = mapping.get("execution")
+        if not isinstance(execution, dict):
+            execution = {}
+            mapping["execution"] = execution
+        execution["exit_price"] = "close"
     return _yaml.safe_dump(mapping, allow_unicode=True, sort_keys=False)
 
 

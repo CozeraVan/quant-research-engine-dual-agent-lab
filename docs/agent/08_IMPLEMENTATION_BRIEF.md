@@ -1,3 +1,9 @@
+## 2026-11-16 NL 持仓期限与卖出价格确定性修复
+
+- 明确“N日/交易日后卖出”直接规范化 holding.max_holding_days=N；明确“收盘价卖出”写 execution.exit_price=close，不依赖模型自觉遵守。
+- StrategySpec 增加 execution.entry_price/exit_price，GUI/CLI 请求读取；显式回测参数优先，安全白名单允许 execution 两键。
+- 先失败测试，再跑NL/CLI/安全回归；真实模型只编译不运行回测。支付与真实收费不推进。
+
 # Implementation Brief
 
 ## 2026-11-16 买入持有首收盘口径与经典结果迁移

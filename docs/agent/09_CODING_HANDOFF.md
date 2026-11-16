@@ -1,3 +1,9 @@
+## 2026-11-16 NL 持仓与卖出执行语义
+
+- `nl_compiler._with_default_holding` 对明确N日后卖出和收盘价卖出做确定性规范化；无期限仍默认0。
+- `StrategySpec` 增 entry_price/exit_price；GUI显式参数优先于execution，CLI三种模式读取execution，yaml_guard开放两键。
+- 492项相关测试通过；真实NL结果holding=5、exit=close，未跑回测。
+
 # Coding Handoff
 
 ## 2026-11-16 首收盘基准与经典迁移

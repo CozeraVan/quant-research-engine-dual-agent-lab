@@ -1,3 +1,9 @@
+## 2026-11-16 NL 持仓与卖出执行语义（已部署待验收）
+
+- 明确期限和收盘卖出由确定性后处理写入YAML；execution配置贯通Spec/GUI/CLI/安全白名单。
+- 492项相关测试通过；真实模型最终 holding=5、exit_price=close，无回测。回滚 `/tmp/qre-deploy-20261116T133717Z.bak`。
+- 未commit/push；建议 `fix(nl): 固化持仓期限与卖出价格执行语义`。
+
 # Task Handoff
 
 ## 2026-11-16 首收盘基准与经典迁移（已部署待验收）

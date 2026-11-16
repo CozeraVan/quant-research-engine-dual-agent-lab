@@ -1,3 +1,9 @@
+### 2026-11-16: NL 明确期限与成交价由确定性执行合同承接（QRE-NL-EXECUTION）
+
+- Decision: 明确N日后卖出直接规范化为 holding=N；收盘价卖出写 execution.exit_price=close。StrategySpec/GUI/CLI读取execution，显式回测参数优先。
+- Rationale: 两家模型都曾把明确5日写成0；提示词自觉不足以保证执行正确，也不能只修YAML展示而不改执行。
+- Verification: 492项相关测试通过；真实模型编译5日+close，无回测。
+
 ### 2026-11-16: 持有基准定稿为首收盘到末收盘并迁移经典结果（QRE-BUY-HOLD-CLOSE）
 
 - Decision: 在用户批准和外部软件调研后，首边界由开盘改为收盘；经典策略仅重算基准与超额，不重跑交易。
