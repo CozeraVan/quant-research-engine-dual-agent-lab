@@ -15,6 +15,7 @@
         <a href="#strategies" data-profile-view-link="strategies">我的策略库</a>
         <a href="#records" data-profile-view-link="records">回测记录</a>
         <a href="#shares" data-profile-view-link="shares">我的分享</a>
+        <a href="#mcp" data-profile-view-link="mcp">MCP 接入</a>
       </nav>
     </aside>
 
@@ -133,6 +134,32 @@
             <button class="btn-sm" id="share-pg-next" type="button">下一页 →</button>
           </div>
         </div>
+      </section>
+
+      <section class="profile-view" data-profile-view="mcp" hidden>
+        <div class="profile-sec-head">
+          <div><h2>MCP 接入 <button type="button" class="tip-trigger" data-tip="在支持的 MCP 客户端中配置 https://aguhuice.com/mcp，并使用 Authorization: Bearer 加上你的 Agent token。" aria-label="MCP 接入说明">?</button></h2><p>创建独立凭证，让 AI 客户端校验策略、提交小样本回测并读取结果。</p></div>
+        </div>
+        <section class="card profile-detail-card">
+          <h2>创建 Agent token</h2>
+          <form id="mcp-token-form" class="profile-kv">
+            <div><label for="mcp-token-name">令牌名称</label><input id="mcp-token-name" maxlength="64" value="我的 MCP 客户端" required></div>
+            <div><label for="mcp-token-days">有效天数</label><input id="mcp-token-days" type="number" min="1" max="365" value="30" required></div>
+            <div><label for="mcp-token-nightly">仅夜间执行</label><input id="mcp-token-nightly" type="checkbox"></div>
+            <div><button class="btn btn-primary" type="submit">创建令牌</button></div>
+          </form>
+          <div id="mcp-token-created" hidden>
+            <label for="mcp-token-value">新令牌</label>
+            <textarea id="mcp-token-value" readonly rows="3"></textarea>
+            <button class="btn-sm" type="button" id="mcp-token-copy">复制令牌</button>
+            <button class="btn-sm" type="button" id="mcp-token-close">我已保存</button>
+          </div>
+          <div class="profile-inline-error" id="mcp-token-error" hidden role="alert"></div>
+        </section>
+        <section class="card profile-list-card">
+          <div class="profile-list-head"><h2>我的令牌</h2><button class="btn-sm" type="button" id="mcp-token-refresh">刷新</button></div>
+          <div class="profile-list-scroll" id="mcp-token-list"><div class="chart-empty">加载中…</div></div>
+        </section>
       </section>
     </div>
   </div>
@@ -429,11 +456,78 @@ if (shareNext) shareNext.addEventListener('click', function(){
   if (sharePage < pages){ sharePage++; renderSharePage(); }
 });
 
+// --- MCP Agent token：明文仅创建响应出现一次，列表与刷新均不回显 ---
+function mcpTokenError(text){
+  const box = document.getElementById('mcp-token-error');
+  box.textContent = text || '';
+  box.hidden = !text;
+}
+function mcpTokenState(item){
+  if (item.revoked_at) return '已撤销';
+  if (item.expires_at && new Date(item.expires_at).getTime() <= Date.now()) return '已过期';
+  return '有效';
+}
+async function loadMcpTokens(){
+  const box = document.getElementById('mcp-token-list');
+  try {
+    const r = await apiFetch('/api/agent/v1/tokens', {redirectOn401:false});
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error((d.error && d.error.message) || ('HTTP ' + r.status));
+    const items = d.tokens || [];
+    if (!items.length){ box.innerHTML = '<div class="chart-empty">尚未创建令牌</div>'; return; }
+    box.innerHTML = '<table class="tbl"><thead><tr><th>名称</th><th>前缀</th><th>状态</th><th>有效期</th><th>最近使用</th><th></th></tr></thead><tbody>'
+      + items.map(it => '<tr><td>' + escH(it.name) + '</td><td>' + escH(it.prefix) + '…</td><td>'
+        + mcpTokenState(it) + '</td><td>' + escH(it.expires_at ? fmtShareTime(it.expires_at) : '长期') + '</td><td>'
+        + escH(it.last_used_at ? fmtShareTime(it.last_used_at) : '—') + '</td><td>'
+        + (!it.revoked_at ? '<button class="btn-sm" data-mcp-revoke="' + it.id + '">吊销</button>' : '') + '</td></tr>').join('')
+      + '</tbody></table>';
+    box.querySelectorAll('[data-mcp-revoke]').forEach(btn => btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const r = await apiFetch('/api/agent/v1/tokens/' + btn.getAttribute('data-mcp-revoke') + '/revoke', {json:{}});
+        const d = await r.json();
+        if (!r.ok || !d.ok) throw new Error((d.error && d.error.message) || '吊销失败');
+        await loadMcpTokens();
+      } catch (e) { mcpTokenError(e.message || '吊销失败'); btn.disabled = false; }
+    }));
+  } catch (e) { box.innerHTML = '<div class="chart-empty">' + escH(e.message || '令牌加载失败') + '</div>'; }
+}
+document.getElementById('mcp-token-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  mcpTokenError('');
+  const button = e.target.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const r = await apiFetch('/api/agent/v1/tokens', {json:{
+      name:document.getElementById('mcp-token-name').value,
+      expires_days:Number(document.getElementById('mcp-token-days').value),
+      nightly_only:document.getElementById('mcp-token-nightly').checked,
+      allow_full_market:false
+    }});
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error((d.error && d.error.message) || '创建失败');
+    document.getElementById('mcp-token-value').value = d.token.plaintext;
+    document.getElementById('mcp-token-created').hidden = false;
+    await loadMcpTokens();
+  } catch (e2) { mcpTokenError(e2.message || '创建失败'); }
+  finally { button.disabled = false; }
+});
+document.getElementById('mcp-token-copy').addEventListener('click', async () => {
+  const field = document.getElementById('mcp-token-value');
+  field.select();
+  await navigator.clipboard.writeText(field.value);
+});
+document.getElementById('mcp-token-close').addEventListener('click', () => {
+  document.getElementById('mcp-token-value').value = '';
+  document.getElementById('mcp-token-created').hidden = true;
+});
+document.getElementById('mcp-token-refresh').addEventListener('click', loadMcpTokens);
+
 // --- 个人中心子页面切换：支持 /saas/profile#strategies 等直达 ---
 (function(){
   const layout = document.querySelector('.profile-layout');
   if (!layout) return;
-  const views = ['info', 'strategies', 'records', 'shares'];
+  const views = ['info', 'strategies', 'records', 'shares', 'mcp'];
   const links = Array.prototype.slice.call(document.querySelectorAll('[data-profile-view-link]'));
   function normalize(name){ return views.indexOf(name) >= 0 ? name : 'info'; }
   function activate(name, scroll){
@@ -479,5 +573,6 @@ bindMembershipRetry();
 bindShareRevoke();
 loadProfile();
 loadShares();
+loadMcpTokens();
 </script>
 {% endblock %}
