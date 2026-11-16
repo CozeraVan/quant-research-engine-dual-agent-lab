@@ -21,7 +21,7 @@ def _bearer_token(ctx: Context) -> str:
 
 
 def create_server(client: AgentAPIClient | None = None, *, public: bool = False) -> MCPServer:
-    private_client = client or (None if public else AgentAPIClient(AgentAPIConfig.from_env()))
+    private_client = client or (None if public else AgentAPIClient(AgentAPIConfig.from_user()))
 
     def api_for(ctx: Context) -> AgentAPIClient:
         if private_client is not None:

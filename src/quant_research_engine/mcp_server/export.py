@@ -86,7 +86,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("qre-results"))
     args = parser.parse_args()
     result = export_backtest(
-        AgentAPIClient(AgentAPIConfig.from_env()), args.job_id, args.output,
+        AgentAPIClient(AgentAPIConfig.from_user()), args.job_id, args.output,
     )
     print(json.dumps(result, ensure_ascii=False))
 

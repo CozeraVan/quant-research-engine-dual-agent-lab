@@ -1,5 +1,16 @@
 # Task Handoff
 
+## 2026-11-16 MCP CLI 登录（已部署待验收）
+
+- 用户本机运行 `qre-mcp-login`，手机号+短信即可，不再网页复制 token；logout 会吊销并删除。
+- 143 项测试通过/14 skipped；真实短信需用户本人验收，无新回测。未 commit/push。
+- 建议 `feat(mcp): 增加 CLI 短信登录与凭证管理`。说明页与 CLI 可一起提交。
+
+## 2026-11-16 MCP 使用说明页（已部署待验收）
+
+- 地址 `https://aguhuice.com/saas/mcp-guide`；145 项测试通过，桌面/375px验收通过。
+- 未 commit/push；建议 `docs(saas): 新增 MCP 使用说明页`。此前两提交已推送。
+
 ## 2026-11-16 MCP 本地导出（已部署待验收）
 
 - `qre-mcp-export <job_id> --output ./qre-results` 可供本机 Agent 保存紧凑包；job360 已真实验证并复制本机。

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}MCP 使用说明 · A股回测台{% endblock %}
+{% block description %}A股回测台 MCP 使用说明：创建 Agent token、配置 Kimi Code 或其他 MCP 客户端、异步回测、读取结果并导出到本地电脑。{% endblock %}
+{% block body %}
+<div class="wrap">
+  <div class="page-head">
+    <h1>MCP 使用说明</h1>
+    <p>让支持 MCP 的 AI 客户端调用 A 股回测能力：校验策略、提交小样本任务、跟踪进度、读取报告并保存到本地。</p>
+  </div>
+  <div class="help-layout">
+    <aside class="card help-side">
+      <nav class="help-jump" aria-label="MCP 使用说明栏目">
+        <a href="#mcp-start">接入准备</a>
+        <a href="#mcp-client">客户端配置</a>
+        <a href="#mcp-run">执行回测</a>
+        <a href="#mcp-tools">工具清单</a>
+        <a href="#mcp-export">本地导出</a>
+        <a href="#mcp-security">权限与边界</a>
+      </nav>
+    </aside>
+    <div class="help-content">
+      <section class="card help-sec" id="mcp-start">
+        <h2>1. 接入准备</h2>
+        <p>登录后进入个人中心的「MCP 接入」，创建独立 Agent token。可设置有效天数，以及是否只允许夜间执行。</p>
+        <p><a class="btn btn-primary" href="/saas/profile#mcp">创建 Agent token</a></p>
+        <p>令牌明文只在创建成功时显示一次。请立即保存；丢失后不能找回，只能吊销并重新创建。</p>
+        <table class="tbl"><tbody>
+          <tr><td>MCP 地址</td><td><code>https://aguhuice.com/mcp</code></td></tr>
+          <tr><td>认证方式</td><td><code>Authorization: Bearer &lt;你的 Agent token&gt;</code></td></tr>
+          <tr><td>传输协议</td><td>Streamable HTTP</td></tr>
+        </tbody></table>
+      </section>
+
+      <section class="card help-sec" id="mcp-client">
+        <h2>2. 客户端配置</h2>
+        <p>在本机使用 Kimi Code 等 CLI 时，可直接通过手机号和短信验证码登录，不必进入网页复制 token：</p>
+        <pre class="compiled-yaml pv">qre-mcp-login</pre>
+        <p>登录命令会先发送短信，再要求输入验证码。成功后会自动创建 Agent token，并保存到本机权限受限的配置文件；后续 MCP 与本地导出命令自动读取。使用 <code>qre-mcp-login --logout</code> 可吊销 token 并删除本机凭证。</p>
+        <p>如果需要手动配置 Remote MCP 客户端，则使用下面的地址，并把请求头中的占位符替换为你自己的令牌。不要把真实令牌提交到代码仓库或分享给他人。</p>
+        <pre class="compiled-yaml pv">{
+  "mcpServers": {
+    "qre-backtest": {
+      "url": "https://aguhuice.com/mcp",
+      "headers": {
+        "Authorization": "Bearer <你的 Agent token>"
+      }
+    }
+  }
+}</pre>
+        <p>不同客户端的配置字段可能略有差异；核心是 Remote MCP URL 与 Authorization 请求头。</p>
+      </section>
+
+      <section class="card help-sec" id="mcp-run">
+        <h2>3. 执行一次小样本回测</h2>
+        <table class="tbl">
+          <thead><tr><th>顺序</th><th>操作</th><th>结果</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>读取策略 Schema，准备 YAML、股票范围和日期区间</td><td>得到可校验的策略定义</td></tr>
+            <tr><td>2</td><td>调用策略校验</td><td>返回因子、参数错误和成本估计，不执行任务</td></tr>
+            <tr><td>3</td><td>创建研究会话并设置计算预算</td><td>返回 research_run_id</td></tr>
+            <tr><td>4</td><td>提交单个 screen 回测，提供唯一幂等键</td><td>立即返回 sweep_id，不等待回测结束</td></tr>
+            <tr><td>5</td><td>轮询状态，完成后读取 job 结果</td><td>得到摘要、指标和产物清单</td></tr>
+          </tbody>
+        </table>
+        <p>首次使用建议选择 2～5 只股票、近 6 个月。小样本用于验证流程，不构成策略有效性结论。</p>
+      </section>
+
+      <section class="card help-sec" id="mcp-tools">
+        <h2>4. 工具清单</h2>
+        <table class="tbl">
+          <thead><tr><th>工具</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td><code>get_capabilities</code></td><td>查看规模档、预计耗时和容量限制</td></tr>
+            <tr><td><code>get_strategy_schema</code></td><td>读取策略 YAML 的 JSON Schema</td></tr>
+            <tr><td><code>validate_strategy</code></td><td>校验策略与参数，不执行、不建单</td></tr>
+            <tr><td><code>create_research_run</code></td><td>创建研究边界和计算预算</td></tr>
+            <tr><td><code>submit_backtest</code></td><td>提交单个 screen 异步回测</td></tr>
+            <tr><td><code>get_backtest_status</code></td><td>查询 sweep 与子 job 状态</td></tr>
+            <tr><td><code>get_backtest_aggregate</code></td><td>读取数值聚合，不生成投资解读</td></tr>
+            <tr><td><code>get_backtest_result</code></td><td>读取本人已完成任务摘要</td></tr>
+            <tr><td><code>get_backtest_chart_data</code></td><td>按需读取收益、回撤等图表数据</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card help-sec" id="mcp-export">
+        <h2>5. 把结果保存到本地电脑</h2>
+        <p>回测结果仍可在网页查看。需要离线分析或视频制作时，可让本机 Agent 调用以下命令，把核心结果包保存到当前电脑：</p>
+        <pre class="compiled-yaml pv">export QRE_AGENT_TOKEN='<你的 Agent token>'
+export QRE_API_BASE_URL='https://aguhuice.com'
+uv run qre-mcp-export 360 --output ./qre-results</pre>
+        <p>将命令中的 360 换成实际 job_id。默认目录为 <code>qre-results/job_&lt;id&gt;/</code>，包含参数结果、核心指标、收益与回撤、交易汇总和 HTML 报告。</p>
+        <p>导出器逐文件校验 SHA-256，失败会清理半成品，不覆盖已有目录。默认不包含逐股目录、图片和 Excel。远程服务器不会直接获得你电脑的磁盘写权限，保存动作由本机 Agent 完成。</p>
+      </section>
+
+      <section class="card help-sec" id="mcp-security">
+        <h2>6. 权限与边界</h2>
+        <table class="tbl"><tbody>
+          <tr><td>任务归属</td><td>同一账号的有效 token 可读取该账号历史结果；其他账号不可见。</td></tr>
+          <tr><td>容量限制</td><td>每个令牌仍受每日提交、在飞任务、请求频率和研究预算约束。</td></tr>
+          <tr><td>当前范围</td><td>只开放单配置 screen 小样本，不开放全市场 confirm。</td></tr>
+          <tr><td>云端存储</td><td>本地导出不改变现有云端保留策略，也不会自动删除云端结果。</td></tr>
+          <tr><td>令牌管理</td><td>不再使用时请及时吊销；吊销后立即失效。</td></tr>
+          <tr><td>研究声明</td><td>所有结果均为历史模拟，仅供研究使用，不构成投资建议。</td></tr>
+        </tbody></table>
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/help-nav.js?v={{ asset_v }}"></script>{% endblock %}

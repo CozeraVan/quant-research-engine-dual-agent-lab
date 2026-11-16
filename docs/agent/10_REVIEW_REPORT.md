@@ -1,5 +1,16 @@
 # Review Report
 
+## 2026-11-16 MCP CLI 登录自审
+
+- Review Status：PASS，无 Required Fixes。复用现有认证/令牌合同，无新权限；0600/原子写/环境优先/logout 吊销均有测试。
+- 已修正先发码再输入的交互顺序；短信码/密码不保存，成功输出不含 token。
+- 143 项相关测试通过/14 skipped；真实短信未自动触发，不能声称生产短信端到端已验。无回测。
+
+## 2026-11-16 MCP 使用说明页自审
+
+- Review Status：PASS，无 Required Fixes。内容与实际九工具、screen 限制、账号归属和本地导出一致，无付费/千问已上架虚假声明。
+- 145 项相关测试通过/14 skipped；公网六章节、token链接、桌面与375px无横溢。无新回测。
+
 ## 2026-11-16 MCP 本地紧凑导出自审
 
 - Review Status：PASS，无 Required Fixes。默认范围紧凑，无 Base64；文件白名单、大小/hash、原子落盘和不覆盖均有测试。

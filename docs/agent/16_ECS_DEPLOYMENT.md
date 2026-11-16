@@ -1,3 +1,7 @@
+**MCP CLI 登录（2026-11-16，已部署待验收/未 commit）**：qre-mcp-login 短信登录/凭证/logout，指南同步；143 测试通过，真实短信未自动触发。回滚 `/tmp/qre-deploy-20261116T061300Z.bak`。
+
+**MCP 使用说明页（2026-11-16，已部署待验收/未 commit）**：`/saas/mcp-guide` 公开六章节，个人中心/下拉入口；145 测试通过，桌面/375px无横溢。回滚 `/tmp/qre-deploy-20261116T055800Z.bak`。
+
 **MCP 本地紧凑导出（2026-11-16，已部署待验收/未 commit）**：qre-mcp-export + 账号级历史结果读取 + 9090 可见范围。job360 真实 12 文件本机验证；token id=3 已吊销。回滚 `/tmp/qre-deploy-20261116T054554Z.bak`、`/tmp/qre-deploy-20261116T054847Z.bak`、`/tmp/qre-deploy-20261116T055033Z.bak`。
 
 **MCP token 自助管理（2026-11-16，已部署待验收/未 commit）**：个人中心 profile.html 新增创建/列表/吊销；真实 UI token id=2 创建后吊销。224 测试通过。回滚 `/tmp/qre-deploy-20261116T053803Z.bak`。

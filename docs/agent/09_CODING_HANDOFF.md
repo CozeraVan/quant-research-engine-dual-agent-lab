@@ -1,5 +1,17 @@
 # Coding Handoff
 
+## 2026-11-16 MCP CLI 登录
+
+- `mcp_server/auth.py`：短信登录、token 创建、0600 原子凭证、logout 吊销删除；`AgentAPIConfig.from_user()` 环境优先、文件兜底。
+- 新命令 `qre-mcp-login`；真实凭证路径 `${XDG_CONFIG_HOME:-~/.config}/qre/mcp.json`，测试用 QRE_MCP_CREDENTIALS 隔离。
+- 143 项相关测试通过/14 skipped；真实短信未测。部署回滚 `/tmp/qre-deploy-20261116T061300Z.bak`。
+
+## 2026-11-16 MCP 使用说明页
+
+- 新增 `templates/mcp_guide.html` 与公开路由；复用 help-layout/help-nav，无新 CSS/依赖。
+- base 下拉与 profile#mcp 增加说明入口；测试 `test_saas_mcp_guide.py`。
+- 145 项相关测试通过/14 skipped；公网桌面/移动验收通过。回滚 `/tmp/qre-deploy-20261116T055800Z.bak`。
+
 ## 2026-11-16 MCP 本地紧凑导出
 
 - `mcp_server/export.py` + `qre-mcp-export`：compact 白名单、SHA-256、partial/原子 rename、不覆盖；client.download_artifact 禁嵌套路径。

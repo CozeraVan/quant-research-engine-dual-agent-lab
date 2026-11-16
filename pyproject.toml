@@ -25,6 +25,7 @@ dependencies = [
 qre = "quant_research_engine.apps.cli:main"
 qre-mcp = "quant_research_engine.mcp_server.__main__:main"
 qre-mcp-export = "quant_research_engine.mcp_server.export:main"
+qre-mcp-login = "quant_research_engine.mcp_server.auth:main"
 
 [build-system]
 requires = ["hatchling"]

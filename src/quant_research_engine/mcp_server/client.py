@@ -49,6 +49,18 @@ class AgentAPIConfig:
             max_response_bytes=int(os.environ.get("QRE_API_MAX_RESPONSE_BYTES", str(32 * 1024 * 1024))),
         )
 
+    @classmethod
+    def from_user(cls) -> "AgentAPIConfig":
+        """环境变量优先；否则读取 qre-mcp-login 保存的本机凭证。"""
+        if os.environ.get("QRE_AGENT_TOKEN", "").strip():
+            return cls.from_env()
+        from .auth import load_credentials
+
+        saved = load_credentials()
+        if saved is None:
+            raise ValueError("请先运行 qre-mcp-login，或设置 QRE_AGENT_TOKEN")
+        return cls(base_url=normalize_base_url(saved["base_url"]), token=saved["agent_token"])
+
 
 class AgentAPIClient:
     def __init__(self, config: AgentAPIConfig, session: requests.Session | None = None):

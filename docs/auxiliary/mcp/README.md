@@ -2,9 +2,17 @@
 
 当前提供九个工具：能力/成本发现、策略 Schema、免执行策略校验、研究会话、异步小样本提交、状态、聚合、回测摘要、图表数据。提交固定走 screen，不开放全市场 confirm。
 
+## CLI 登录
+
+```bash
+uv run qre-mcp-login
+```
+
+按提示输入手机号，命令先发送短信，再读取验证码。成功即自动创建 30 天 Agent token 并保存到 `${XDG_CONFIG_HOME:-~/.config}/qre/mcp.json`（0600）；`qre-mcp`、`qre-mcp-export` 自动读取。`qre-mcp-login --logout` 吊销 token 并删除本机凭证。短信码和密码不保存。环境变量 `QRE_AGENT_TOKEN` 仍优先，也可用 `QRE_MCP_CREDENTIALS` 指定其他凭证文件。
+
 ## 启动
 
-需要先在 SaaS 创建外部 Agent token，并通过环境变量提供；不要把 token 写进配置仓库或命令行。
+也可在 SaaS 个人中心创建 token，并通过环境变量提供；不要把 token 写进配置仓库或命令行。
 
 ```bash
 export QRE_AGENT_TOKEN='<你的 agent token>'

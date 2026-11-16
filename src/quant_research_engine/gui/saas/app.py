@@ -1557,6 +1557,10 @@ def create_saas_app() -> Flask:
             total_return_basis=TOTAL_RETURN_BASIS,
         )
 
+    @app.get("/saas/mcp-guide")
+    def saas_mcp_guide_page() -> str:
+        return render_template("mcp_guide.html")
+
     @app.get("/api/saas/showcase")
     def api_showcase_list() -> Any:
         """经典策略公开展示列表（无需登录）。返回白名单 job 的摘要指标。

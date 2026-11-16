@@ -1,3 +1,7 @@
+2026-11-16 MCP CLI 短信登录已实现并部署：`qre-mcp-login` 自动发码/登录/建 token，凭证 0600 原子保存，MCP/导出自动读取；logout 吊销并删除。无新后端权限/schema，网页指南同步。143 项相关测试通过/14 skipped；真实短信未自动触发，无回测，未 commit/push。
+
+2026-11-16 MCP 独立使用说明页已上线：`/saas/mcp-guide` 公开六章节，个人中心与下拉入口；145 项相关测试通过/14 skipped，公网桌面和375px无横溢。前两项 commit `13926fd`、`fe57bf9` 已 push。说明页未 commit/push，无回测。
+
 2026-11-16 MCP 本地紧凑导出已上线：新增 `qre-mcp-export`，核心文件 + result/local manifest，SHA-256、partial 清理、原子改名、不覆盖；真实 job360 12 文件已复制本机 `.tmp/mcp-export-job360/job_360/` 复核通过。结果读取从“本 token/人工”改为“同账号全部历史”，他人仍 404；9090 显示同源可见范围。119 项测试通过/13 skipped。专用 token id=3 已吊销，云端产物/TTL不变，无新回测，未 commit/push。
 
 2026-11-16 MCP token 自助管理已上线：个人中心新增 MCP 接入页，创建/单次明文/复制/清除/列表/吊销完整可用。真实浏览器 token id=2 已创建并吊销，明文未记录；224 项相关测试通过、13 skipped。9090 复用现有同源令牌计数，无权限/schema变化。纠正此前误判：SaaS 会话为 Authorization Bearer，手工 fetch 未带头才 401，登录代码无需修复。仅 profile.html 部署，未跑回测，未 commit/push。
