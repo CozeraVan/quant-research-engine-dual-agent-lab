@@ -546,3 +546,37 @@ def test_simulated_membership_payment_is_idempotent_and_scoped(client, app):
     with engine.connect() as conn:
         assert conn.execute(text('SELECT member_expire_at FROM users WHERE id=:uid'), {'uid': uid}).scalar_one() == first_expiry
         assert conn.execute(text('SELECT count(*) FROM payment_events WHERE order_id=:id'), {'id': order_id}).scalar_one() == 2
+
+
+def test_native_callback_and_query_use_same_idempotent_fulfillment(client, app, monkeypatch):
+    uid = _make_user(app, '13800050012')
+    headers = {'X-User-Id': str(uid)}
+    # NativeClient 在函数内导入，patch 类本身的方法。
+    from quant_research_engine.gui.saas.wechat_native import NativeClient, NativeConfig
+    config = NativeConfig('mch-1','app-1','serial','private','platform','https://example.test/notify')
+    monkeypatch.setattr(NativeConfig, 'from_env', classmethod(lambda cls: config))
+    monkeypatch.setattr(NativeClient, 'create_order', lambda self, **kwargs: 'weixin://test')
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    order_id = created.get_json()['order']['id']
+    assert created.get_json()['code_url'] == 'weixin://test'
+    paid = {'out_trade_no': order_id, 'trade_state': 'SUCCESS', 'mchid': 'mch-1',
+            'amount': {'total': 2990}}
+    monkeypatch.setattr(NativeClient, 'verify_callback', lambda self, body, headers: paid)
+    notified = client.post('/api/saas/membership/payments/wechat/notify', data=b'{}')
+    assert notified.status_code == 200 and notified.get_json()['status'] == 'fulfilled'
+    monkeypatch.setattr(NativeClient, 'query_order', lambda self, order_id: paid)
+    queried = client.post(f'/api/saas/membership/orders/{order_id}/query-payment', headers=headers)
+    assert queried.status_code == 200 and queried.get_json()['order']['status'] == 'fulfilled'
+
+
+def test_membership_order_list_is_scoped_to_current_user(client, app):
+    uid = _make_user(app, '13800050013')
+    other = _make_user(app, '13800050014')
+    headers = {'X-User-Id': str(uid)}
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    order_id = created.get_json()['order']['id']
+    listed = client.get('/api/saas/membership/orders', headers=headers)
+    assert listed.status_code == 200
+    assert [o['id'] for o in listed.get_json()['orders']] == [order_id]
+    hidden = client.get('/api/saas/membership/orders', headers={'X-User-Id': str(other)})
+    assert hidden.get_json()['orders'] == []
