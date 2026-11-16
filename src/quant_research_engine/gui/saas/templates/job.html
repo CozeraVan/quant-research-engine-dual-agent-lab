@@ -131,6 +131,7 @@
         <button data-layer="A" class="active">行业板块</button>
         <button data-layer="B">概念关键词</button>
         <button data-layer="C">技术标签</button>
+        <select id="tag-min-samples" aria-label="板块最小股票样本数"><option value="1">至少1只</option><option value="5">至少5只</option><option value="10">至少10只</option><option value="30">至少30只</option></select>
       </div>
       <div id="chart-tags" style="height:480px"></div>
       <div id="tag-note" class="opt" style="font-size:14px"></div>
@@ -175,6 +176,13 @@
         <div class="result-action-buttons">
           <button class="btn btn-ghost" id="btn-share">分享结果</button>
           <span class="result-action-status" id="share-status"></span>
+        </div>
+      </div>
+      <div class="result-action-group">
+        <div class="result-action-buttons">
+          <button class="btn btn-ghost" id="btn-export-json" type="button">导出 JSON</button>
+          <button class="btn btn-ghost" id="btn-export-csv" type="button">导出 CSV</button>
+          <span class="result-action-status" id="export-status"></span>
         </div>
       </div>
     </div>
@@ -477,7 +485,7 @@ function renderMain(d){
 
 
 // --- 赚钱板块归因（tag_analysis，数据为回传截断版：板块聚合全量 + 个股前/后各 50） ---
-let tagChart = null, tagData = null, curLayer = 'A', curTag = null;
+let tagChart = null, tagData = null, curLayer = 'A', curTag = null, tagMinSamples = 1, tagSampleFiltered = 0;
 // 盈亏符号决定色相：盈利红、亏损绿、零值灰白；绝对盈亏只影响深浅，绝不改变色相。
 function pnlColor(pnl, minPnl, maxPnl){
   const red = [212, 48, 48], light = [245, 245, 245], green = [26, 158, 75];
@@ -496,6 +504,11 @@ function pnlTextColor(pnl, minPnl, maxPnl){
 function renderAttribution(attr){
   if (!attr || !attr.layers){ document.getElementById('box-tags').classList.add('hidden'); return; }
   tagData = attr;
+  const sampleSelect = document.getElementById('tag-min-samples');
+  if (sampleSelect.dataset.bound !== 'true'){
+    sampleSelect.dataset.bound = 'true';
+    sampleSelect.addEventListener('change', () => { tagMinSamples = Number(sampleSelect.value); curTag = null; renderTagChart(); });
+  }
   document.querySelectorAll('#tag-tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
       curLayer = btn.dataset.layer; curTag = null;
@@ -507,7 +520,9 @@ function renderAttribution(attr){
   renderTagChart();
 }
 function renderTagChart(){
-  const items = (tagData.layers[curLayer] || []).slice();
+  const allItems = (tagData.layers[curLayer] || []).slice();
+  const items = allItems.filter(t => (t.symbols || []).length >= tagMinSamples);
+  tagSampleFiltered = allItems.length - items.length;
   const noteEl = document.getElementById('tag-note');
   const rankEl = document.getElementById('tag-rank');
   if (!items.length){
@@ -518,6 +533,7 @@ function renderTagChart(){
   }
   let noteText = '';
   if (curLayer === 'B' && tagData.filtered_count) noteText += '已过滤 ' + tagData.filtered_count + ' 个无效关键词。';
+  if (tagSampleFiltered) noteText += (noteText ? '　' : '') + '按样本数过滤 ' + tagSampleFiltered + ' 个标签。';
   const tmItems = items.slice(0, 20);
   if (items.length > 20) noteText += (noteText ? '　' : '') + '热力图仅显示前 20 个，共 ' + items.length + ' 个（完整见下表）。';
   noteEl.textContent = noteText;
@@ -1643,6 +1659,33 @@ async function initResultActions(jobData, chart){
     } catch (e) { cfm.disabled = false; }
   });
 }
+
+// 结果导出：复用现有 summary/chart-data 权限与只读分享链，不创建新数据副本。
+function downloadResultBlob(content, type, suffix){
+  const url = URL.createObjectURL(new Blob([content], {type: type}));
+  const link = document.createElement('a'); link.href = url; link.download = 'qre-' + JOB_ID + suffix; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function exportResultJson(){
+  const [summary, chart] = await Promise.all([
+    apiFetch(shareUrl('/api/results/' + JOB_ID + '/summary')).then(r => r.json()),
+    apiFetch(shareUrl('/api/results/' + JOB_ID + '/chart-data')).then(r => r.json()),
+  ]);
+  downloadResultBlob(JSON.stringify({summary: summary, chart_data: chart}, null, 2), 'application/json', '.json');
+}
+async function exportResultCsv(){
+  const response = await apiFetch(shareUrl('/api/results/' + JOB_ID + '/summary'));
+  const data = await response.json(), metrics = data.metrics || data.summary || data;
+  const rows = Object.entries(metrics).map(([key, value]) => [key, typeof value === 'object' ? JSON.stringify(value) : value]);
+  const csv = 'metric,value\n' + rows.map(row => row.map(value => '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"').join(',')).join('\n');
+  downloadResultBlob(csv, 'text/csv;charset=utf-8', '.csv');
+}
+document.getElementById('btn-export-json').addEventListener('click', () => {
+  exportResultJson().then(() => { document.getElementById('export-status').textContent = '已导出'; }).catch(() => { document.getElementById('export-status').textContent = '导出失败'; });
+});
+document.getElementById('btn-export-csv').addEventListener('click', () => {
+  exportResultCsv().then(() => { document.getElementById('export-status').textContent = '已导出'; }).catch(() => { document.getElementById('export-status').textContent = '导出失败'; });
+});
 
 // --- P1 只读分享（QRE-SAAS-READONLY-SHARE）：登录用户分享自己的已完成结果；
 //       链接只读、可撤销、可设有效期；明文 token 只在创建响应出现一次，

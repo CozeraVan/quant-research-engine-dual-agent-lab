@@ -580,3 +580,28 @@ def test_membership_order_list_is_scoped_to_current_user(client, app):
     assert [o['id'] for o in listed.get_json()['orders']] == [order_id]
     hidden = client.get('/api/saas/membership/orders', headers={'X-User-Id': str(other)})
     assert hidden.get_json()['orders'] == []
+
+
+def test_nl_quality_api_uses_real_compile_events(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050025')
+    with app.extensions['saas_engine'].begin() as conn:
+        conn.execute(text("UPDATE users SET role='admin' WHERE id=:uid"), {'uid': uid})
+        conn.execute(text("INSERT INTO nl_compile_events (ok,cache_hit,error_class,scope) VALUES (true,false,null,'member'),(false,false,'invalid_yaml','member')"))
+    response = client.get('/api/saas/console/nl-quality', headers={'X-User-Id': str(uid)})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['total'] == 2 and data['success_rate'] == 0.5
+    assert data['top_failures'][0]['error_class'] == 'invalid_yaml'
+    assert len(data['daily']) == 1
+
+
+def test_membership_launch_notification_is_idempotent_and_counted(client, app):
+    uid = _make_user(app, '13800050026')
+    headers = {'X-User-Id': str(uid)}
+    first = client.post('/api/saas/membership/notify', headers=headers)
+    again = client.post('/api/saas/membership/notify', headers=headers)
+    assert first.status_code == 201 and first.get_json()['subscribed'] is True
+    assert again.status_code == 200 and again.get_json()['deduped'] is True
+    from quant_research_engine.gui.saas.app import _membership_ops_view
+    assert _membership_ops_view(app.extensions['saas_engine'])['launch_subscriptions'] == 1

@@ -1,3 +1,9 @@
+## 2026-11-16 六项非支付功能包
+
+- showcase.html 复用公开结果增加搜索/筛选/4项对比与日更状态；job.html 增板块样本过滤和JSON/CSV导出。
+- 新 `nl_quality.py`/页面复用 nl_compile_events；`subscriptions.py` + feature_subscriptions 承接会员上线通知，9090真实计数。
+- 206项整包测试通过/14 skipped；修复 apiFetch unauthorized 的登录引导与 membership escH。公网验收 `.tmp/nonpay-browser.json` 全绿。
+
 ## 2026-11-16 NL 持仓与卖出执行语义
 
 - `nl_compiler._with_default_holding` 对明确N日后卖出和收盘价卖出做确定性规范化；无期限仍默认0。

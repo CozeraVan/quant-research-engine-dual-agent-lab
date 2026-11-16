@@ -22,6 +22,12 @@
     </tbody></table>
   </section>
   <section class="card">
+    <h2>功能上线通知</h2>
+    <p>支付尚未开放。登录账号可登记会员上线通知，不产生订单或扣费。</p>
+    <button class="btn btn-primary" id="btn-member-notify" type="button">会员上线时通知我</button>
+    <span id="member-notify-status" role="status"></span>
+  </section>
+  <section class="card">
     <h2>订单记录</h2>
     <div id="membership-orders"><div class="chart-empty">加载中…</div></div>
   </section>
@@ -29,6 +35,7 @@
 {% endblock %}
 {% block scripts %}
 <script>
+function escH(value){return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function membershipText(id,value){document.getElementById(id).textContent=value;}
 function membershipDate(value){return value ? String(value).slice(0,10) : '—';}
 async function loadMembershipCenter(){
@@ -56,6 +63,18 @@ async function loadMembershipOrders(){
       +items.map(o=>'<tr><td>'+escH(o.id)+'</td><td>'+escH(o.sku)+'</td><td>'+(Number(o.price_cents)/100).toFixed(2)+' 元</td><td>'+escH(labels[o.status]||o.status)+'</td><td>'+escH(String(o.created_at).replace('T',' ').slice(0,19))+'</td></tr>').join('')+'</tbody></table>';
   } catch(e){box.innerHTML='<div class="chart-empty">'+escH(e.message||'订单加载失败')+'</div>';}
 }
+document.getElementById('btn-member-notify').addEventListener('click', async () => {
+  const button=document.getElementById('btn-member-notify'),status=document.getElementById('member-notify-status');
+  button.disabled=true;
+  try {
+    const r=await apiFetch('/api/saas/membership/notify',{method:'POST',redirectOn401:false});
+    if(r.status===401) throw new Error('请先登录');
+    const d=await r.json();
+    if(!r.ok||!d.ok) throw new Error(d.error||'登记失败');
+    status.textContent=d.deduped?'已登记，无需重复操作':'登记成功';
+    button.textContent='已登记';
+  } catch(e){status.textContent=e.message==='unauthorized'?'请先登录':e.message;button.disabled=false;}
+});
 loadMembershipCenter();
 loadMembershipOrders();
 </script>

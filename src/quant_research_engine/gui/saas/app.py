@@ -1283,6 +1283,18 @@ def _touch_worker(conn: Any, worker_id: str) -> None:
     )
 
 
+def _membership_ops_view(engine) -> dict[str, int]:
+    """免费功能上线通知的真实登记计数；无表时降级为0。"""
+    try:
+        with engine.connect() as conn:
+            count = conn.execute(text(
+                "SELECT count(*) FROM feature_subscriptions WHERE feature='membership_launch'"
+            )).scalar_one()
+        return {"launch_subscriptions": int(count)}
+    except Exception:
+        return {"launch_subscriptions": 0}
+
+
 def _agent_api_console_view(app, engine) -> dict[str, Any]:
     """9090 管理台「外部 Agent API」卡数据（AGENT-API M1 + R-ADMIN-001）。
 
@@ -4992,6 +5004,7 @@ def create_saas_app() -> Flask:
                         # AGENT-API M1 + R-ADMIN-001：外部 Agent API 开关/默认限额/令牌清点。
                         # 限额读执行侧默认常量（agent_api.AGENT_DEFAULTS），不另写一套数字；
                         # 令牌行只回前缀与限额，不明文、不散列值。
+                        "membership_ops": _membership_ops_view(engine),
                         "agent_api": _agent_api_console_view(app, engine)})
 
     @app.get("/api/saas/console/users")
@@ -5533,6 +5546,12 @@ def create_saas_app() -> Flask:
     from quant_research_engine.gui.saas.payments import register_payment_routes
 
     register_payment_routes(app)
+    from quant_research_engine.gui.saas.nl_quality import register_nl_quality_routes
+
+    register_nl_quality_routes(app)
+    from quant_research_engine.gui.saas.subscriptions import register_subscription_routes
+
+    register_subscription_routes(app)
 
     return app
 

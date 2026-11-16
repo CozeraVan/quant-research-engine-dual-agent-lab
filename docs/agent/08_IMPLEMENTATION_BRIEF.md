@@ -1,3 +1,14 @@
+## 2026-11-16 六项非支付产品功能包
+
+1. 经典策略页增加搜索、收益筛选、最多4项对比；复用 showcase API，不新增结果来源。
+2. NL质量页复用 nl_compile_events，展示成功率、缓存、失败分类和每日趋势；9090管理员可见。
+3. 持续测试复用 showcase_daily 的 tracking_since/tracking_days/data_until，在经典页显式展示日更状态。
+4. 股票适用分析复用 job tag-analysis，增加最小样本过滤与样本数/收益对比，不新跑聚类或回测。
+5. 结果页补 JSON/CSV 导出，复用 summary/chart-data 与现有只读分享，权限不变。
+6. 免费用户运营复用既有额度/历史/反馈，增加会员预览与上线通知登记；不接支付。
+
+每项先测试后实现、真实浏览器验收、部署ECS；不修改交易计算、不跑全量回测。所有任务同步14号权威Todo与当前状态。
+
 ## 2026-11-16 NL 持仓期限与卖出价格确定性修复
 
 - 明确“N日/交易日后卖出”直接规范化 holding.max_holding_days=N；明确“收盘价卖出”写 execution.exit_price=close，不依赖模型自觉遵守。

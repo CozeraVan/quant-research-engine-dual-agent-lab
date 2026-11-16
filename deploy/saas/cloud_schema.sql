@@ -672,3 +672,18 @@ BEGIN
     GRANT USAGE,SELECT ON SEQUENCE payment_events_id_seq TO aguhuice;
   END IF;
 END $$;
+
+
+-- QRE-FREE-USER-LAUNCH-NOTICE：会员上线通知，复用登录账号。
+CREATE TABLE IF NOT EXISTS feature_subscriptions (
+    id BIGSERIAL PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id),
+    feature TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id,feature)
+);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='aguhuice') THEN
+    GRANT SELECT,INSERT,UPDATE,DELETE ON feature_subscriptions TO aguhuice;
+    GRANT USAGE,SELECT ON SEQUENCE feature_subscriptions_id_seq TO aguhuice;
+  END IF;
+END $$;

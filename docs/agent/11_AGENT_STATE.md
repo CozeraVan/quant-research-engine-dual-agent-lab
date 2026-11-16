@@ -37,6 +37,12 @@ This file is the source of truth for single-agent workflow recovery.
 - 492项相关测试通过，真实模型最终holding=5/exit=close，无回测。回滚 `/tmp/qre-deploy-20261116T133717Z.bak`。
 - 建议 `fix(nl): 固化持仓期限与卖出价格执行语义`，未commit/push；真实支付仍等营业执照。
 
+### 2026-11-16 六项非支付产品功能包已部署（待统一人工验收/提交）
+
+- G-1经典搜索/正收益/正超额筛选与最多4项对比；G-2 `/saas/nl-quality` 管理员真实编译质量；G-3经典页日更天数；G-4板块最小样本过滤；G-5结果JSON/CSV导出+只读分享；G-6会员上线通知登记与9090计数。
+- 206项整包测试通过/14 skipped；公网搜索/对比/板块过滤/匿名通知登录引导/9090 NL页鉴权与375px布局通过，零pageerror，证据 `.tmp/nonpay-browser.json`。
+- 生产 feature_subscriptions=0，无支付/全量回测。回滚 `/tmp/qre-deploy-20261116T144908Z.bak`、模板修补 `/tmp/qre-deploy-20261116T145549Z.bak`。建议 `feat(saas): 完成六项非支付产品功能包`，未commit/push。
+
 ### 2026-11-16 NL 错配与持有基准修复已部署（待验收/提交）
 
 - 8081 运行入口自动编译当前NL，失败即停止，不再要求用户另行点击生成；run记录原文和最终YAML hash。因子left join保留完整行情，持有基准固定首开盘→末收盘，shared覆盖完整回测宇宙。
