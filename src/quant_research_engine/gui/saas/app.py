@@ -5526,6 +5526,9 @@ def create_saas_app() -> Flask:
     from quant_research_engine.gui.saas.agent_api import register_agent_api
 
     register_agent_api(app)
+    from quant_research_engine.gui.saas.payments import register_payment_routes
+
+    register_payment_routes(app)
 
     return app
 

@@ -1,5 +1,10 @@
 # Coding Handoff
 
+## 2026-11-16 模拟支付订单闭环
+
+- payments.py PRODUCTS/orders routes；SAAS_PAYMENT_SIMULATOR 仅测试显式开启。订单本人归属、价格服务端常量、支付履约事务。
+- schema membership_orders/payment_events；生产0行。237 项相关测试通过，回滚 `/tmp/qre-deploy-20261116T090002Z.bak`。
+
 ## 2026-11-16 付费分池扣次与订单状态机
 
 - 新档 defaults/CHECK；jobs.quota_pool + `_quota_user_row` 周期计数，仅 large；console 档位授予与 member_since 初始化。

@@ -651,3 +651,24 @@ ON CONFLICT (tier) DO NOTHING;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_tier_check;
 ALTER TABLE users ADD CONSTRAINT users_tier_check
 CHECK (tier IN ('guest','member','paid','starter','advanced','diamond'));
+
+
+-- QRE-MEMBERSHIP-SIMULATED-PAYMENT：订单与事件；真实渠道未接入。
+CREATE TABLE IF NOT EXISTS membership_orders (
+    id TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id),
+    sku TEXT NOT NULL,price_cents INT NOT NULL,days INT NOT NULL,
+    status TEXT NOT NULL,channel TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    paid_at TIMESTAMPTZ,fulfilled_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS payment_events (
+    id BIGSERIAL PRIMARY KEY,order_id TEXT NOT NULL REFERENCES membership_orders(id),
+    event_type TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(order_id,event_type)
+);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='aguhuice') THEN
+    GRANT SELECT,INSERT,UPDATE,DELETE ON membership_orders,payment_events TO aguhuice;
+    GRANT USAGE,SELECT ON SEQUENCE payment_events_id_seq TO aguhuice;
+  END IF;
+END $$;

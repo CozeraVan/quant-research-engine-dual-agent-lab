@@ -518,3 +518,31 @@ def test_paid_tier_counts_only_large_tasks_in_payment_cycle(client, app):
     assert membership['membership']['tier_label'] == '初级会员'
     assert membership['membership']['daily_full']['used'] == 3
     assert membership['membership']['daily_full']['remaining'] == 0
+
+
+def test_simulated_membership_payment_is_idempotent_and_scoped(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050010')
+    other = _make_user(app, '13800050011')
+    headers = {'X-User-Id': str(uid)}
+    products = client.get('/api/saas/membership/products').get_json()
+    assert products['ok'] and len(products['products']) == 3
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    assert created.status_code == 201
+    order_id = created.get_json()['order']['id']
+    assert created.get_json()['order']['price_cents'] == 2990
+    assert client.get(f'/api/saas/membership/orders/{order_id}', headers={'X-User-Id': str(other)}).status_code == 404
+    assert client.post(f'/api/saas/membership/orders/{order_id}/simulate-pay', headers=headers).status_code == 404
+    app.config['SAAS_PAYMENT_SIMULATOR'] = True
+    paid = client.post(f'/api/saas/membership/orders/{order_id}/simulate-pay', headers=headers)
+    assert paid.status_code == 200 and paid.get_json()['order']['status'] == 'fulfilled'
+    engine = app.extensions['saas_engine']
+    with engine.connect() as conn:
+        user = conn.execute(text('SELECT tier,member_expire_at FROM users WHERE id=:uid'), {'uid': uid}).mappings().one()
+        first_expiry = user['member_expire_at']
+        assert user['tier'] == 'starter'
+    again = client.post(f'/api/saas/membership/orders/{order_id}/simulate-pay', headers=headers)
+    assert again.status_code == 200 and again.get_json()['deduped'] is True
+    with engine.connect() as conn:
+        assert conn.execute(text('SELECT member_expire_at FROM users WHERE id=:uid'), {'uid': uid}).scalar_one() == first_expiry
+        assert conn.execute(text('SELECT count(*) FROM payment_events WHERE order_id=:id'), {'id': order_id}).scalar_one() == 2

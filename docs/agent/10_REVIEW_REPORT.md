@@ -1,5 +1,10 @@
 # Review Report
 
+## 2026-11-16 模拟支付订单闭环自审
+
+- Review Status：PASS，无 Required Fixes。237 项相关测试通过，金额/归属/开关/幂等覆盖；生产无订单、无真实支付。
+- 模拟支付不被描述为真实收费，Native 验签/查单仍待接。
+
 ## 2026-11-16 付费分池扣次与订单状态机自审
 
 - Review Status：PASS，无 Required Fixes。新档只 large 扣次，支付周期与个人中心/管理台一致；历史 paid 不变。

@@ -19,7 +19,13 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
-### 2026-11-16 付费分池扣次与订单状态机已部署（待验收/提交）
+### 2026-11-16 会员模拟支付 HTTP 已部署（待验收/提交）
+
+- payments.py + membership_orders/payment_events：商品/下单/本人查询/开关模拟支付；支付履约与会员生效同事务，重复不顺延。
+- 237 项相关测试通过/14 skipped；生产 products=200、orders=0、模拟开关关，无真实支付/回测。
+- 上一提交 `9a5377e` 未 push；本轮未 commit。建议 `feat(membership): 增加模拟支付订单闭环`。
+
+### 2026-11-16 付费分池扣次与订单状态机已部署（已提交）
 
 - starter/advanced/diamond=3/10/30次、5/8/20字段；jobs.quota_pool 仅 large 扣次，按 member_since 滚动周期。
 - `_quota_user_row` 统一执行/个人中心；9090可选档与真实策略；orders.py 纯状态机含退款/非法迁移。
