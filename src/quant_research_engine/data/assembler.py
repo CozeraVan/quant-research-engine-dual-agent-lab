@@ -45,7 +45,9 @@ class ResearchFrameAssembler:
                 start=start,
                 end=end,
             )
-            frame = frame.merge(factors, on=["ts_code", "trade_date"], how="inner")
+            # 行情是时间轴与买入持有基准的唯一来源；因子缺口只产生 NaN 信号，
+            # 不得删除 K 线并让基准起止点随策略因子覆盖变化。
+            frame = frame.merge(factors, on=["ts_code", "trade_date"], how="left")
         if include_metadata:
             metadata = self.store.load_security_metadata(ts_codes=ts_codes, as_of=metadata_as_of)
             frame = frame.merge(metadata, on="ts_code", how="left")

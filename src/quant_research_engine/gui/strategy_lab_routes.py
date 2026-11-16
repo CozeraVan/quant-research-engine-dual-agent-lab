@@ -116,6 +116,14 @@ def register_strategy_lab_routes(app: Flask) -> None:
         if missing:
             return jsonify({"status": "error", "error": f"Missing fields: {', '.join(missing)}"}), 400
 
+        entry_mode = data.get("entry_mode")
+        nl_text = str(data.get("nl_text") or "").strip()
+        if entry_mode == "nl" and (not nl_text or data.get("nl_compiled") is not True):
+            return jsonify({
+                "status": "error",
+                "error": "自然语言策略尚未成功绑定当前代码，请先点击「生成策略」",
+            }), 400
+
         all_market = bool(data.get("all_market"))
         codes = data.get("codes") or ""
         # 随机股票（QRE-LAB-RANDOM-UNIVERSE）：random_n = 服务端从全 A 股池抽 N 只
@@ -196,6 +204,18 @@ def register_strategy_lab_routes(app: Flask) -> None:
                 "error": "已有 2 个回测在运行，请稍后再提交",
             }), 409
 
+        run_mark: dict[str, Any] | None = None
+        if entry_mode:
+            run_mark = {"entry_mode": entry_mode}
+        if entry_mode == "nl":
+            from hashlib import sha256
+
+            run_mark = {
+                "entry_mode": "nl",
+                "nl_text": nl_text,
+                "strategy_sha256": sha256(data["yaml"].encode("utf-8")).hexdigest(),
+            }
+
         try:
             record = _run_backtest(
                 yaml_text=data["yaml"],
@@ -220,6 +240,7 @@ def register_strategy_lab_routes(app: Flask) -> None:
                 precheck=bool(data.get("precheck")),
                 random_n=random_n,
                 background=(executor != "cli"),
+                mark=run_mark,
             )
             return jsonify(record)
         except Exception as exc:

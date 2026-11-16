@@ -75,6 +75,40 @@ def test_research_frame_assembler_reads_declared_market_and_factor_fields():
     ]
 
 
+def test_factor_gaps_do_not_truncate_market_history():
+    class SparseFactorStore(FakeStore):
+        def load_daily_bars(self, ts_codes, start, end, fields=None, limit=None):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ", "000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-05", "2026-01-06"]),
+                    "open": [10.0, 11.0],
+                    "close": [10.5, 11.2],
+                }
+            )
+
+        def load_factor_history(self, ts_codes, field_requests, start, end):
+            return pd.DataFrame(
+                {
+                    "ts_code": ["000001.SZ"],
+                    "trade_date": pd.to_datetime(["2026-01-06"]),
+                    "rsi_2": [8.0],
+                }
+            )
+
+    frame = ResearchFrameAssembler(SparseFactorStore()).build(
+        ts_codes=["000001.SZ"],
+        start=date(2026, 1, 5),
+        end=date(2026, 1, 6),
+        market_fields=["open", "close"],
+        factor_fields=[FactorFieldRequest.from_target("rsi_2", "factors.stock_daily_momentum_close.rsi_2")],
+    )
+
+    assert frame["trade_date"].tolist() == list(pd.to_datetime(["2026-01-05", "2026-01-06"]))
+    assert pd.isna(frame.iloc[0]["rsi_2"])
+    assert frame.iloc[1]["rsi_2"] == 8.0
+
+
 def test_research_frame_assembler_can_merge_security_metadata():
     store = FakeStore()
     assembler = ResearchFrameAssembler(store)

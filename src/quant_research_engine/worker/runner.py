@@ -419,10 +419,10 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None,
 
 
 def _fill_excess_return(record: dict[str, Any], chart_data: dict[str, Any]) -> None:
-    """B 修复：shared_cash 模式引擎不写 buy_hold_return（恒 None），导致
-    「超额收益 vs 持有不动」恒为「—」。此处补齐：实际交易个股在 run 区间的
-    等权买入持有收益（与 batch 模式 mean(buy_hold_return) 同族口径），
-    超额 = 策略全期总收益 − 该等权买入持有收益。DB 不可用保持 None 不报错。"""
+    """补齐 shared 模式的持有基准：回测宇宙内个股区间收益等权平均。
+
+    超额 = 策略全期总收益 − 该等权买入持有收益；DB 不可用保持 None。
+    """
     metrics = chart_data.get("metrics")
     if not isinstance(metrics, dict) or metrics.get("excess_return") is not None:
         return
@@ -430,17 +430,23 @@ def _fill_excess_return(record: dict[str, Any], chart_data: dict[str, Any]) -> N
     if not isinstance(total, (int, float)):
         return
     try:
-        from quant_research_engine.gui.lab_result import (
-            _fetch_symbol_range_returns,
-            _symbol_trade_stats,
-        )
+        from quant_research_engine.gui.lab_result import _fetch_symbol_range_returns
 
-        traded = list(_symbol_trade_stats(record))
-        if not traded:
-            return
         start = metrics.get("date_start") or record.get("start")
         end = metrics.get("date_end") or record.get("end")
-        rets = _fetch_symbol_range_returns(traded, start, end)
+        symbols = record.get("codes") or []
+        if isinstance(symbols, str):
+            symbols = [s.strip() for s in symbols.split(",") if s.strip()]
+        if not symbols:
+            # 全市场/shared 的持有基准覆盖回测宇宙，而非只覆盖产生交易的股票。
+            from quant_research_engine.data.universe_rules import filter_untrusted_symbols
+            from quant_research_engine.gui.admin import _store
+
+            symbols = _store().list_symbols_with_bars(start, end)
+            symbols = filter_untrusted_symbols(symbols, load_start=date.fromisoformat(str(start)))
+        if not symbols:
+            return
+        rets = _fetch_symbol_range_returns(symbols, start, end)
     except Exception:
         return
     if not rets:
@@ -448,7 +454,7 @@ def _fill_excess_return(record: dict[str, Any], chart_data: dict[str, Any]) -> N
     buy_hold = round(sum(rets.values()) / len(rets), 6)
     metrics["buy_hold_return"] = buy_hold
     metrics["excess_return"] = round(total - buy_hold, 6)
-    metrics["buy_hold_note"] = f"等权买入持有（实际交易 {len(rets)} 只）"
+    metrics["buy_hold_note"] = f"等权买入持有（回测范围 {len(rets)} 只）"
 
 
 #: per-symbol 详情产物总体积上限（gzip 后；超出按 |总净盈亏| 降序截断）

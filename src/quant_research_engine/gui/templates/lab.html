@@ -833,6 +833,12 @@
   var nlDesc = document.getElementById("nl-description");
   var nlStatus = document.getElementById("nl-status");
   var nlResult = document.getElementById("nl-result");
+  var nlCompiledDescription = "";
+  var nlCompiledYaml = "";
+  nlDesc.addEventListener("input", function() {
+    nlCompiledDescription = "";
+    nlCompiledYaml = "";
+  });
 
   // 可点击示例句：点击填入输入框
   document.querySelectorAll(".nl-example").forEach(function(btn) {
@@ -863,6 +869,8 @@
         nlStatus.textContent = "编译成功";
         nlStatus.className = "ok";
         yamlEl.value = d.yaml;
+        nlCompiledDescription = description;
+        nlCompiledYaml = d.yaml;
         // LLM 给的策略名填入公共 ID 字段（用户可改；用户命名过则不覆盖）
         var nm = (d.yaml.match(/^\s*name:\s*(\S+)\s*$/m) || [])[1];
         if (nm && !userNamed) { lastAuto = nm; document.getElementById("param-sname").value = nm; }
@@ -1163,6 +1171,9 @@
   function buildRunPayload(scope) {
     return {
       yaml: applyNameToYaml(yamlEl.value),
+      entry_mode: currentEntry(),
+      nl_text: currentEntry() === "nl" ? nlDesc.value.trim() : null,
+      nl_compiled: nlCompiledDescription === nlDesc.value.trim() && nlCompiledYaml === yamlEl.value,
       mode: document.getElementById("param-mode").value,
       start: document.getElementById("param-start").value,
       end: document.getElementById("param-end").value,
@@ -1190,7 +1201,7 @@
     };
   }
 
-  document.getElementById("btn-run-main").addEventListener("click", function() {
+  document.getElementById("btn-run-main").addEventListener("click", async function() {
     if (pipeRunning) return;
     var btn = this;
     pipeEl.style.display = "block";
@@ -1198,6 +1209,36 @@
     runResult.className = "result-box hidden pipe-err";
     runResult.style.display = "none";
     LabUI.pipeDoing(pipeEl, 1);
+    if (currentEntry() === "nl" &&
+        (nlCompiledDescription !== nlDesc.value.trim() || nlCompiledYaml !== yamlEl.value)) {
+      if (!nlDesc.value.trim()) {
+        runResult.className = "result-box err pipe-err";
+        LabUI.pipeFail(pipeEl, 1, "请先填写自然语言策略描述。");
+        return;
+      }
+      // 运行链的权威输入是当前 NL 原文；自动编译，绝不使用默认/旧 YAML。
+      pipeRunning = true; btn.disabled = true; btn.style.opacity = .65;
+      try {
+        var nlResponse = await fetch("/api/nl_compile", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({description: nlDesc.value.trim()})
+        });
+        var nlData = await nlResponse.json();
+        if (!nlData.ok) throw new Error(nlData.error || "自然语言编译失败");
+        yamlEl.value = nlData.yaml;
+        nlCompiledDescription = nlDesc.value.trim();
+        nlCompiledYaml = nlData.yaml;
+        updateParamsLine();
+        show(nlStatus);
+        nlStatus.textContent = "编译成功";
+        nlStatus.className = "ok";
+      } catch (err) {
+        runResult.className = "result-box err pipe-err";
+        LabUI.pipeFail(pipeEl, 1, escHtml(String(err)));
+        pipeRunning = false; btn.disabled = false; btn.style.opacity = "";
+        return;
+      }
+    }
 
     // ① 校验：先验策略 ID（公共项），再调 /api/validate 验 YAML
     var sid = document.getElementById("param-sname").value.trim();

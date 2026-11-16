@@ -223,6 +223,22 @@ def test_single_symbol_backtest_summary_includes_buy_hold_return():
     assert summary["excess_return_vs_buy_hold"] == pytest.approx(0.077216944 - 0.13)
 
 
+def test_buy_hold_return_is_independent_of_strategy_price_columns():
+    request = SingleSymbolBacktestRequest(
+        symbol="000001.SZ",
+        initial_cash=100000.0,
+        entry_signal="rsi_2 < 10",
+        holding_days=3,
+        entry_price_column="close",
+        exit_price_column="close",
+        mark_price_column="open",
+    )
+    result = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile()).run(make_frame(), request)
+
+    # 基准始终是首根开盘 10.0 → 末根收盘 11.3，与策略 close/open 参数无关。
+    assert result.summary["buy_hold_return"] == pytest.approx(0.13)
+
+
 def test_single_symbol_backtest_buy_hold_return_is_none_for_empty_frame():
     engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
     request = SingleSymbolBacktestRequest(

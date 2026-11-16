@@ -29,6 +29,8 @@ def _http_ok(content: str):
     def http_post(url, headers, payload, timeout):
         assert url == "http://llm.local/v1/chat/completions"
         assert headers["Authorization"] == "Bearer test-key"
+        assert headers["User-Agent"] == "qre-nl-compiler/1.0"
+        assert headers["x-opencode-session"].startswith("qre-nl-")
         assert payload["model"] == "test-model"
         assert payload["messages"][-1]["role"] == "user"
         return {"choices": [{"message": {"content": content}}]}
@@ -89,6 +91,33 @@ def test_strip_yaml_fence():
 
 
 # --- compile_nl flows ---
+
+
+def test_compile_falls_back_to_backup_model_on_primary_failure():
+    env = _llm_env() | {
+        "QRE_NL_LLM_BACKUP_BASE_URL": "http://backup.local/v1",
+        "QRE_NL_LLM_BACKUP_API_KEY": "backup-key",
+        "QRE_NL_LLM_BACKUP_MODEL": "backup-model",
+    }
+    calls = []
+
+    def http_post(url, headers, payload, timeout):
+        calls.append((url, payload["model"]))
+        if len(calls) == 1:
+            raise RuntimeError("primary unavailable")
+        return {"choices": [{"message": {"content": _VALID_YAML}}]}
+
+    result = compile_nl(
+        "RSI(14) 站回 30 买入，大于 60 卖出",
+        env=env,
+        http_post=http_post,
+        column_lookup=lambda table: {"rsi_14"},
+    )
+    assert result["ok"] is True
+    assert calls == [
+        ("http://llm.local/v1/chat/completions", "test-model"),
+        ("http://backup.local/v1/chat/completions", "backup-model"),
+    ]
 
 
 def test_compile_not_configured():

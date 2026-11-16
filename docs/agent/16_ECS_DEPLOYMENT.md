@@ -1,3 +1,5 @@
+**到期降级/权益历史/模拟退款（2026-11-16，已部署待验收/未 commit）**：247 测试通过，生产 entitlements0，9090计数。回滚 `/tmp/qre-deploy-20261116T095415Z.bak`。
+
 **会员中心（2026-11-16，已部署待验收/未 commit）**：当前权益/套餐/本人订单与导航，购买未开放；99 测试通过，移动无横溢。回滚 `/tmp/qre-deploy-20261116T091553Z.bak`。
 
 **微信 Native 适配层（2026-11-16，已部署待验收/未 commit）**：下单/回调验签/查单/幂等履约，241 测试通过；生产无配置 notify404，无真实交易。回滚 `/tmp/qre-deploy-20261116T091054Z.bak`。
@@ -163,6 +165,8 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 **NL 持久限频与编译缓存已部署（2026-10-26，QRE-SAAS-NL-A2A3，待人工验收、未 commit/push）**：postgres 幂等 apply `cloud_schema.sql` 新增 `nl_rate_limits`（scope/subject_hash/window_start/hits，PK 三元组；游客 guest_daily=10 保持 403/code=guest_nl_limit，会员 member_minute=6 超限 429/code=nl_rate_limited+reset_seconds 且每日仍不限，admin 不计）与 `nl_compile_cache`（cache_key PK/description/result JSONB/model/prompt_hash/cache_version/created_at/last_hit_at/hit_count + last_hit_at 索引；只存 ok=true 完整结果，无 API key）；两表无序列，aguhuice 表 CRUD 由 schema DO 块授予。同步 app.py、`gui/saas/nl_compile_support.py`（新）、cloud_schema.sql 后仅重启 qre-saas，未重启 worker、未跑真实回测。公网临时游客会话对经典 MACD 描述纯编译两次：第一次 cache_hit=false（真实调用 LLM）、第二次 cache_hit=true 且 YAML 一致，jobs 表 10→10 未创建回测；缓存行 model=deepseek-flash、hit_count=1，guest_daily hits=1（命中不占额度）。全量 2726 passed + 6 skipped。回滚备份 `/tmp/qre-nl-a2a3-pre-20261026/`（app.py + cloud_schema.sql），不通过立即恢复并重启 qre-saas。实现细节见 04/05/09，证据 `.tmp/nl-a2a3/`。
 
 **NL 管理台同步已部署（2026-10-26，QRE-SAAS-NL-A2A3 续，R-ADMIN-001，待人工验收）**：`api_console_overview` 新增 `nl` 对象（guest_daily/member_minute 读执行常量 `GUEST_NL_DAILY_LIMIT`/`MEMBER_NL_MINUTE_LIMIT`、admin=不限、cache_version、`nl_rate_limits`/`nl_compile_cache` 真实行数与 hits）；console.html 总览在 Worker 资源卡前新增「自然语言编译」卡（metric 卡 + tip-trigger，无灰色小字）。仅同步 app.py 与 console.html 并重启 qre-saas，无 schema 变更、未重启 worker、未跑真实回测。9090 隧道临时 admin session 验证 overview nl 字段与常量/表计数一致（匿名/错 token 401），临时账号与会话已清理。全量 2731 passed + 6 skipped。回滚备份 `/tmp/qre-nl-console-pre-20261026/`（app.py + console.html）。
+
+**NL 千帆主备配置（2026-11-16）**：生产替换为千帆 Token Plan OpenAI 兼容主通道 + OpenCode Go 备用；`nl_compiler.py` 支持异常切换和真实客户端/会话头。密钥仅在 `/etc/qre-saas.env`，未读取输出；env备份 `/etc/qre-saas.env.bak-nl-models-20261116`，代码回滚 `/tmp/qre-deploy-20261116T105240Z.bak`。两组真实编译与断主切换通过，308项相关测试通过；qre-saas active。无回测，未commit/push。
 
 **NL DeepSeek V4.1 Flash 配置（2026-10-25）**：生产 `QRE_NL_LLM_BASE_URL=https://api.deepseek.com`，正确模型 ID 为 `QRE_NL_LLM_MODEL=deepseek-flash`（最新 V4.1 Flash；`deepseek-v4.1-flash` 不是可用 ID，真实编译 400）。已用 MACD 金叉死叉纯编译验证成功，未创建回测。改前 env 备份 `/etc/qre-saas.env.bak-deepseek-v41-20261025`（0600）。
 

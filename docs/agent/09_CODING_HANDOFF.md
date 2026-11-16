@@ -1,5 +1,23 @@
 # Coding Handoff
 
+## 2026-11-16 NL 主备模型
+
+- `nl_compiler.py` 新增 `nl_configs` 和 `QRE_NL_LLM_BACKUP_*`，异常时主→备；`call_llm` 增加 `qre-nl-compiler/1.0` 与稳定 `x-opencode-session`。
+- 千帆使用OpenAI兼容地址而非用户给的Anthropic地址；OpenCode使用官方Go OpenAI地址。两组真实编译及人为断主切换通过。
+- 308项相关测试通过；本地/生产env受限更新，未记录密钥。已知5日持仓被译成0的语义问题未在本轮掩盖或放行。
+
+## 2026-11-16 NL 运行绑定与持有基准
+
+- `lab.html` 运行时自动编译当前NL，失败可见且停止；`strategy_lab_routes.py` 服务端拒绝未确认NL，写 `entry_mode/nl_text/strategy_sha256`。
+- `assembler.py` 行情×因子改 left join；`single_symbol.py` 与 `incremental.py` 固定首开盘/末收盘；`worker/runner.py` shared 使用完整宇宙。
+- 新增六类回归与shared宇宙用例；288 passed/14 skipped。8081与worker已重启，ECS已备份部署；不跑全量。
+
+## 2026-11-16 到期降级、权益历史与模拟退款
+
+- membership.effective_tier + PAID_CYCLE_TIERS；app/agent_api 在提交、视图、owner policy、watch 应用。
+- fulfill_order 写 membership_entitlements；simulate-refund 订单/权益/用户/事件事务幂等。
+- 9090 `_membership_ops_view` + renderMembershipOps。247 项相关测试通过；回滚 `/tmp/qre-deploy-20261116T095415Z.bak`。
+
 ## 2026-11-16 会员中心
 
 - membership.html + `/saas/membership`；payments.py 新增本人 orders 列表；base 下拉入口。

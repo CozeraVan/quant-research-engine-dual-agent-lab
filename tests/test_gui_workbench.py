@@ -286,6 +286,41 @@ def test_api_run_requires_codes_without_all_market(app_client):
     assert "全部 A 股" in resp.get_json()["error"]
 
 
+def test_api_run_rejects_nl_without_successful_compile(app_client, monkeypatch):
+    called = False
+    monkeypatch.setattr(
+        "quant_research_engine.gui.app.run_backtest",
+        lambda **kw: called,
+    )
+    resp = app_client.post(
+        "/api/run",
+        json=_run_payload(entry_mode="nl", nl_text="EMA5上穿EMA20买入", nl_compiled=False),
+    )
+    assert resp.status_code == 400
+    assert "生成策略" in resp.get_json()["error"]
+    assert called is False
+
+
+def test_api_run_records_nl_text_and_final_yaml_binding(app_client, monkeypatch):
+    monkeypatch.setattr(
+        "quant_research_engine.gui.engine._run_via_module",
+        lambda **kw: kw["stdout_path"].write_text("ok=1\n", encoding="utf-8"),
+    )
+    resp = app_client.post(
+        "/api/run",
+        json=_run_payload(
+            entry_mode="nl",
+            nl_text="EMA5上穿EMA20买入，5日后卖出",
+            nl_compiled=True,
+        ),
+    )
+    assert resp.status_code == 200
+    record = resp.get_json()
+    assert record["entry_mode"] == "nl"
+    assert record["nl_text"] == "EMA5上穿EMA20买入，5日后卖出"
+    assert len(record["strategy_sha256"]) == 64
+
+
 def test_api_run_all_market_rejected_for_single(app_client):
     resp = app_client.post("/api/run", json=_run_payload(mode="single", codes="", all_market=True))
     assert resp.status_code == 400

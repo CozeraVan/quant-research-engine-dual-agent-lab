@@ -322,11 +322,37 @@ class TestWorkerExcessFallback:
         chart_data = {"metrics": {"total_return": 0.25, "excess_return": None,
                                   "buy_hold_return": None, "date_start": "2026-01-01",
                                   "date_end": "2026-06-01"}}
-        runner._fill_excess_return({"run_id": "r1"}, chart_data)
+        runner._fill_excess_return(
+            {"run_id": "r1", "codes": ["000001.SZ", "600519.SH"]}, chart_data
+        )
         m = chart_data["metrics"]
         assert m["buy_hold_return"] == pytest.approx(0.15)
         assert m["excess_return"] == pytest.approx(0.10)
         assert "buy_hold_note" in m
+
+    def test_fill_excess_return_uses_full_requested_universe(self, monkeypatch):
+        from quant_research_engine.gui import lab_result
+        from quant_research_engine.worker import runner
+
+        monkeypatch.setattr(lab_result, "_symbol_trade_stats", lambda record: {"000001.SZ": {}})
+        seen = []
+        monkeypatch.setattr(
+            lab_result,
+            "_fetch_symbol_range_returns",
+            lambda symbols, start, end: seen.append(symbols) or {
+                "000001.SZ": 0.10,
+                "000002.SZ": 0.20,
+                "600519.SH": 0.30,
+            },
+        )
+        chart_data = {"metrics": {"total_return": 0.25, "excess_return": None}}
+        runner._fill_excess_return(
+            {"run_id": "r1", "codes": ["000001.SZ", "000002.SZ", "600519.SH"]},
+            chart_data,
+        )
+        assert seen == [["000001.SZ", "000002.SZ", "600519.SH"]]
+        assert chart_data["metrics"]["buy_hold_return"] == pytest.approx(0.20)
+        assert chart_data["metrics"]["buy_hold_note"] == "等权买入持有（回测范围 3 只）"
 
     def test_fill_excess_return_noop_when_present(self, monkeypatch):
         from quant_research_engine.worker import runner

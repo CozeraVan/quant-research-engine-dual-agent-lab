@@ -1,3 +1,10 @@
+### 2026-11-16: 持有基准只由行情宇宙与区间决定（QRE-BUY-HOLD-INVARIANT）
+
+- Decision: 行情与因子改 left join；持有收益固定首根开盘→末根收盘；shared 使用完整回测宇宙，不用实际交易股。NL 入口运行前必须绑定当前描述的成功编译结果，并保存最终 YAML hash。
+- Rationale: 旧 inner join 使因子覆盖范围截断行情，价格参数与交易股筛选进一步令同区间基准随策略变化，失去可比性。
+- Verification: 六项缺陷测试先红后绿，相关288 passed/14 skipped；真实浏览器和合成小样本通过。历史产物不改，不跑全量。
+- Owner: KIMI_CODE；用户明确要求修复两处问题。
+
 ### 2026-11-16: Agent 结果读取按账号归属，支持本地紧凑导出（QRE-MCP-LOCAL-EXPORT）
 
 - Decision: 同账号有效 token 可读取该账号全部历史 job，不再限本 token；新增本地 compact 导出，云端 TTL 不变。

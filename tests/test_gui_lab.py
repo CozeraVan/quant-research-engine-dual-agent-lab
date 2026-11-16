@@ -179,6 +179,15 @@ def test_lab_strategy_three_entry_tabs(lab_client):
     assert 'id="wz-save-smoke"' not in html
     assert "去高级 YAML 修改详情" not in html
     assert 'id="btn-run-main"' in html            # 唯一主按钮
+    # NL 运行链直接编译当前描述；不再要求用户另点按钮，也不能运行默认旧 YAML。
+    assert "nlCompiledDescription" in html and "nlCompiledYaml" in html
+    assert 'nlDesc.addEventListener("input"' in html
+    assert "nl_compiled: nlCompiledDescription === nlDesc.value.trim()" in html
+    assert 'addEventListener("click", async function()' in html
+    assert 'body: JSON.stringify({description: nlDesc.value.trim()})' in html
+    assert 'nlCompiledDescription = nlDesc.value.trim();' in html
+    assert "系统不会沿用旧 YAML" not in html
+    assert 'runResult.className = "result-box err pipe-err";' in html
     assert 'id="preview-card"' in html            # 策略代码预览栏（唯一 YAML 真相源，在参数区之后）
     assert 'id="pv-view"' in html and "pv-line" in html  # 行号 + 语法高亮合并视图（1:1 移植）
     # 缺陷修复：编辑代码提升为预览栏头部主按钮（实心紫），复制为次按钮

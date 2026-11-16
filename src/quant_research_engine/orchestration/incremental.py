@@ -198,14 +198,15 @@ def _update_summary_inputs(
         }
         entry = {
             "first_trade_date": str(pd.Timestamp(first["trade_date"]).date()),
-            "first_entry_price": float(first[entry_price_column]),
-            "first_mark_price": float(first[mark_price_column]),
+            # 持有基准固定首开盘/末收盘；策略成交价参数不改变基准。
+            "first_entry_price": float(first["open"]),
+            "first_mark_price": float(first["close"]),
             "metadata": metadata,
         }
         inputs[symbol] = entry
     last = effective_rows.iloc[-1]
     entry["last_trade_date"] = str(pd.Timestamp(last["trade_date"]).date())
-    entry["last_mark_price"] = float(last[mark_price_column])
+    entry["last_mark_price"] = float(last["close"])
 
 
 def _recompute_summary(

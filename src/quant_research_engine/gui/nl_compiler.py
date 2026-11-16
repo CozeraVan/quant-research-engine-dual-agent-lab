@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Callable
 
@@ -58,6 +59,22 @@ def nl_config(env: dict[str, str] | None = None) -> dict[str, str] | None:
     if not (base_url and api_key and model):
         return None
     return {"base_url": base_url, "api_key": api_key, "model": model}
+
+
+def nl_configs(env: dict[str, str] | None = None) -> list[dict[str, str]]:
+    """主模型 + 可选备用模型；备用配置不完整时不参与调用。"""
+    env = env if env is not None else os.environ
+    primary = nl_config(env)
+    configs = [primary] if primary is not None else []
+    backup_env = {
+        ENV_BASE_URL: env.get("QRE_NL_LLM_BACKUP_BASE_URL", ""),
+        ENV_API_KEY: env.get("QRE_NL_LLM_BACKUP_API_KEY", ""),
+        ENV_MODEL: env.get("QRE_NL_LLM_BACKUP_MODEL", ""),
+    }
+    backup = nl_config(backup_env)
+    if backup is not None:
+        configs.append(backup)
+    return configs
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +301,8 @@ def call_llm(
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {config['api_key']}",
+        "User-Agent": "qre-nl-compiler/1.0",
+        "x-opencode-session": f"qre-nl-{sha256(description.encode('utf-8')).hexdigest()[:24]}",
     }
     payload = {
         "model": config["model"],
@@ -518,8 +537,8 @@ def compile_nl(
     if not description:
         return {"ok": False, "code": "empty", "error": "请先用自然语言描述策略"}
 
-    config = nl_config(env)
-    if config is None:
+    configs = nl_configs(env)
+    if not configs:
         return {"ok": False, "code": "not_configured", "error": NOT_CONFIGURED_ERROR}
 
     lookup = column_lookup if column_lookup is not None else _default_column_lookup(db_url)
@@ -528,15 +547,18 @@ def compile_nl(
         warnings.append("因子库不可用，跳过因子存在性检查（提交回测时仍会校验）")
 
     # 修复回路：LLM 输出 → 校验+纠错+语义闸 → 缺因子/语义降级则回喂重试。
-    # 语义闸不依赖因子库，lookup 缺失时同样生效。
+    # 主模型网络/认证失败时切换备用模型；语义问题仍在原输出上回喂修复。
     prompt = description
     fix_attempts = 0
     outcome: dict[str, Any] | None = None
     for attempt in range(1 + MAX_FIX_RETRIES):
-        try:
-            raw = call_llm(prompt, config, http_post=http_post)
-        except Exception as exc:
-            return {"ok": False, "code": "llm_error", "error": f"LLM 调用失败：{exc}"}
+        for config_index, config in enumerate(configs):
+            try:
+                raw = call_llm(prompt, config, http_post=http_post)
+                break
+            except Exception as exc:
+                if config_index == len(configs) - 1:
+                    return {"ok": False, "code": "llm_error", "error": f"LLM 调用失败：{exc}"}
         outcome = _validate_and_correct(raw, lookup, description)
         assert outcome is not None
         if outcome.get("fatal"):  # YAML 结构错误不回喂重试（与因子无关）
