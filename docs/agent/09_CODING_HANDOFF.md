@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-16 免费层周期额度
+
+- membership 默认与 USED_QUOTA_SQL：member自然月，其余自然日；daily_full_limit 是历史字段名。
+- api_create_job 对 full 执行周期次数，smoke 不占且不查 full 区间；提示与个人中心/9090同步。
+- schema 只更新旧默认行；生产 guest/member 各1匹配，备份 `/tmp/tier-policies-pre-20261116.csv`。232 项测试通过，回滚 `/tmp/qre-deploy-20261116T082555Z.bak`。
+
 ## 2026-11-16 会员规模分池与范围闸
 
 - membership.quota_pool + validate_scope_policy；MAX_RANDOM_UNIVERSE=2000、LARGE_SCALE_COVERAGE=.8。

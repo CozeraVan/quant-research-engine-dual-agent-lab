@@ -46,6 +46,13 @@ def app(saas_db):
     app.config["SAAS_WORKER_TOKEN"] = WORKER_TOKEN
     app.config["SAAS_DEV_AUTH"] = "1"
     app.config["SAAS_AUTH_CHANNEL"] = "stub"
+    # 控制台/队列旧用例显式使用不限量策略；新会员额度由专项用例覆盖。
+    from quant_research_engine.gui.saas.app import _get_engine
+    from sqlalchemy import text
+    engine = _get_engine(app)
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE tier_policies SET daily_full_limit=0,max_codes=0,max_days=0,max_factor_fields=20 WHERE tier='member'"))
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
     yield app
     engine = app.extensions.get("saas_engine")
     if engine is not None:
@@ -338,10 +345,9 @@ class TestTierPolicies:
         d = client.get("/api/saas/console/policies", headers=headers).get_json()
         assert d["ok"]
         by_tier = {p["tier"]: p for p in d["policies"]}
-        # 种子行：三级权限与代码常量一致（2026-10-05 内测调整：游客 10 只/近 10 年/日 1 次；
-        # 注册用户与付费占位全 0=不限，限制只在 R2 资源层）
+        # 游客 1 只/5 年/日 1 次；协议夹具中的登录策略显式不限量。
         assert by_tier["guest"]["daily_full_limit"] == 1
-        assert by_tier["guest"]["max_codes"] == 10 and by_tier["guest"]["max_days"] == 3657
+        assert by_tier["guest"]["max_codes"] == 1 and by_tier["guest"]["max_days"] == 1826
         assert by_tier["member"]["daily_full_limit"] == 0
         assert by_tier["member"]["max_codes"] == 0 and by_tier["member"]["max_days"] == 0
         assert by_tier["paid"]["daily_full_limit"] == 0
@@ -356,17 +362,17 @@ class TestTierPolicies:
         assert client.post("/api/saas/console/policies/member", json={}, headers=headers).status_code == 400
 
     def test_member_quota_follows_policy(self, client, app):
-        # 改 member 日限额为 1 → 会员第二次提交被拒；admin 不受限
+        # 改 member 周期限额为 1 → 会员第二次提交被拒；admin 不受限
         headers, admin_uid = _admin_headers(app)
         client.post("/api/saas/console/policies/member", json={"daily_full_limit": 1}, headers=headers)
         uid = _make_user(app, "13800050004")
         h = {"X-User-Id": str(uid)}
         assert _create_job(client, uid=uid).status_code == 200
         r = _create_job(client, uid=uid)
-        assert r.status_code == 403 and "每日" in r.get_json()["error"]
+        assert r.status_code == 403 and "本周期" in r.get_json()["error"]
         assert _create_job(client, uid=admin_uid).status_code == 200  # admin 不限
-        # 恢复默认 3
-        client.post("/api/saas/console/policies/member", json={"daily_full_limit": 3}, headers=headers)
+        # 恢复当前登录用户默认 10
+        client.post("/api/saas/console/policies/member", json={"daily_full_limit": 10}, headers=headers)
 
     def test_factor_limits_follow_policy(self, client, app):
         # N4b 接入 N1：管理台把 member 因子上限调低到 5 → 6 因子策略提交即 400；

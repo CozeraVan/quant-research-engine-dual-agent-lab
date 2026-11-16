@@ -292,9 +292,9 @@ class TestMembershipEndpoint:
         assert mb["tier"] == "member"
         assert mb["tier_label"] == "内测会员"
         assert mb["is_admin"] is False
-        # 内测期会员全量不限（daily_full_limit=0）
-        assert mb["daily_full"] == {"limit": "不限", "used": 0, "remaining": None,
-                                    "unlimited": True}
+        # 登录用户自然月 10 次
+        assert mb["daily_full"] == {"limit": 10, "used": 0, "remaining": 10,
+                                    "unlimited": False}
         assert mb["watches"] == {"limit": 20, "used": 0, "remaining": 20,
                                  "unlimited": False}
         assert mb["scan_enabled"] is True
@@ -305,9 +305,9 @@ class TestMembershipEndpoint:
         guest = tiers[0]
         assert guest["label"] == "游客"
         assert guest["daily_full_limit"] == 1
-        assert guest["max_codes"] == 10
-        assert guest["max_days"] == 3657
-        assert guest["max_factor_fields"] == 20
+        assert guest["max_codes"] == 1
+        assert guest["max_days"] == 1826
+        assert guest["max_factor_fields"] == 3
         assert guest["max_factor_tables"] == 3
         assert guest["max_watches"] == 20
         assert guest["scan_enabled"] is True
@@ -317,7 +317,7 @@ class TestMembershipEndpoint:
         token, uid = reg["token"], reg["user"]["id"]
         created = client.post("/api/saas/jobs", headers=_bearer(token), json={
             "yaml": "signal:\n  entry: 'true'\n", "kind": "full",
-            "name": "t", "params": {"cash": 1000000}})
+            "name": "t", "params": {"cash": 1000000, "start": "2025-01-01", "end": "2025-12-31"}})
         assert created.status_code == 200, created.get_json()
         # smoke 不占全量配额
         smoke = client.post("/api/saas/jobs", headers=_bearer(token), json={
@@ -333,7 +333,7 @@ class TestMembershipEndpoint:
 
         mb = client.get("/api/saas/membership", headers=_bearer(token)).get_json()["membership"]
         assert mb["daily_full"]["used"] == 1
-        assert mb["daily_full"]["unlimited"] is True
+        assert mb["daily_full"]["unlimited"] is False
         assert mb["watches"]["used"] == 1
         assert mb["watches"]["remaining"] == 19
 
@@ -370,14 +370,14 @@ class TestMembershipPureFunctions:
     def test_normalize_policy_fills_missing_and_coerces(self):
         pol = membership.normalize_policy({"daily_full_limit": "5", "scan_enabled": 0}, "guest")
         assert pol["daily_full_limit"] == 5
-        assert pol["max_codes"] == 10
+        assert pol["max_codes"] == 1
         assert pol["scan_enabled"] is False
         assert membership.normalize_policy(None, "guest") == membership.default_policy("guest")
 
     def test_quota_view(self):
         member = membership.default_policy("member")
         assert membership.quota_view(member, 2) == {
-            "limit": "不限", "used": 2, "remaining": None, "unlimited": True}
+            "limit": 10, "used": 2, "remaining": 8, "unlimited": False}
         guest = membership.default_policy("guest")
         assert membership.quota_view(guest, 0) == {
             "limit": 1, "used": 0, "remaining": 1, "unlimited": False}
@@ -389,7 +389,8 @@ class TestMembershipPureFunctions:
         assert membership.is_quota_exceeded(guest, 1) is True
         assert membership.is_quota_exceeded(guest, 0) is False
         assert membership.is_quota_exceeded(guest, 9, is_admin=True) is False
-        assert membership.is_quota_exceeded(membership.default_policy("member"), 99) is False
+        assert membership.is_quota_exceeded(membership.default_policy("member"), 9) is False
+        assert membership.is_quota_exceeded(membership.default_policy("member"), 10) is True
 
     def test_is_watch_exceeded(self):
         guest = membership.default_policy("guest")

@@ -3056,7 +3056,7 @@ def create_saas_app() -> Flask:
             "max_tables": int(factor_pol.get("max_factor_tables", 3)),
         }
         scope_issue = membership.validate_scope_policy(
-            params_raw, factor_pol, logged_in=uid is not None,
+            params_raw, factor_pol, logged_in=uid is not None, check_period=kind == "full",
         )
         if scope_issue:
             return jsonify({"ok": False, "error": scope_issue}), 403
@@ -3074,10 +3074,10 @@ def create_saas_app() -> Flask:
             random_n = params_raw.get("random_n")
             max_codes = int(pol["max_codes"])
             if params_raw.get("universe"):
-                return jsonify({"ok": False, "error": "游客暂不支持板块/概念与全市场回测——可选「指定股票代码」（最多 10 只）或「随机股票」。注册会员后不限范围"}), 403
+                return jsonify({"ok": False, "error": f"游客暂不支持板块/概念与全市场回测——可选指定股票或随机股票（最多 {max_codes} 只）"}), 403
             if codes:
                 if max_codes > 0 and len(codes) > max_codes:
-                    return jsonify({"ok": False, "error": f"游客最多回测 {max_codes} 只股票（当前 {len(codes)} 只）。注册会员后不限数量"}), 403
+                    return jsonify({"ok": False, "error": f"游客最多回测 {max_codes} 只股票（当前 {len(codes)} 只）"}), 403
                 # 自选不足上限 → 标记 worker 执行前随机补齐（params 落库可见口径）
                 if max_codes > 0 and len(codes) < max_codes:
                     params_raw = dict(params_raw)
@@ -3090,7 +3090,7 @@ def create_saas_app() -> Flask:
                 if max_codes > 0 and (rn < 1 or rn > max_codes):
                     return jsonify({"ok": False, "error": f"游客随机股票数量须为 1~{max_codes} 只"}), 403
             else:
-                return jsonify({"ok": False, "error": "游客请选择「指定股票代码」（最多 10 只，不足自动随机补齐）或「随机股票」（≤10 只）"}), 403
+                return jsonify({"ok": False, "error": f"游客请选择指定股票或随机股票（最多 {max_codes} 只）"}), 403
             try:
                 from datetime import date as _date
 
@@ -3099,7 +3099,7 @@ def create_saas_app() -> Flask:
             except (TypeError, ValueError):
                 return jsonify({"ok": False, "error": "请填写回测区间（开始/结束日期）"}), 400
             if pol["max_days"] > 0 and ((d1 - d0).days > pol["max_days"] or d0 > d1):
-                return jsonify({"ok": False, "error": "游客仅支持近 10 年内的区间。注册会员后不限"}), 403
+                return jsonify({"ok": False, "error": f"游客单次最多回测 {pol['max_days']} 天"}), 403
             # QRE-SAAS-ACCESS-HARDENING-001：归属键由会话 Cookie 派生（缺失时本次
             # 请求签发，响应带上 Set-Cookie）；同 IP 旧结果在新会话首次创建任务时
             # 一次性迁移到本会话（先迁移后计数，今日旧任务照占当日配额）。
@@ -3119,7 +3119,7 @@ def create_saas_app() -> Flask:
             if kind == "full" and pol["daily_full_limit"] > 0 and used >= pol["daily_full_limit"]:
                 # 403 也要带会话 Cookie：迁移后的归属得让浏览器拿到
                 return _with_guest_cookie(app, (
-                    jsonify({"ok": False, "error": "游客每日可回测 1 次（今日已用完）。注册会员后不限次数且记录永久保存"}),
+                    jsonify({"ok": False, "error": "游客每日可回测 1 次（今日已用完）。登录后每周期可测试 10 次"}),
                     403,
                 ), new_guest_sid)
 
@@ -3161,7 +3161,7 @@ def create_saas_app() -> Flask:
                     ),
                     {"id": uid, "phone": f"pending_{uid}"},
                 )
-                # 会员配额（15 号文档）：每日全量回测 3 次，smoke 不占；付费占位同会员
+                # 登录用户自然月 10 次；游客走独立日闸；付费支付周期由订单模型接管
                 quota_row = conn.execute(
                     text(
                         "SELECT tier, role, "
@@ -3174,7 +3174,8 @@ def create_saas_app() -> Flask:
                 pol = _get_policy(app, engine, str(quota_row["tier"] or "member"))
                 if kind == "full" and membership.is_quota_exceeded(
                         pol, quota_row["used_today"], quota_row["role"] == "admin"):
-                    return jsonify({"ok": False, "error": "会员每日可全量回测 3 次（今日已用完），明天再来或试试小样本验证"}), 403
+                    limit = int(pol.get("daily_full_limit") or 0)
+                    return jsonify({"ok": False, "error": f"当前账号本周期可回测 {limit} 次（已用完），下个周期恢复"}), 403
             # 会员：按 (user_id, name) upsert 复用策略库行（QRE-SAAS-D3）
             if uid is not None:
                 existing = conn.execute(

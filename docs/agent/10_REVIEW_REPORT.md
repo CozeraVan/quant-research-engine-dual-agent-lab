@@ -1,5 +1,10 @@
 # Review Report
 
+## 2026-11-16 免费层周期额度自审
+
+- Review Status：PASS，无 Required Fixes。232 项相关测试通过/14 skipped；自然月边界、超限、smoke例外和旧协议夹具分离。
+- 生产迁移有同WHERE计数与备份，只改旧默认行；paid不变。无回测。
+
 ## 2026-11-16 会员规模分池与范围闸自审
 
 - Review Status：PASS，无 Required Fixes。解决全量−1套利合同；NL不生成 params，直接伪造请求仍过服务端闸。

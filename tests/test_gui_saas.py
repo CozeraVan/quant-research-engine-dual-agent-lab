@@ -53,6 +53,13 @@ def app(saas_db):
     app.config["SAAS_WORKER_TOKEN"] = WORKER_TOKEN
     app.config["SAAS_DEV_AUTH"] = "1"  # 既有队列用例继续走 X-User-Id 后门
     app.config["SAAS_AUTH_CHANNEL"] = "stub"  # 验证码不真发，落 sent_codes
+    # 协议/队列旧用例显式使用不限量测试策略；新会员额度由独立用例验证。
+    from quant_research_engine.gui.saas.app import _get_engine
+    from sqlalchemy import text
+    engine = _get_engine(app)
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE tier_policies SET daily_full_limit=0,max_codes=0,max_days=0,max_factor_fields=20 WHERE tier='member'"))
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
     yield app
     engine = app.extensions.get("saas_engine")
     if engine is not None:
@@ -963,10 +970,10 @@ class TestTiersD1D2:
         assert resp.status_code == 200
         body = resp.get_json()
         assert body["guest"] is True and "次日清空" in body["note"]
-        # 自选 1 只 → 云端打 codes_auto_fill=10 标记（worker 执行前随机补齐）
+        # 游客自选 1 只即当前上限，不再自动补齐。
         engine_job = client.get(f"/api/jobs/{body['job_id']}",
                                 headers={"X-Forwarded-For": "1.2.3.4"}).get_json()["job"]
-        assert engine_job["params"]["codes_auto_fill"] == 10
+        assert "codes_auto_fill" not in engine_job["params"]
         # 同会话当日第二次全量 → 403（每日 1 次不变）
         assert self._guest_job(client).status_code == 403
         # smoke 不占配额
@@ -974,29 +981,26 @@ class TestTiersD1D2:
             "params": {"codes": ["000001.SZ"], "start": "2025-01-01", "end": "2026-01-01"}},
             headers={"X-Forwarded-For": "1.2.3.4"})
         assert smoke.status_code == 200
-        # 2026-10-05 内测调整：多股（≤10）放行并标补齐；11 只 → 403；
-        # 区间 ≤ 近 10 年放行、超 10 年 → 403；缺区间 → 400
-        # （以下各场景用独立客户端 = 独立会话，互不占当日配额）
+        # 游客当前仅 1 只/5 年；以下各场景用独立客户端，互不占当日配额。
         c3 = app.test_client()
         r3 = self._guest_job(c3, codes=("000001.SZ", "600000.SH", "600519.SH"), ip="5.6.7.8")
-        assert r3.status_code == 200
-        assert r3.get_json()["guest"] is True
+        assert r3.status_code == 403
         codes11 = tuple(f"{i:06d}.SZ" for i in range(11))
         assert self._guest_job(app.test_client(), codes=codes11, ip="5.6.7.8").status_code == 403
         assert self._guest_job(app.test_client(), start="2016-10-01", end="2026-10-01",
-                               ip="5.6.7.9").status_code == 200
+                               ip="5.6.7.9").status_code == 403
         assert self._guest_job(app.test_client(), start="2015-01-01", end="2026-01-01",
                                ip="5.6.7.10").status_code == 403
         bad = client.post("/api/jobs", json={"yaml": "x", "kind": "full", "params": {"codes": ["000001.SZ"]}},
                           headers={"X-Forwarded-For": "5.6.7.11"})
         assert bad.status_code == 400
-        # 随机股票 N≤10 放行、>10 拦截；板块仍 403（独立会话，避免与当日配额混淆）
+        # 随机股票仅 1 只放行、2 只拦截；板块仍 403。
         rnd = app.test_client().post("/api/jobs", json={"yaml": "x", "kind": "full",
-            "params": {"random_n": 10, "start": "2025-01-01", "end": "2026-01-01"}},
+            "params": {"random_n": 1, "start": "2025-01-01", "end": "2026-01-01"}},
             headers={"X-Forwarded-For": "9.1.1.1"})
         assert rnd.status_code == 200
         rnd_over = app.test_client().post("/api/jobs", json={"yaml": "x", "kind": "full",
-            "params": {"random_n": 11, "start": "2025-01-01", "end": "2026-01-01"}},
+            "params": {"random_n": 2, "start": "2025-01-01", "end": "2026-01-01"}},
             headers={"X-Forwarded-For": "9.1.1.2"})
         assert rnd_over.status_code == 403
         univ = app.test_client().post("/api/jobs", json={"yaml": "x", "kind": "full",
@@ -1826,3 +1830,23 @@ def test_global_random_cap_applies_to_guest_too(client):
     })
     assert response.status_code == 403
     assert '2000' in response.get_json()['error']
+
+
+def test_member_quota_uses_natural_month_not_daily_count(client, app):
+    from sqlalchemy import text
+    engine = app.extensions['saas_engine']
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE tier_policies SET daily_full_limit=10,max_codes=10,max_days=3653,max_factor_fields=3 WHERE tier='member'"))
+        conn.execute(text("INSERT INTO users (id,phone,tier) VALUES (1,'13800000001','member')"))
+        sid = conn.execute(text(
+            "INSERT INTO strategies (user_id,name,yaml) VALUES (1,'old','signal: {}') RETURNING id"
+        )).scalar_one()
+        conn.execute(text(
+            "INSERT INTO jobs (user_id,strategy_id,kind,params,created_at) VALUES "
+            "(1,:sid,'full','{}',date_trunc('month',now())-interval '1 day')"
+        ), {'sid': sid})
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
+    response = client.get('/api/saas/membership', headers={'X-User-Id': '1'})
+    assert response.status_code == 200
+    quota = response.get_json()['membership']['daily_full']
+    assert quota['used'] == 0 and quota['limit'] == 10 and quota['remaining'] == 10

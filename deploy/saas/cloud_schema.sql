@@ -448,10 +448,15 @@ ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_factor_tables INT NOT NUL
 ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS scan_enabled BOOL NOT NULL DEFAULT true;
 ALTER TABLE tier_policies ADD COLUMN IF NOT EXISTS max_watches INT NOT NULL DEFAULT 20;
 INSERT INTO tier_policies (tier, daily_full_limit, max_codes, max_days, max_factor_fields, max_factor_tables) VALUES
-    ('guest',  1, 10, 3657, 20, 3),
-    ('member', 0, 0, 0, 20, 3),
+    ('guest',  1, 1, 1826, 3, 3),
+    ('member', 10, 10, 3653, 3, 3),
     ('paid',   0, 0, 0, 20, 3)
 ON CONFLICT (tier) DO NOTHING;
+-- 2026-11-16 初版会员迁移：只替换已确认的旧默认行，保留运营自定义值。
+UPDATE tier_policies SET daily_full_limit=1,max_codes=1,max_days=1826,max_factor_fields=3,updated_at=now()
+WHERE tier='guest' AND daily_full_limit=1 AND max_codes=10 AND max_days=3657 AND max_factor_fields=20;
+UPDATE tier_policies SET daily_full_limit=10,max_codes=10,max_days=3653,max_factor_fields=3,updated_at=now()
+WHERE tier='member' AND daily_full_limit=0 AND max_codes=0 AND max_days=0 AND max_factor_fields=20;
 
 -- AGENT-API M1（2026-11-02）：第四入口外部 AI Agent 访问令牌。
 -- 设计文档 docs/superpowers/specs/2026-11-02-external-agent-api-design.md §6。
@@ -618,9 +623,15 @@ CREATE TABLE IF NOT EXISTS backtest_usage (
     estimated_su BIGINT NOT NULL,
     actual_su BIGINT NOT NULL,
     mode TEXT NOT NULL DEFAULT 'shadow',
+    cycle_start DATE,
+    cycle_end DATE,
+    allowance_su BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     settled_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE backtest_usage ADD COLUMN IF NOT EXISTS cycle_start DATE;
+ALTER TABLE backtest_usage ADD COLUMN IF NOT EXISTS cycle_end DATE;
+ALTER TABLE backtest_usage ADD COLUMN IF NOT EXISTS allowance_su BIGINT NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_backtest_usage_user ON backtest_usage (user_id, created_at DESC);
 DO $$
 BEGIN

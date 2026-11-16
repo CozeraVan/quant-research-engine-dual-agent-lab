@@ -40,8 +40,8 @@
               </div>
             </div>
             <div class="member-quota">
-              <div class="member-quota-head"><span>今日全量回测</span><b id="pf-quota">—</b></div>
-              <div class="member-bar" role="progressbar" aria-label="今日配额使用量"><i id="pf-quota-bar"></i></div>
+              <div class="member-quota-head"><span>本周期回测</span><b id="pf-quota">—</b></div>
+              <div class="member-bar" role="progressbar" aria-label="本周期配额使用量"><i id="pf-quota-bar"></i></div>
               <div class="member-quota-foot" id="pf-quota-foot">—</div>
             </div>
           </div>
@@ -53,7 +53,7 @@
             <div class="m-label">会员等级</div><div class="m-value" id="pf-tier-metric">—</div>
           </div>
           <div class="metric-card">
-            <div class="m-label">今日已用 / 上限</div><div class="m-value" id="pf-used-metric">—</div>
+            <div class="m-label">本周期已用 / 上限</div><div class="m-value" id="pf-used-metric">—</div>
           </div>
           <div class="metric-card">
             <div class="m-label">信号跟踪
@@ -238,8 +238,8 @@ function applyMembership(m, tiers){
     ? (used + ' / 不限')
     : (used + ' / ' + limit));
   setProfileText('pf-quota-foot', unlimited
-    ? (isAdmin ? '管理员账号不限次数' : (tier === 'member' ? '内测期不限次数，放心回测' : '当前会员配额不限次数'))
-    : ('今日剩余 ' + Math.max(0, Number(q.remaining || 0)) + ' 次'));
+    ? (isAdmin ? '管理员账号不限次数' : '当前会员配额不限次数')
+    : ('本周期剩余 ' + Math.max(0, Number(q.remaining || 0)) + ' 次'));
   const bar = document.getElementById('pf-quota-bar');
   if (bar){
     bar.classList.toggle('is-unlimited', unlimited);

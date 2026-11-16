@@ -15,19 +15,21 @@ POLICY_INT_KEYS = ("max_watches",)
 # 2026-10-04 内测期权限调整（用户拍板，19 号文档原则：注册用户功能全开，
 # 限制只在并发与计算资源/R2 槽位体系）：member/paid 前三项全 0=不限。
 TIER_POLICY_DEFAULTS: dict[str, dict[str, object]] = {
-    "guest":  {"daily_full_limit": 1, "max_codes": 10, "max_days": 3650 + 7,
-               "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
-    "member": {"daily_full_limit": 0, "max_codes": 0, "max_days": 0,
-               "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
+    "guest":  {"daily_full_limit": 1, "max_codes": 1, "max_days": 1826,
+               "max_factor_fields": 3, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
+    "member": {"daily_full_limit": 10, "max_codes": 10, "max_days": 3653,
+               "max_factor_fields": 3, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
     "paid":   {"daily_full_limit": 0, "max_codes": 0, "max_days": 0,
                "max_factor_fields": 20, "max_factor_tables": 3, "scan_enabled": True, "max_watches": 20},
 }
 
-# 当日全量回测用量（要求外层 users 表别名 u）：三处端点共用同一口径。
-USED_TODAY_SQL = (
-    "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id"
-    " AND j.kind = 'full' AND j.created_at::date = now()::date)"
+# 周期用量（要求外层 users 表别名 u）：member=自然月，其余=自然日；付费支付周期由后续订单模型接管。
+USED_QUOTA_SQL = (
+    "(SELECT count(*) FROM jobs j WHERE j.user_id = u.id AND j.kind = 'full'"
+    " AND j.created_at >= CASE WHEN u.tier = 'member'"
+    " THEN date_trunc('month', now()) ELSE now()::date END)"
 )
+USED_TODAY_SQL = USED_QUOTA_SQL  # 既有调用别名；字段名 daily_full_limit 为历史合同
 
 
 def default_policy(tier: str | None) -> dict[str, object]:
@@ -106,7 +108,7 @@ def quota_pool(params: dict, available_symbols: int | None = None) -> str:
     return "small"
 
 
-def validate_scope_policy(params: dict, policy: dict, *, logged_in: bool) -> str | None:
+def validate_scope_policy(params: dict, policy: dict, *, logged_in: bool, check_period: bool = True) -> str | None:
     """服务端统一标的/区间闸；NL 文本不参与 params，直接构造请求也必须经过。"""
     random_n = params.get("random_n")
     if random_n is not None:
@@ -129,7 +131,7 @@ def validate_scope_policy(params: dict, policy: dict, *, logged_in: bool) -> str
     if max_codes > 0 and (params.get("universe") or params.get("all_market") or params.get("whole_market")):
         return "当前账号未开放板块或全市场范围"
     max_days = int(policy.get("max_days") or 0)
-    if max_days > 0:
+    if check_period and max_days > 0:
         from datetime import date
         try:
             start = date.fromisoformat(str(params.get("start")))

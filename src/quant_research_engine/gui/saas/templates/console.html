@@ -93,7 +93,7 @@
       <div class="card">
         <h2>角色权限配置 <button type="button" class="tip-trigger" data-tip="改动即时生效，0 表示不限。未来新增付费等级可插入新角色行；admin 不受这些限制。" aria-label="角色权限说明">?</button></h2>
         <table class="tbl">
-          <thead><tr><th>角色</th><th class="num">每日全量回测次数</th><th class="num">标的数上限</th><th class="num">区间天数上限</th><th class="num">因子数上限</th><th class="num">因子表数上限</th><th>更新时间</th><th>操作</th></tr></thead>
+          <thead><tr><th>角色</th><th class="num">周期/日回测次数</th><th class="num">标的数上限</th><th class="num">区间天数上限</th><th class="num">因子数上限</th><th class="num">因子表数上限</th><th>更新时间</th><th>操作</th></tr></thead>
           <tbody id="policies-tbody"></tbody>
         </table>
       </div>
@@ -590,7 +590,7 @@
   function loadUsers(){
     apiFetch('/api/saas/console/users').then(function(r){ return r.json(); }).then(function(d){
       if (!d.ok) return;
-      document.getElementById('users-count').textContent = '共 ' + d.users.length + ' 人（日配额 ' + (d.quota_limit === '不限' ? '不限' : d.quota_limit + ' 次') + '）';
+      document.getElementById('users-count').textContent = '共 ' + d.users.length + ' 人（登录用户周期配额 ' + (d.quota_limit === '不限' ? '不限' : d.quota_limit + ' 次') + '）';
       var html = d.users.map(function(u){
         var acct = esc(u.email || u.phone || ('#' + u.id));
         var tierSel = '<select data-uid="' + u.id + '" class="tier-sel">' +
