@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-16 会员分层与 SU 影子计量自审
+
+- Review Status：PASS，无 Required Fixes。影子记录不影响现有权限、收费或用户页面；参考值与实际日期值明确区分。
+- 修复了回归暴露的缺日期和旧文本策略500：不完整任务跳过，主回传148项全绿。
+- 生产表0行、无历史补记/新回测；schema幂等，qre-saas active。
+
 ## 2026-11-16 MCP CLI 登录自审
 
 - Review Status：PASS，无 Required Fixes。复用现有认证/令牌合同，无新权限；0600/原子写/环境优先/logout 吊销均有测试。

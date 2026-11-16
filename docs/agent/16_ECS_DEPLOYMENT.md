@@ -1,3 +1,5 @@
+**会员 SU 影子账本（2026-11-16，已部署待验收/未 commit）**：backtest_usage + result/meta 幂等记录；148 测试通过，生产0行，无权限变化。回滚 `/tmp/qre-deploy-20261116T072537Z.bak`。
+
 **MCP CLI 登录（2026-11-16，已部署待验收/未 commit）**：qre-mcp-login 短信登录/凭证/logout，指南同步；143 测试通过，真实短信未自动触发。回滚 `/tmp/qre-deploy-20261116T061300Z.bak`。
 
 **MCP 使用说明页（2026-11-16，已部署待验收/未 commit）**：`/saas/mcp-guide` 公开六章节，个人中心/下拉入口；145 测试通过，桌面/375px无横溢。回滚 `/tmp/qre-deploy-20261116T055800Z.bak`。

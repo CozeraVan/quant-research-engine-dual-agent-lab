@@ -3753,9 +3753,12 @@ def create_saas_app() -> Flask:
         data = request.get_json(silent=True) or {}
         worker_id = str(data.get("worker_id") or "").strip()
         engine = _get_engine(app)
+        from quant_research_engine.gui.saas import metering
+        metering.ensure_usage_ledger(engine)
         with engine.begin() as conn:
             job = conn.execute(
-                text("SELECT * FROM jobs WHERE id = :id FOR UPDATE"),
+                text("SELECT jobs.*, strategies.yaml AS strategy_yaml FROM jobs "
+                     "JOIN strategies ON strategies.id=jobs.strategy_id WHERE jobs.id = :id FOR UPDATE"),
                 {"id": job_id},
             ).mappings().first()
             if job is None:
@@ -3819,6 +3822,7 @@ def create_saas_app() -> Flask:
                     "result_files": json.dumps(result_files) if result_files is not None else None,
                 },
             )
+            metering.record_shadow_usage(conn, job, summary, job["strategy_yaml"] if "strategy_yaml" in job else "")
             if not files:
                 # P0-9 Required Fix（2026-11-03，job 212 实测）：终态进度由服务端在
                 # 置 completed 的同一事务落定——completed 后 heartbeat 会被拒

@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-16 会员 SU 影子计量
+
+- `gui/saas/metering.py`：calculate_su/usage_from_result/ensure_usage_ledger/record_shadow_usage；FULL_SCALE_REFERENCE_SU=470493。
+- result/meta 查询 join 策略 YAML，同事务 upsert backtest_usage；缺日期/非结构化旧策略跳过，不影响主结果。
+- schema 幂等并授权；生产0行。148 项相关测试通过。回滚 `/tmp/qre-deploy-20261116T072537Z.bak`。
+
 ## 2026-11-16 MCP CLI 登录
 
 - `mcp_server/auth.py`：短信登录、token 创建、0600 原子凭证、logout 吊销删除；`AgentAPIConfig.from_user()` 环境优先、文件兜底。

@@ -604,3 +604,27 @@ BEGIN
 END $$;
 
 COMMIT;
+
+
+-- QRE-MEMBERSHIP-SHADOW-METERING（2026-11-16）：只记录 SU，不拦截/不收费。
+CREATE TABLE IF NOT EXISTS backtest_usage (
+    job_id BIGINT PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id BIGINT,
+    symbol_count INT NOT NULL,
+    years DOUBLE PRECISION NOT NULL,
+    factor_fields INT NOT NULL,
+    factor_tables INT NOT NULL,
+    trades INT NOT NULL,
+    estimated_su BIGINT NOT NULL,
+    actual_su BIGINT NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'shadow',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    settled_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_backtest_usage_user ON backtest_usage (user_id, created_at DESC);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON backtest_usage TO aguhuice;
+  END IF;
+END $$;
