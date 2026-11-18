@@ -219,6 +219,8 @@ def build_feature_matrix(
     work = frame.copy()
     metadata_columns: list[str] = []
     if metadata is not None and not metadata.empty:
+        if "symbol" not in metadata.columns and "ts_code" in metadata.columns:
+            metadata = metadata.rename(columns={"ts_code": "symbol"})
         extra_columns = [c for c in metadata.columns if c != "symbol" and c not in work.columns]
         if extra_columns:
             extra = metadata.loc[:, ["symbol", *extra_columns]]

@@ -8,7 +8,7 @@ Statistics (pure Python, no new dependencies):
   per-symbol win rate (fraction of net-profitable trades) vs H0: p=0.5.
 - Confidence tiers: 90% / 99% / 99.9% (p <= 0.10 / 0.01 / 0.001).
 - Magnitude gate: total_return > 0 AND excess_return_vs_benchmark > 0 — the
-  strategy must beat the stock's own natural (buy-and-hold) return.
+  strategy must beat the SSE Composite over the same window.
 - Strategy meta-test: significant-stock count vs binomial false-positive
   expectation (eligible_symbols x tier alpha). A no-edge strategy lands at
   ~expectation and is correctly judged ineffective.

@@ -311,6 +311,18 @@ def test_metadata_enriches_features(tmp_path):
     assert status_rows[0]["status"] == STATUS_OK
 
 
+@requires_sklearn
+def test_metadata_accepts_ts_code_without_csv_round_trip():
+    stocks = _two_groups_frame()
+    metadata = pd.DataFrame({
+        "ts_code": stocks["symbol"],
+        "total_mv": [1e9 if s.startswith("600") else 1e8 for s in stocks["symbol"]],
+    })
+    stocks_df, _, status_rows = analyze_fit_stocks(stocks, metadata, MlClusterConfig())
+    assert "total_mv" not in stocks_df.columns
+    assert status_rows[0]["status"] == STATUS_OK
+
+
 # ---------------------------------------------------------------------------
 # outputs + manifest
 # ---------------------------------------------------------------------------
