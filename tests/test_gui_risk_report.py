@@ -226,7 +226,7 @@ class TestRiskReportEndpoints:
         job = {}
         while time.time() < deadline:
             poll = app_client.get(f"/api/runs/runok1/risk-report/job/{job_id}")
-            assert poll.status_code == 200
+            assert poll.status_code == 200, poll.get_json()
             job = poll.get_json()
             if job["status"] in ("completed", "failed"):
                 break

@@ -86,9 +86,12 @@ def active_job(pipeline: str) -> str | None:
 def _write_status(job_dir: Path, record: dict[str, Any]) -> None:
     record["updated_at"] = _now_iso()
     job_dir.mkdir(parents=True, exist_ok=True)
-    (job_dir / "status.json").write_text(
+    status_path = job_dir / "status.json"
+    tmp_path = job_dir / "status.json.tmp"
+    tmp_path.write_text(
         json.dumps(record, ensure_ascii=False, indent=2, default=str), encoding="utf-8"
     )
+    tmp_path.replace(status_path)  # 原子替换：轮询不会读到半份 JSON 并误报 404
 
 
 def _append_log(job_dir: Path, text: str) -> None:
