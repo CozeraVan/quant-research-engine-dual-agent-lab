@@ -22,8 +22,10 @@
 ### 千问真实控制台进展（2026-11-18）
 
 - 已使用用户现有登录态进入 `Agent 开发 → 托管智能体 → MCP → 创建MCP服务`，确认入口提供“接入已有MCP服务 / API转MCP / 从AI网关导入 / 操作阿里云资源”。
-- 选择“接入已有MCP服务”后落到 `/agent-infra/managed-agent/mcp/manage/create/script`，页面要求先开通函数计算授权；该形态是平台函数计算脚本部署，不等于我们现有自托管 Remote MCP 的直接登记。
-- 本轮未点击开通授权、未创建平台服务、未产生费用。后续需先由用户确认是否授权函数计算；商店正式入驻仍需书面规则，不把控制台入口当成已上架。
+- 选择“接入已有MCP服务”后落到 `/agent-infra/managed-agent/mcp/manage/create/script`，首次需开通函数计算服务关联角色；用户已于2026-11-18完成授权。
+- 实际采用 **http / streamableHttp** 连接现有 `https://aguhuice.com/mcp`，不是把代码重新部署到FC；页面明确http模式无部署资源消耗、服务无需计费。
+- 自定义服务已创建并启用：名称 `QRE A股回测`，服务ID `mcp-ZjZhNDVjNmQzYjM1`，成功发现9个工具；平台内实际运行 `get_capabilities` 返回 `isError=false`、`ok=true`。
+- 使用专用令牌ID=4，仅 `jobs:read/results:read/factors:read`，禁止full market，30天到期；明文不入文档/仓库。未提交新回测。此为自定义服务接入成功，不等于已上架公共MCP商店；正式入驻与结算仍需书面规则。
 
 ## Token Plan 产品方向（已被取代）
 
