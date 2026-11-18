@@ -658,18 +658,53 @@ CREATE TABLE IF NOT EXISTS membership_orders (
     id TEXT PRIMARY KEY,user_id BIGINT NOT NULL REFERENCES users(id),
     sku TEXT NOT NULL,price_cents INT NOT NULL,days INT NOT NULL,
     status TEXT NOT NULL,channel TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    paid_at TIMESTAMPTZ,fulfilled_at TIMESTAMPTZ
+    paid_at TIMESTAMPTZ,fulfilled_at TIMESTAMPTZ,expires_at TIMESTAMPTZ,closed_at TIMESTAMPTZ
 );
+ALTER TABLE membership_orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE membership_orders ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS payment_events (
     id BIGSERIAL PRIMARY KEY,order_id TEXT NOT NULL REFERENCES membership_orders(id),
     event_type TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(order_id,event_type)
+    channel_event_id TEXT,UNIQUE(order_id,event_type)
 );
+ALTER TABLE payment_events ADD COLUMN IF NOT EXISTS channel_event_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_events_channel_event
+    ON payment_events(channel_event_id) WHERE channel_event_id IS NOT NULL;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='aguhuice') THEN
     GRANT SELECT,INSERT,UPDATE,DELETE ON membership_orders,payment_events TO aguhuice;
     GRANT USAGE,SELECT ON SEQUENCE payment_events_id_seq TO aguhuice;
+  END IF;
+END $$;
+
+
+-- QRE-MEMBERSHIP-ENTITLEMENT-HISTORY：订单带来的权益历史与退款撤销。
+CREATE TABLE IF NOT EXISTS payment_reconciliation_issues (
+    id BIGSERIAL PRIMARY KEY,order_id TEXT NOT NULL REFERENCES membership_orders(id),
+    issue_type TEXT NOT NULL,detail TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at TIMESTAMPTZ,UNIQUE(order_id,issue_type)
+);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='aguhuice') THEN
+    GRANT SELECT,INSERT,UPDATE,DELETE ON payment_reconciliation_issues TO aguhuice;
+    GRANT USAGE,SELECT ON SEQUENCE payment_reconciliation_issues_id_seq TO aguhuice;
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS membership_entitlements (
+    id BIGSERIAL PRIMARY KEY,order_id TEXT NOT NULL REFERENCES membership_orders(id),
+    user_id BIGINT NOT NULL REFERENCES users(id),tier TEXT NOT NULL,
+    starts_at TIMESTAMPTZ NOT NULL,ends_at TIMESTAMPTZ NOT NULL,
+    status TEXT NOT NULL,revoked_at TIMESTAMPTZ,revoke_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),UNIQUE(order_id)
+);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='aguhuice') THEN
+    GRANT SELECT,INSERT,UPDATE,DELETE ON membership_entitlements TO aguhuice;
+    GRANT USAGE,SELECT ON SEQUENCE membership_entitlements_id_seq TO aguhuice;
   END IF;
 END $$;
 

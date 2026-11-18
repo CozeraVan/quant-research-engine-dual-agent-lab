@@ -457,9 +457,9 @@ def _quota_user_row(conn, uid: int):
     from quant_research_engine.gui.saas import metering
 
     user = conn.execute(
-        text("SELECT tier,role,member_since FROM users WHERE id=:uid"), {"uid": uid},
+        text("SELECT tier,role,member_since,member_expire_at FROM users WHERE id=:uid"), {"uid": uid},
     ).mappings().one()
-    tier = str(user["tier"] or "member")
+    tier = membership.effective_tier(str(user["tier"] or "member"), user["member_expire_at"])
     since = user["member_since"]
     since = since.date() if hasattr(since, "date") else since
     start, _end = metering.period_window(tier, date.today(), since)
@@ -1284,15 +1284,35 @@ def _touch_worker(conn: Any, worker_id: str) -> None:
 
 
 def _membership_ops_view(engine) -> dict[str, int]:
-    """免费功能上线通知的真实登记计数；无表时降级为0。"""
+    """会员订单与权益真实计数；无表时返回零，不伪造运营数据。"""
+    empty = {"orders": 0, "fulfilled": 0, "refunded": 0, "active_entitlements": 0,
+             "pending": 0, "expired": 0, "closed": 0, "reconciliation_issues": 0,
+             "launch_subscriptions": 0}
     try:
         with engine.connect() as conn:
-            count = conn.execute(text(
+            orders = conn.execute(text(
+                "SELECT count(*) AS total,count(*) FILTER (WHERE status='fulfilled') AS fulfilled,"
+                "count(*) FILTER (WHERE status='refunded') AS refunded,"
+                "count(*) FILTER (WHERE status='pending') AS pending,"
+                "count(*) FILTER (WHERE status='expired') AS expired,"
+                "count(*) FILTER (WHERE status='closed') AS closed FROM membership_orders"
+            )).mappings().one()
+            active = conn.execute(text(
+                "SELECT count(*) FROM membership_entitlements WHERE status='active'"
+            )).scalar_one()
+            issues = conn.execute(text(
+                "SELECT count(*) FROM payment_reconciliation_issues WHERE resolved_at IS NULL"
+            )).scalar_one()
+            subscriptions = conn.execute(text(
                 "SELECT count(*) FROM feature_subscriptions WHERE feature='membership_launch'"
             )).scalar_one()
-        return {"launch_subscriptions": int(count)}
+        return {**empty, "orders": int(orders["total"]), "fulfilled": int(orders["fulfilled"]),
+                "refunded": int(orders["refunded"]), "active_entitlements": int(active),
+                "pending": int(orders["pending"]), "expired": int(orders["expired"]),
+                "closed": int(orders["closed"]), "reconciliation_issues": int(issues),
+                "launch_subscriptions": int(subscriptions)}
     except Exception:
-        return {"launch_subscriptions": 0}
+        return empty
 
 
 def _agent_api_console_view(app, engine) -> dict[str, Any]:
@@ -2173,8 +2193,10 @@ def create_saas_app() -> Flask:
                 {"sid": strategy_id},
             )
             tier_row = conn.execute(
-                text("SELECT tier FROM users WHERE id = :uid"), {"uid": uid}).first()
-            pol = _get_policy(app, engine, str(tier_row.tier or "member") if tier_row else "member")
+                text("SELECT tier,member_expire_at FROM users WHERE id = :uid"), {"uid": uid}).mappings().first()
+            pol = _get_policy(app, engine, membership.effective_tier(
+                str(tier_row["tier"] or "member") if tier_row else "member",
+                tier_row["member_expire_at"] if tier_row else None))
             if not pol.get("scan_enabled", True):
                 return jsonify({"ok": False, "error": "当前账号层级未开放信号监控"}), 403
             existing = conn.execute(
@@ -2974,7 +2996,7 @@ def create_saas_app() -> Flask:
         with engine.connect() as conn:
             user = conn.execute(
                 text(
-                    "SELECT id, phone, email, quota_daily, tier, role, "
+                    "SELECT id, phone, email, quota_daily, tier, role, member_expire_at, "
                     f"{membership.USED_TODAY_SQL} AS used_today "
                     "FROM users u WHERE u.id = :uid"
                 ),
@@ -2986,7 +3008,8 @@ def create_saas_app() -> Flask:
         item["is_admin"] = item.get("role") == "admin"
         with engine.connect() as conn:
             item["used_today"] = _quota_user_row(conn, uid)["used_today"]
-        pol = _get_policy(app, engine, str(item.get("tier") or "member"))
+        item["tier"] = membership.effective_tier(item.get("tier"), item.get("member_expire_at"))
+        pol = _get_policy(app, engine, item["tier"])
         view = membership.quota_view(pol, item.get("used_today") or 0, item["is_admin"])
         item["quota_limit"] = view["limit"]
         item["quota_remaining"] = view["remaining"]
@@ -3025,7 +3048,7 @@ def create_saas_app() -> Flask:
             ).mappings().all()
         if user is None:
             return jsonify({"ok": False, "error": "用户不存在"}), 401
-        tier = str(user["tier"] or "member")
+        tier = membership.effective_tier(str(user["tier"] or "member"), user["member_expire_at"])
         policy = _get_policy(app, engine, tier)
         is_admin = user["role"] == "admin"
         max_watches = int(policy.get("max_watches", 20) or 0)
@@ -3094,9 +3117,12 @@ def create_saas_app() -> Flask:
         else:
             with engine.connect() as conn:
                 tier_row = conn.execute(
-                    text("SELECT tier FROM users WHERE id = :uid"), {"uid": uid}
-                ).first()
-            factor_pol = _get_policy(app, engine, str(tier_row[0]) if tier_row else "member")
+                    text("SELECT tier,member_expire_at FROM users WHERE id = :uid"), {"uid": uid}
+                ).mappings().first()
+            factor_pol = _get_policy(app, engine, membership.effective_tier(
+                str(tier_row["tier"]) if tier_row else "member",
+                tier_row["member_expire_at"] if tier_row else None,
+            ))
         limit_issues = check_factor_limits(
             yaml_text,
             max_fields=int(factor_pol.get("max_factor_fields", 20)),
@@ -4996,6 +5022,7 @@ def create_saas_app() -> Flask:
                             "cache_entries": int(nl_cache["entries"]),
                             "cache_hits": int(nl_cache["hits"]),
                         },
+                        "membership_ops": _membership_ops_view(engine),
                         "scope_policy": {
                             "max_random_n": membership.MAX_RANDOM_UNIVERSE,
                             "large_scale_coverage": membership.LARGE_SCALE_COVERAGE,
@@ -5004,7 +5031,6 @@ def create_saas_app() -> Flask:
                         # AGENT-API M1 + R-ADMIN-001：外部 Agent API 开关/默认限额/令牌清点。
                         # 限额读执行侧默认常量（agent_api.AGENT_DEFAULTS），不另写一套数字；
                         # 令牌行只回前缀与限额，不明文、不散列值。
-                        "membership_ops": _membership_ops_view(engine),
                         "agent_api": _agent_api_console_view(app, engine)})
 
     @app.get("/api/saas/console/users")

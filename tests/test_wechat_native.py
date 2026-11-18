@@ -58,8 +58,9 @@ def test_native_callback_signature_and_decrypt(tmp_path, monkeypatch):
                           'ciphertext': base64.b64encode(encrypted).decode(),
                           'associated_data': 'associated'}}
     body = json.dumps(event).encode()
-    headers = {'Wechatpay-Timestamp': '1', 'Wechatpay-Nonce': 'nonce'}
-    message = f"1\nnonce\n{body.decode()}\n"
+    timestamp = str(int(__import__('time').time()))
+    headers = {'Wechatpay-Timestamp': timestamp, 'Wechatpay-Nonce': 'nonce'}
+    message = f"{timestamp}\nnonce\n{body.decode()}\n"
     signature = key.sign(message.encode(), padding.PKCS1v15(), hashes.SHA256())
     headers['Wechatpay-Signature'] = base64.b64encode(signature).decode()
     result = client.verify_callback(body, headers)
@@ -70,6 +71,40 @@ def test_native_callback_signature_and_decrypt(tmp_path, monkeypatch):
         assert False
     except Exception:
         assert True
+
+
+def test_native_callback_accepts_next_certificate_during_rotation(tmp_path, monkeypatch):
+    old_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    next_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    config = _config(tmp_path, old_key, old_key.public_key())
+    next_path = tmp_path / 'platform-next.pem'
+    next_path.write_bytes(next_key.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    config = __import__('dataclasses').replace(config, platform_public_key_next_path=str(next_path))
+    client = NativeClient(config)
+    plaintext = json.dumps({'out_trade_no': 'qre-rotate', 'trade_state': 'SUCCESS'}).encode()
+    api_key = b'x' * 32
+    monkeypatch.setenv('QRE_WECHAT_API_V3_KEY', api_key.decode())
+    encrypted = AESGCM(api_key).encrypt(b'nonce-rotate', plaintext, b'associated')
+    body = json.dumps({'resource': {'nonce': base64.b64encode(b'nonce-rotate').decode(),
+                                    'ciphertext': base64.b64encode(encrypted).decode(),
+                                    'associated_data': 'associated'}}).encode()
+    timestamp = str(int(__import__('time').time()))
+    message = f"{timestamp}\nnonce\n{body.decode()}\n"
+    signature = next_key.sign(message.encode(), padding.PKCS1v15(), hashes.SHA256())
+    headers = {'Wechatpay-Timestamp': timestamp, 'Wechatpay-Nonce': 'nonce',
+               'Wechatpay-Signature': base64.b64encode(signature).decode()}
+    assert client.verify_callback(body, headers)['out_trade_no'] == 'qre-rotate'
+
+
+def test_native_callback_rejects_stale_timestamp_before_signature(tmp_path):
+    config = NativeConfig('mch-1', 'app-1', 'serial', 'missing-private',
+                          str(tmp_path / 'missing-public'), 'https://example.test/notify')
+    try:
+        NativeClient(config).verify_callback(b'{}', {'Wechatpay-Timestamp': '1'})
+        assert False
+    except Exception as exc:
+        assert '时间戳' in str(exc)
 
 
 def test_native_config_disabled_without_credentials(monkeypatch):

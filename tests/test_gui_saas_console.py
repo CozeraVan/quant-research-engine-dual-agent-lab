@@ -526,7 +526,7 @@ def test_simulated_membership_payment_is_idempotent_and_scoped(client, app):
     other = _make_user(app, '13800050011')
     headers = {'X-User-Id': str(uid)}
     products = client.get('/api/saas/membership/products').get_json()
-    assert products['ok'] and len(products['products']) == 3
+    assert products['ok'] and len(products['products']) == 4
     created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
     assert created.status_code == 201
     order_id = created.get_json()['order']['id']
@@ -560,10 +560,15 @@ def test_native_callback_and_query_use_same_idempotent_fulfillment(client, app, 
     order_id = created.get_json()['order']['id']
     assert created.get_json()['code_url'] == 'weixin://test'
     paid = {'out_trade_no': order_id, 'trade_state': 'SUCCESS', 'mchid': 'mch-1',
-            'amount': {'total': 2990}}
+            'amount': {'total': 2990}, '_event_id': 'event-native-1'}
     monkeypatch.setattr(NativeClient, 'verify_callback', lambda self, body, headers: paid)
     notified = client.post('/api/saas/membership/payments/wechat/notify', data=b'{}')
     assert notified.status_code == 200 and notified.get_json()['status'] == 'fulfilled'
+    with app.extensions['saas_engine'].connect() as conn:
+        notifications = conn.execute(text(
+            "SELECT count(*) FROM payment_events WHERE event_type='notification'"
+        )).scalar_one()
+    assert notifications == 1
     monkeypatch.setattr(NativeClient, 'query_order', lambda self, order_id: paid)
     queried = client.post(f'/api/saas/membership/orders/{order_id}/query-payment', headers=headers)
     assert queried.status_code == 200 and queried.get_json()['order']['status'] == 'fulfilled'
@@ -580,6 +585,179 @@ def test_membership_order_list_is_scoped_to_current_user(client, app):
     assert [o['id'] for o in listed.get_json()['orders']] == [order_id]
     hidden = client.get('/api/saas/membership/orders', headers={'X-User-Id': str(other)})
     assert hidden.get_json()['orders'] == []
+
+
+def test_simulated_refund_revokes_entitlement_and_downgrades(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050015')
+    headers = {'X-User-Id': str(uid)}
+    app.config['SAAS_PAYMENT_SIMULATOR'] = True
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    order_id = created.get_json()['order']['id']
+    assert client.post(f'/api/saas/membership/orders/{order_id}/simulate-pay', headers=headers).status_code == 200
+    refunded = client.post(f'/api/saas/membership/orders/{order_id}/simulate-refund', headers=headers)
+    assert refunded.status_code == 200 and refunded.get_json()['order']['status'] == 'refunded'
+    engine = app.extensions['saas_engine']
+    with engine.connect() as conn:
+        user = conn.execute(text('SELECT tier FROM users WHERE id=:uid'), {'uid': uid}).scalar_one()
+        entitlement = conn.execute(text('SELECT status FROM membership_entitlements WHERE order_id=:id'), {'id': order_id}).scalar_one()
+        events = conn.execute(text("SELECT count(*) FROM payment_events WHERE order_id=:id AND event_type='refunded'"), {'id': order_id}).scalar_one()
+    assert user == 'member' and entitlement == 'revoked' and events == 1
+    again = client.post(f'/api/saas/membership/orders/{order_id}/simulate-refund', headers=headers)
+    assert again.status_code == 200 and again.get_json()['deduped'] is True
+
+
+def test_native_order_failure_closes_local_order_without_payment(client, app, monkeypatch):
+    from sqlalchemy import text
+    from quant_research_engine.gui.saas.wechat_native import NativeClient, NativeConfig
+    uid = _make_user(app, '13800050024')
+    headers = {'X-User-Id': str(uid)}
+    config = NativeConfig('mch-1', 'app-1', 'serial', 'private', 'platform', 'https://example.test/notify')
+    monkeypatch.setattr(NativeConfig, 'from_env', classmethod(lambda cls: config))
+    def fail_order(self, **kwargs):
+        raise RuntimeError('synthetic channel failure')
+    monkeypatch.setattr(NativeClient, 'create_order', fail_order)
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    assert created.status_code == 502
+    with app.extensions['saas_engine'].connect() as conn:
+        order = conn.execute(text('SELECT status FROM membership_orders ORDER BY created_at DESC LIMIT 1')).scalar_one()
+        events = conn.execute(text("SELECT count(*) FROM payment_events WHERE event_type='channel_order_failed'")).scalar_one()
+    assert order == 'closed' and events == 1
+
+
+def test_expired_pending_order_cannot_be_paid(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050018')
+    headers = {'X-User-Id': str(uid)}
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    order_id = created.get_json()['order']['id']
+    with app.extensions['saas_engine'].begin() as conn:
+        conn.execute(text("UPDATE membership_orders SET created_at=now()-interval '31 minutes',expires_at=now()-interval '1 second' WHERE id=:id"), {'id': order_id})
+    detail = client.get(f'/api/saas/membership/orders/{order_id}', headers=headers)
+    assert detail.get_json()['order']['status'] == 'expired'
+    app.config['SAAS_PAYMENT_SIMULATOR'] = True
+    assert client.post(f'/api/saas/membership/orders/{order_id}/simulate-pay', headers=headers).status_code == 409
+
+
+def test_close_pending_order_is_idempotent(client, app):
+    uid = _make_user(app, '13800050019')
+    headers = {'X-User-Id': str(uid)}
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    order_id = created.get_json()['order']['id']
+    closed = client.post(f'/api/saas/membership/orders/{order_id}/close', headers=headers)
+    assert closed.status_code == 200 and closed.get_json()['order']['status'] == 'closed'
+    again = client.post(f'/api/saas/membership/orders/{order_id}/close', headers=headers)
+    assert again.status_code == 200 and again.get_json()['deduped'] is True
+    app.config['SAAS_PAYMENT_SIMULATOR'] = True
+    assert client.post(f'/api/saas/membership/orders/{order_id}/simulate-pay', headers=headers).status_code == 409
+
+
+def test_retry_fulfillment_recovers_paid_order_without_extending_twice(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050020')
+    headers = {'X-User-Id': str(uid)}
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    order_id = created.get_json()['order']['id']
+    with app.extensions['saas_engine'].begin() as conn:
+        conn.execute(text("UPDATE membership_orders SET status='paid',paid_at=now() WHERE id=:id"), {'id': order_id})
+    recovered = client.post(f'/api/saas/membership/orders/{order_id}/retry-fulfillment', headers=headers)
+    assert recovered.status_code == 200 and recovered.get_json()['order']['status'] == 'fulfilled'
+    with app.extensions['saas_engine'].connect() as conn:
+        expiry = conn.execute(text('SELECT member_expire_at FROM users WHERE id=:uid'), {'uid': uid}).scalar_one()
+    again = client.post(f'/api/saas/membership/orders/{order_id}/retry-fulfillment', headers=headers)
+    assert again.get_json()['deduped'] is True
+    with app.extensions['saas_engine'].connect() as conn:
+        assert conn.execute(text('SELECT member_expire_at FROM users WHERE id=:uid'), {'uid': uid}).scalar_one() == expiry
+
+
+def test_second_membership_order_extends_current_expiry(client, app):
+    from datetime import timedelta
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050021')
+    headers = {'X-User-Id': str(uid)}
+    app.config['SAAS_PAYMENT_SIMULATOR'] = True
+    for _ in range(2):
+        created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+        order_id = created.get_json()['order']['id']
+        assert client.post(f'/api/saas/membership/orders/{order_id}/simulate-pay', headers=headers).status_code == 200
+    with app.extensions['saas_engine'].connect() as conn:
+        expiry = conn.execute(text('SELECT member_expire_at FROM users WHERE id=:uid'), {'uid': uid}).scalar_one()
+        orders = conn.execute(text('SELECT count(*) FROM membership_orders WHERE user_id=:uid'), {'uid': uid}).scalar_one()
+    assert orders == 2
+    assert expiry > __import__('datetime').datetime.now(expiry.tzinfo) + timedelta(days=55)
+
+
+def test_membership_ops_counts_orders_and_entitlements(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050016')
+    app.config['SAAS_PAYMENT_SIMULATOR'] = True
+    headers = {'X-User-Id': str(uid)}
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    client.post(f"/api/saas/membership/orders/{created.get_json()['order']['id']}/simulate-pay", headers=headers)
+    ops = client.get('/api/saas/console/overview', headers={'X-User-Id': '1'}).get_json()
+    # 管理员工具的账号权限由专项用例覆盖；这里直接验证同源聚合函数。
+    from quant_research_engine.gui.saas.app import _membership_ops_view
+    view = _membership_ops_view(app.extensions['saas_engine'])
+    assert view == {'orders': 1, 'fulfilled': 1, 'refunded': 0, 'active_entitlements': 1,
+                    'pending': 0, 'expired': 0, 'closed': 0, 'reconciliation_issues': 0,
+                    'launch_subscriptions': 0}
+
+
+def test_admin_reconciliation_recovers_paid_order_and_is_idempotent(client, app, monkeypatch):
+    from sqlalchemy import text
+    from quant_research_engine.gui.saas.wechat_native import NativeClient, NativeConfig
+    uid = _make_user(app, '13800050022')
+    headers = {'X-User-Id': str(uid)}
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    order_id = created.get_json()['order']['id']
+    with app.extensions['saas_engine'].begin() as conn:
+        conn.execute(text("UPDATE membership_orders SET channel='native',status='paid',paid_at=now() WHERE id=:id"), {'id': order_id})
+        conn.execute(text("UPDATE users SET role='admin' WHERE id=:uid"), {'uid': uid})
+    config = NativeConfig('mch-1', 'app-1', 'serial', 'private', 'platform', 'https://example.test/notify')
+    monkeypatch.setattr(NativeConfig, 'from_env', classmethod(lambda cls: config))
+    monkeypatch.setattr(NativeClient, 'query_order', lambda self, oid: {
+        'out_trade_no': oid, 'trade_state': 'SUCCESS', 'mchid': 'mch-1', 'amount': {'total': 2990}})
+    recovered = client.post('/api/saas/console/payments/reconcile', headers=headers)
+    assert recovered.status_code == 200 and recovered.get_json()['recovered'] == 1
+    again = client.post('/api/saas/console/payments/reconcile', headers=headers)
+    assert again.status_code == 200 and again.get_json()['recovered'] == 0
+
+
+def test_reconciliation_amount_mismatch_opens_issue_without_fulfillment(client, app, monkeypatch):
+    from sqlalchemy import text
+    from quant_research_engine.gui.saas.wechat_native import NativeClient, NativeConfig
+    uid = _make_user(app, '13800050023')
+    headers = {'X-User-Id': str(uid)}
+    created = client.post('/api/saas/membership/orders', json={'sku': 'starter'}, headers=headers)
+    order_id = created.get_json()['order']['id']
+    with app.extensions['saas_engine'].begin() as conn:
+        conn.execute(text("UPDATE membership_orders SET channel='native' WHERE id=:id"), {'id': order_id})
+        conn.execute(text("UPDATE users SET role='admin' WHERE id=:uid"), {'uid': uid})
+    config = NativeConfig('mch-1', 'app-1', 'serial', 'private', 'platform', 'https://example.test/notify')
+    monkeypatch.setattr(NativeConfig, 'from_env', classmethod(lambda cls: config))
+    monkeypatch.setattr(NativeClient, 'query_order', lambda self, oid: {
+        'out_trade_no': oid, 'trade_state': 'SUCCESS', 'mchid': 'mch-1', 'amount': {'total': 1}})
+    result = client.post('/api/saas/console/payments/reconcile', headers=headers)
+    assert result.status_code == 200 and result.get_json()['issues'] == 1
+    with app.extensions['saas_engine'].connect() as conn:
+        assert conn.execute(text('SELECT status FROM membership_orders WHERE id=:id'), {'id': order_id}).scalar_one() == 'pending'
+        assert conn.execute(text("SELECT count(*) FROM payment_reconciliation_issues WHERE order_id=:id AND resolved_at IS NULL"), {'id': order_id}).scalar_one() == 1
+
+
+def test_expired_paid_tier_cannot_start_new_large_task(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050017')
+    engine = app.extensions['saas_engine']
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE users SET tier='starter',member_since=now()-interval '40 days',member_expire_at=now()-interval '1 second' WHERE id=:uid"), {'uid': uid})
+        conn.execute(text("UPDATE tier_policies SET max_codes=10,max_days=3653,max_factor_fields=3 WHERE tier='member'"))
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
+    response = client.post('/api/saas/jobs', json={
+        'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full', 'name': 'expired',
+        'params': {'universe': {'group': 'market', 'key': 'all'}, 'start': '2020-01-01', 'end': '2025-12-31'}},
+        headers={'X-User-Id': str(uid)})
+    assert response.status_code == 403
+    assert '未开放' in response.get_json()['error']
 
 
 def test_nl_quality_api_uses_real_compile_events(client, app):
@@ -605,3 +783,14 @@ def test_membership_launch_notification_is_idempotent_and_counted(client, app):
     assert again.status_code == 200 and again.get_json()['deduped'] is True
     from quant_research_engine.gui.saas.app import _membership_ops_view
     assert _membership_ops_view(app.extensions['saas_engine'])['launch_subscriptions'] == 1
+
+
+def test_single_full_backtest_product_is_catalogued_but_not_purchasable(client, app):
+    uid = _make_user(app, '13800050027')
+    products = client.get('/api/saas/membership/products').get_json()['products']
+    single = next(p for p in products if p['sku'] == 'single_full')
+    assert single['price_cents'] == 990 and single['days'] == 0
+    response = client.post('/api/saas/membership/orders', json={'sku': 'single_full'},
+                           headers={'X-User-Id': str(uid)})
+    assert response.status_code == 403
+    assert '尚未开放' in response.get_json()['error']

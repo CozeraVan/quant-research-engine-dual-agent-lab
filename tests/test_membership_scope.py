@@ -26,3 +26,12 @@ def test_admin_scope_display_uses_execution_constants():
     assert 'membership.MAX_RANDOM_UNIVERSE' in app
     assert 'membership.LARGE_SCALE_COVERAGE' in app
     assert 'renderScopePolicy(d.scope_policy' in console
+
+
+def test_paid_membership_expires_to_member():
+    from datetime import datetime, timedelta, timezone
+    from quant_research_engine.gui.saas.membership import effective_tier
+    now = datetime.now(timezone.utc)
+    assert effective_tier('starter', now + timedelta(seconds=1), now=now) == 'starter'
+    assert effective_tier('starter', now, now=now) == 'member'
+    assert effective_tier('paid', None, now=now) == 'paid'

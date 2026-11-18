@@ -26,6 +26,7 @@ class NativeConfig:
     private_key_path: str
     platform_public_key_path: str
     notify_url: str
+    platform_public_key_next_path: str = ""
 
     @classmethod
     def from_env(cls) -> "NativeConfig | None":
@@ -37,7 +38,12 @@ class NativeConfig:
             "platform_public_key_path": os.environ.get("QRE_WECHAT_PLATFORM_PUBLIC_KEY_PATH", ""),
             "notify_url": os.environ.get("QRE_WECHAT_NOTIFY_URL", ""),
         }
-        return cls(**values) if all(values.values()) else None
+        if not all(values.values()):
+            return None
+        return cls(
+            **values,
+            platform_public_key_next_path=os.environ.get("QRE_WECHAT_PLATFORM_PUBLIC_KEY_NEXT_PATH", ""),
+        )
 
 
 class NativeClient:
@@ -92,16 +98,30 @@ class NativeClient:
         return self._call("GET", f"/v3/pay/transactions/out-trade-no/{order_id}?mchid={self.config.mchid}")
 
     def verify_callback(self, body: bytes, headers: dict[str, str]) -> dict[str, Any]:
-        """验证平台签名并解密 AES-GCM resource；不验证业务字段由路由负责。"""
+        """验证时间戳、平台签名并解密 resource；业务字段由路由负责。"""
+        try:
+            callback_time = int(headers.get("Wechatpay-Timestamp", ""))
+        except ValueError as exc:
+            raise ValueError("微信支付通知时间戳无效") from exc
+        if abs(time.time() - callback_time) > 300:
+            raise ValueError("微信支付通知时间戳超出允许窗口")
         message = (
             headers.get("Wechatpay-Timestamp", "") + "\n"
             + headers.get("Wechatpay-Nonce", "") + "\n" + body.decode() + "\n"
         )
         signature = base64.b64decode(headers.get("Wechatpay-Signature", ""))
-        public_key = serialization.load_pem_public_key(
-            Path(self.config.platform_public_key_path).read_bytes()
-        )
-        public_key.verify(signature, message.encode(), padding.PKCS1v15(), hashes.SHA256())
+        paths = [self.config.platform_public_key_path]
+        if self.config.platform_public_key_next_path:
+            paths.append(self.config.platform_public_key_next_path)
+        for index, path in enumerate(paths):
+            public_key = serialization.load_pem_public_key(Path(path).read_bytes())
+            try:
+                public_key.verify(signature, message.encode(), padding.PKCS1v15(), hashes.SHA256())
+                break
+            except Exception:
+                # 仅在还有轮换备用证书时继续；两者均失败则由最后一次验签异常拒绝。
+                if index == len(paths) - 1:
+                    raise
         event = json.loads(body)
         resource = event.get("resource") or {}
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -114,4 +134,7 @@ class NativeClient:
             base64.b64decode(resource["ciphertext"]),
             resource.get("associated_data", "").encode(),
         )
-        return json.loads(plaintext)
+        result = json.loads(plaintext)
+        if event.get("id"):
+            result["_event_id"] = str(event["id"])
+        return result

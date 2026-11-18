@@ -148,3 +148,20 @@ def validate_scope_policy(params: dict, policy: dict, *, logged_in: bool, check_
         if start > end or (end - start).days > max_days:
             return f"当前账号单次最多回测 {max_days} 天，且不允许全期"
     return None
+
+
+PAID_CYCLE_TIERS = frozenset({"starter", "advanced", "diamond"})
+
+
+def effective_tier(tier: str | None, member_expire_at=None, *, now=None) -> str:
+    """仅新付费档到期回落 member；历史 paid 无到期字段时保持兼容。"""
+    from datetime import datetime, timezone
+
+    current = str(tier or "member")
+    if current not in PAID_CYCLE_TIERS or member_expire_at is None:
+        return current
+    now = now or datetime.now(timezone.utc)
+    expiry = member_expire_at
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+    return "member" if expiry <= now else current

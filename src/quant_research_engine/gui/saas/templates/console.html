@@ -61,12 +61,12 @@
         <div class="metric-strip" id="ov-nl"></div>
       </div>
       <div class="card">
-        <h2>范围限制 <button type="button" class="tip-trigger" data-tip="全量/大规模与中小任务分池；自然语言文本不能覆盖服务端参数闸。" aria-label="范围限制说明">?</button></h2>
-        <div class="metric-strip" id="ov-scope-policy"></div>
+        <h2>会员运营 <button type="button" class="tip-trigger" data-tip="订单、履约、退款与有效权益均来自生产表真实计数，用于发现支付与权限不一致。" aria-label="会员运营说明">?</button></h2>
+        <div class="metric-strip" id="ov-membership-ops"></div>
       </div>
       <div class="card">
-        <h2>会员运营</h2>
-        <div class="metric-strip" id="ov-membership-ops"></div>
+        <h2>范围限制 <button type="button" class="tip-trigger" data-tip="全量/大规模与中小任务分池；自然语言文本不能覆盖服务端参数闸。" aria-label="范围限制说明">?</button></h2>
+        <div class="metric-strip" id="ov-scope-policy"></div>
       </div>
       <div class="card">
         <h2>外部 Agent API <button type="button" class="tip-trigger" data-tip="第四入口（供用户自带的外部 AI Agent 调用）的开关、默认限额与访问令牌清点。接口未启用时全部路由返回 404；启用后每个令牌仍受每日提交数、在飞任务数、每分钟请求数约束，且默认只在夜间窗口被认领，避免挤占真人时段。令牌不明文存储，吊销后立即失效。" aria-label="外部Agent说明">?</button></h2>
@@ -303,8 +303,8 @@
         metric('Worker 在线', w.online + ' / ' + w.total, '在线 / 已接入总数') +
         metric('待审因子', d.pending_factor_requests);
       renderNlCompile(d.nl || {});
-      renderScopePolicy(d.scope_policy || {});
       renderMembershipOps(d.membership_ops || {});
+      renderScopePolicy(d.scope_policy || {});
       renderAgentApi(d.agent_api || {});
       var sv = d.server || {};
       var disk = sv.disk ? ('产物盘 ' + (sv.disk.used / 1073741824).toFixed(1) + ' / ' + (sv.disk.total / 1073741824).toFixed(1) + ' GB') : '不可用';
@@ -330,6 +330,20 @@
       metric('限流计数', num(nl.rate_limit_rows) + ' 行 / ' + num(nl.rate_limit_hits) + ' 次', '当前各窗口内的计数行与累计编译次数');
   }
 
+  function renderMembershipOps(ops){
+    var el = document.getElementById('ov-membership-ops');
+    if (!el) return;
+    el.innerHTML = metric('订单总数', Number(ops.orders || 0)) +
+      metric('待支付', Number(ops.pending || 0)) +
+      metric('已履约', Number(ops.fulfilled || 0)) +
+      metric('已过期', Number(ops.expired || 0)) +
+      metric('已关闭', Number(ops.closed || 0)) +
+      metric('已退款', Number(ops.refunded || 0)) +
+      metric('有效权益', Number(ops.active_entitlements || 0)) +
+      metric('对账异常', Number(ops.reconciliation_issues || 0)) +
+      metric('上线通知登记', Number(ops.launch_subscriptions || 0));
+  }
+
   function renderScopePolicy(scope){
     var el = document.getElementById('ov-scope-policy');
     if (!el) return;
@@ -338,10 +352,6 @@
       metric('额度分池', scope.separate_pools ? '已启用' : '未启用', '全量与中小任务不相互兑换');
   }
 
-  function renderMembershipOps(ops){
-    var el = document.getElementById('ov-membership-ops');
-    if (el) el.innerHTML = metric('上线通知登记', Number(ops.launch_subscriptions || 0));
-  }
   // --- AGENT-API M1 + R-ADMIN-001：外部 Agent API 开关/默认限额/令牌清点 ---
   // 限额直接读执行侧默认常量（agent_api.AGENT_DEFAULTS），不在此处另写一套数字。
   function renderAgentApi(ag){
