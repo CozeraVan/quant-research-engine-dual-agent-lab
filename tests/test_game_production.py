@@ -126,6 +126,18 @@ def test_pool_disk_cache_survives_restart(tmp_path):
     assert store.pool_calls == 1
 
 
+def test_pool_filters_legacy_bj_codes_even_from_disk_cache(tmp_path):
+    class Store:
+        def list_symbols_with_bars(self, start, end):
+            return ["600000.SH", "920001.BJ"]
+
+    path = tmp_path / "pool.json"
+    provider = PostgresGameDataProvider(Store(), pool_cache_path=path)
+    assert provider._pool_cached(date(2026, 1, 6)) == ["600000.SH"]
+    restarted = PostgresGameDataProvider(Store(), pool_cache_path=path)
+    assert restarted._pool_cached(date(2026, 1, 6)) == ["600000.SH"]
+
+
 def test_corrupt_pool_disk_cache_falls_back(tmp_path):
     class Store:
         def list_symbols_with_bars(self, start, end):

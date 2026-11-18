@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from quant_research_engine.core.models import Bar
 from quant_research_engine.data.catalog import FactorFieldRequest
+from quant_research_engine.data.universe_rules import filter_untrusted_symbols
 from quant_research_engine.game.engine import GameRuleError
 from quant_research_engine.game.factors import (
     DEFAULT_CANONICALS, price_scaled_canonicals, resolve_selection,
@@ -113,7 +114,7 @@ class PostgresGameDataProvider:
                 # 跨日：先回最近旧池（随机标的/窗口语义不变），后台一次性刷新到新 latest。
                 self._refresh_pool_async(latest)
                 return d_symbols
-        raw = self.store.list_symbols_with_bars(date(2000, 1, 1), latest)
+        raw = filter_untrusted_symbols(self.store.list_symbols_with_bars(date(2000, 1, 1), latest), load_start=date(2000, 1, 1))
         with self._cache_lock:
             self._pool_cache = (latest, raw, now + self.pool_ttl_s)
         self._disk_save(latest, raw)
@@ -132,6 +133,7 @@ class PostgresGameDataProvider:
             saved_at = float(payload["saved_at"])
             if not isinstance(symbols, list) or not all(isinstance(s, str) for s in symbols):
                 return None
+            symbols = filter_untrusted_symbols(symbols, load_start=date(2000, 1, 1))
             return latest, symbols, saved_at
         except Exception:
             return None  # 缓存文件损坏/缺失：退化为冷查询，不影响开局
@@ -159,7 +161,7 @@ class PostgresGameDataProvider:
 
         def _work() -> None:
             try:
-                raw = self.store.list_symbols_with_bars(date(2000, 1, 1), latest)
+                raw = filter_untrusted_symbols(self.store.list_symbols_with_bars(date(2000, 1, 1), latest), load_start=date(2000, 1, 1))
                 now = time.monotonic()
                 with self._cache_lock:
                     self._pool_cache = (latest, raw, now + self.pool_ttl_s)
