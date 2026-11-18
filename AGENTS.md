@@ -9,49 +9,14 @@ The project was migrated from the former dual-agent workflow (Codex planning/rev
 
 Before modifying code or producing plans, read:
 
-- `docs/agent/00_PRODUCT_VISION.md`
-- `docs/agent/01_CURRENT_STATUS.md`
-- `docs/agent/02_LOCKED_REQUIREMENTS.md`
-- `docs/agent/03_ROADMAP.md`
-- `docs/agent/04_TASK_HANDOFF.md`
-- `docs/agent/05_PROGRESS.md`
-- `docs/agent/06_DECISION_LOG.md`
-- `docs/agent/07_RECOVERY_PROTOCOL.md`
-- `docs/agent/08_IMPLEMENTATION_BRIEF.md`
-- `docs/agent/09_CODING_HANDOFF.md`
-- `docs/agent/10_REVIEW_REPORT.md`
-- `docs/agent/11_AGENT_STATE.md`
-- `docs/agent/12_UI_STYLE_GUIDE.md`（UI 设计语言规范：后续页面开发必须遵守，改动需用户批准）
-- `src/quant_research_engine/gui/static/card-class.css`（**小数据卡唯一样式权威**：白底紫框 + 中性紫/盈亏红绿 + flex 自适应；改这类卡只改这个文件）
-- `docs/agent/13_UI_PERF_NOTES.md`（UI 性能评估与优化方案）
-- `docs/agent/14_LAUNCH_ROADMAP.md`（上线路线图与工作手册：现状/ECS 架构/迁移阶段/踩坑/工作流/挂起任务）
-- `docs/agent/15_SAAS_SYSTEMS_DESIGN.md`（SaaS 系统设计：用户/Job/结果/管理四系统与分阶段 TODO）
-- `docs/agent/16_ECS_DEPLOYMENT.md`（ECS 部署单一权威文档：实例/访问/现状/待办/运维速查）
-- `docs/agent/18_AUTH_MEMBERSHIP_DESIGN.md`（Authing 身份层 + Flask 会员体系设计：登录链路/数据模型/迁移/阶段 TODO）
-- `docs/agent/19_MONETIZATION_MATRIX.md`（可付费项目矩阵：11 项付费点映射 + 内测期两层开放原则，会员/管理台建设权威依据）
-- `docs/agent/20_DATA_DICTIONARY_DAILY_MINUTE.md`（行情数据字典：日线/分钟线表结构、单位口径、TimescaleDB 规范、PIT 硬规则）
-- `docs/agent/21_FACTOR_LIBRARY_PLAN.md`（Tushare 202 因子本地复现立项方案：表设计/P0-P8 批次/验收/风险）
-- `docs/agent/23_KLINE_IMPLEMENTATION.md`（当前 K 线实现、数据合同、重播、因子呈现、主题与游戏交接）
-- `docs/agent/TV_FEEDBACK_2026-10-28.md`（TradingView 化本轮反馈：对照逆向 agent 报告的四功能完成度/未完成原因/难点/待回复问题；下一轮 TV 化的输入）
-- `docs/agent/TV_ROUND2_SUMMARY_2026-10-29.md`（**给逆向侧的下一轮输入**：本轮成果汇总 + 4 个待逆向侧回答的问题 + 可自行复跑的复核命令）
-- `docs/agent/TV_ROUND2_ANSWER_2026-10-29.md`（**我方逐项回传**：§3 判据原始输出 + T1–T6 验收细节；**派下一轮前必读 §5bis 收官状态表与 5 条新发现**）
-- `docs/agent/TV_ROUND3_ANSWER_2026-10-29.md`（**ROUND3 回传**：R3-1 零基线 / R3-2 三项补验自动化+2 个真 bug / R3-4 移除 LWC 省 214KiB / R3-5 双列名收敛 / R3-3 前提纠正；下一轮建议见 §8）
-- `docs/agent/TV_ROUND4_ANSWER_2026-10-30.md`（**ROUND4 回传**：R4-1 四类「单测绿生产炸」清扫 / R4-2 判据环境段+一行化入口 / R4-3 模板语法守卫（含事故红灯复现）/ R4-4 旧系退场事件触发制+周扫首扫 / R4-5 用户选 A 维持原状）
-- `docs/agent/TV_FINAL_REPORT_2026-10-30.md`（**TV 化收官报告**：最终记分卡（K线95/作图90/指标95/回放95）/ 8 条有意偏离清单 / 判据与守卫测试资产清单 / 稳态机制 / 三个收官数字 / 三条长期纪律）
-- `docs/agent/TV_ROUND5_ANSWER_2026-10-30.md`（**ROUND5 收官轮回传**：probe 落盘 / AGENTS.md 两条纪律节 / 周扫 timer + LEGACY_RETENTION_DAYS（默认 90，待用户确认）/ 收官报告与三个数字）
-- `docs/agent/24_PERF_METRICS_CONTRACT.md`（持股周期与 α/β/IR/Sharpe 口径合同：公式/常量/基准选择/前端后端分工/防漂移纪律；用这些指标前必读）
-- `docs/agent/24_KLINE_LWC_FROZEN.md`（LWC 引擎试点**已整体移除**（R3-4，省 ~214KiB）：删除清单/收益/决策记录/重新引入条件；版本锁定信息指向 git 历史）
-- `docs/agent/25_WEEKLY_HANDOFF_2026-10-29.md`（**上周工作交接**（Kimi 主 Agent 接手后，47 个提交）：主要成果 / **重大失误与必须复查点**（改过 DB 行情数据、年化爆表未查全、口径只修 58/66、复权问题多次复发、FRM 波动率回归、小游戏指标错乱、子 agent 交付质量、两个环境坑、隐私隔离待确认）/ 现状变更 / 挂起项 / 下周检查清单；**接手本项目必读**）
-- `docs/agent/26_WEEKLY_HANDOFF_2026-11-02.md`（**2026-11-02 主 Agent 交接文档**：当前提交/测试基线、最近成果、未部署未重启项、长期纪律、**交接期间任务记录表**；下一任主 Agent 接手必读，并在此文件维护所有新任务）
-- `docs/agent/31_RESOURCE_MODEL_2026-11-03.md`（**资源-回测任务-耗时关系与用户增长容量估算**：单任务 43–72min/6.3GB 常态/item3 峰值 13.97GB；时间=固定开销+股年+交易笔数模型；用户增长所需 worker/DB/存储/网络扩容公式与起步规格；做容量判断前必读）
-- `docs/agent/32_CLOUD_FULLSTACK_PREP_2026-11-03.md`（**全链上云预准备补全**：DB 吞吐优化、DB↔worker 传输优化、分片上传与对象存储、快速部署 Runbook；不马上迁移，买机后可按序部署）
-- `docs/agent/33_WINDOWS_UI_AGENT_GUIDE.md`（**Windows UIUX agent 工作指南**：工作边界/项目拉取/预览环境搭建（Docker PG 或 WSL 隧道）/UIUX 文件地图/开发规范/验证与交付；Windows 做 UI 预览、WSL 做核心与部署时使用）
-- `docs/agent/30_WEEKLY_HANDOFF_2026-11-03.md`（**最新主 Agent 交接文档（2026-11-03）**：第四入口 M0–M6 全部收官 + 生产开 flag、全期全量压测实测基线与 P0-9/P0-10 两个新立项、**重大失误与必须复查点**（门禁退出码被管道吞、压测采样被污染、测试时间依赖、日志 token 进文档）、遗留待办分级、第一步行事命令与回滚路径；**接手必读**）
-- `docs/agent/27_STRESS_TEST_2026-11-02.md`（**全期全量压测实测记录**（5201 只 × 2009–2026，三项串行）：单跑 43–72 分钟 / 6.3 GB 常态内存 / **item3 峰值 13.97 GB** / 本地产物 0.85–1.52 GiB；**两条独立回传阈值**（part>1000 → 413 零落盘；20 MiB 静默截断无标记）+ `uploading` 无终态会被重排重算；§8 缺陷清单与 §10 待清理清单；**做容量判断或改回传链前必读**）
-- `docs/agent/28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md`（数据库上云与云端 worker/DB 传输完全准备：备份/迁移/对账/产物同步/云端 worker 模板 + 本地大库实测基线 519GB；真迁移待用户批准）
-- `docs/agent/29_PENDING_DEPLOY_AND_DECISIONS_2026-11-02.md`（ECS 待部署清单 / seed.json 处置 / P2-14 与 P2-15 决策单）
-- `docs/agent/28_CLOUD_MIGRATION_RUNBOOK_2026-11-02.md`（**数据库上云与云端 worker/DB 传输完全准备 Runbook**：目标架构、迁移范围与实测基线、备份/迁移/对账/产物同步/云端 worker 模板；真迁移前必须用户批准）
-- `docs/agent/29_PENDING_DEPLOY_AND_DECISIONS_2026-11-02.md`（**待部署/待决策清单**：ECS 精确部署文件与回滚、`seed.json` gitignore 处置、P2-14 worker 重启与小样本验证、P2-15 默认开启决策单）
+- 文档总索引：`docs/agent/README.md`（按主题查找，不再把全部历史文档列为每次必读）。
+- 当前状态：`docs/agent/11_AGENT_STATE.md`、`docs/agent/30_WEEKLY_HANDOFF_2026-11-03.md`。
+- 核心合同：`docs/agent/00_PRODUCT_VISION.md`、`02_LOCKED_REQUIREMENTS.md`、`14_LAUNCH_ROADMAP.md`。
+- 开发闭环：`docs/agent/04_TASK_HANDOFF.md`、`05_PROGRESS.md`、`08_IMPLEMENTATION_BRIEF.md`、`09_CODING_HANDOFF.md`、`10_REVIEW_REPORT.md`。
+- UI 改动另读：`docs/agent/12_UI_STYLE_GUIDE.md`、`23_KLINE_IMPLEMENTATION.md`、`src/quant_research_engine/gui/static/card-class.css`。
+- 数据、容量或回测改动另读：`docs/agent/20_DATA_DICTIONARY_DAILY_MINUTE.md`、`24_PERF_METRICS_CONTRACT.md`、`31_RESOURCE_MODEL_2026-11-03.md`、`35_CAPACITY_MODEL_2026-11-03.md`。
+- 经典策略队列另读：`docs/agent/34_CLASSIC_CATALOG_PUBLIC_SMOKE_2026-11-03.md`、`36_CLASSIC_FULLSCALE_AUTO_RUNBOOK_2026-11-03.md`。
+- 运维、上云或 Windows UI 协作按索引选读；已收官 TV 文档在 `docs/agent/archive/tradingview/`。
 
 ## Long-Term Memory Rule
 

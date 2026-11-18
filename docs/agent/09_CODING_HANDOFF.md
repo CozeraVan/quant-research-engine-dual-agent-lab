@@ -1,3 +1,19 @@
+# Coding Handoff
+
+## 2026-11-17 上证指数唯一超额口径
+
+- `portfolio/benchmark.py` 固定000001.SH及算术差；引擎不再生成buy_hold_return/excess/buy_hold_equity，报告写盘时只读取上证指数首末有效收盘。
+- `lab_result.py` chart metrics与个股summary改由快照内上证指数曲线现算；worker同步新summary字段并清除旧字段；晋升、日更、策略适配、聚类、API均切换 `excess_return_vs_benchmark`。
+- 策略/个股/8081/重播移除持有曲线、持有卡、自然涨幅归因；风险调整α/β/IR固定上证指数，其他指数仅作曲线对照。
+- 新合同5项、相关709项、JS/静默54项均通过；TV全套exit0。生产代码回滚 `/tmp/qre-deploy-20261117T124611Z.bak`；本地lab/worker已重启。
+- 本地312个历史strategy_performance已备份迁移，293项有指数、19项因实际区间早于指数覆盖而null。生产274/274项迁移完成、legacy=0，备份表274行；公网job370策略/重播/个股验收通过，证据 `.tmp/sse-only-migration/public-acceptance.json`。不重跑交易。
+
+## 2026-11-18 job374恢复与测试治理
+
+- job374复用生产results现有summary/chart，重建本地symbol_details后以2.1秒/批续传；305文件、completed，无回测。备份 `.tmp/job374-pre-recovery.json`，日志 `.tmp/job374-recovery.log`。
+- 旧会员测试夹具补合法日期/代码；profile视图数改5；game/data候选池三路统一 `filter_untrusted_symbols`；daily_jobs状态原子replace。
+- 相关215项通过，风险轮询连续5次通过，qre-game active。MACD真实库值差异定位到2026-11-05单日，12序列各仅1点越界；证据 `.tmp/macd-drift-20261118.json`，未改数据。
+
 ## 2026-11-16 六项非支付功能包
 
 - showcase.html 复用公开结果增加搜索/筛选/4项对比与日更状态；job.html 增板块样本过滤和JSON/CSV导出。
@@ -10,7 +26,23 @@
 - `StrategySpec` 增 entry_price/exit_price；GUI显式参数优先于execution，CLI三种模式读取execution，yaml_guard开放两键。
 - 492项相关测试通过；真实NL结果holding=5、exit=close，未跑回测。
 
-# Coding Handoff
+## 2026-11-16 支付失败补偿与防重放
+
+- `payments.py` 捕获 Native create_order 异常，关闭pending、写channel_order_failed并返回502；通知写channel_event_id。
+- `wechat_native.py` 在验签前强制300秒时间窗并透出渠道event id；schema含唯一索引。
+- 128项相关测试通过/14 skipped；生产事件0异常0，无真实交易。
+
+## 2026-11-16 支付证书轮换与主动对账
+
+- `wechat_native.py` 可选 NEXT_PATH，当前证书失败后备用验签；旧配置不变。
+- `payments.py` 增 reconciliation issues 表、reconcile_native_orders 和管理员 `/console/payments/reconcile`；真实SUCCESS+商户金额匹配才复用履约。
+- `_membership_ops_view`/console 增加开放异常数；schema含授权。126项相关测试通过/14 skipped，生产未主动调用渠道。
+
+## 2026-11-16 会员订单异常恢复
+
+- `payments.py` 增 ORDER_TTL_MINUTES、expires_at/closed_at、expire_due_orders 及 close/retry-fulfillment 路由；复用履约事务与唯一权益。
+- `_membership_ops_view` 和 console 同源展示 pending/expired/closed；cloud_schema 幂等增量。
+- 新增过期/关闭/恢复/续费测试，相关120 passed/14 skipped；生产订单0，未接真实交易。
 
 ## 2026-11-16 首收盘基准与经典迁移
 

@@ -1,3 +1,9 @@
+> 2026-11-18 Git 校准：SSE `305f3a7`、会员支付 `18ae9ff`、游戏过滤 `fcf1e13`、后台原子写 `d68844b`、测试夹具 `2c0582d` 均已推送。以下历史条目“未 commit”为当时状态，当前以 Git 为准。
+
+**job374本地产物恢复（2026-11-18，DONE/未 commit）**：限速断点续传305文件，job374 completed/progress=100；20MiB截断标记保留，公网数值复核。未重跑交易、未改行情。游戏宇宙过滤改动仅重启WSL qre-game；daily_jobs不属于ECS SaaS运行路径。
+
+**上证指数唯一超额口径（2026-11-17，DONE/未 commit）**：26个代码/模板文件部署，qre-saas active，本地lab/worker active。生产274/274结果迁移完成，legacy=0、SSE标记274，备份表 `results_backup_sse_20261117` 274行；公网job370策略/重播/个股2026-11-18验收通过。生产回滚 `/tmp/qre-deploy-20261117T124611Z.bak`。无交易重跑、无行情改写。
+
 **到期降级/权益历史/模拟退款（2026-11-16，已部署待验收/未 commit）**：247 测试通过，生产 entitlements0，9090计数。回滚 `/tmp/qre-deploy-20261116T095415Z.bak`。
 
 **会员中心（2026-11-16，已部署待验收/未 commit）**：当前权益/套餐/本人订单与导航，购买未开放；99 测试通过，移动无横溢。回滚 `/tmp/qre-deploy-20261116T091553Z.bak`。
@@ -166,11 +172,19 @@ jobs.guest_key 由随机会话 Cookie（`qre_guest_sid`，Secure/HttpOnly/SameSi
 
 **NL 管理台同步已部署（2026-10-26，QRE-SAAS-NL-A2A3 续，R-ADMIN-001，待人工验收）**：`api_console_overview` 新增 `nl` 对象（guest_daily/member_minute 读执行常量 `GUEST_NL_DAILY_LIMIT`/`MEMBER_NL_MINUTE_LIMIT`、admin=不限、cache_version、`nl_rate_limits`/`nl_compile_cache` 真实行数与 hits）；console.html 总览在 Worker 资源卡前新增「自然语言编译」卡（metric 卡 + tip-trigger，无灰色小字）。仅同步 app.py 与 console.html 并重启 qre-saas，无 schema 变更、未重启 worker、未跑真实回测。9090 隧道临时 admin session 验证 overview nl 字段与常量/表计数一致（匿名/错 token 401），临时账号与会话已清理。全量 2731 passed + 6 skipped。回滚备份 `/tmp/qre-nl-console-pre-20261026/`（app.py + console.html）。
 
-**经典策略首收盘持有基准迁移（2026-11-16）**：生产118个CF结果 summary/chart_data.metrics 已按首有效复权收盘→末有效复权收盘迁移，showcase CF005由233改232；事务逐项UPDATE 1并复核对账。备份 `.tmp/classic-buy-hold-production-backup.jsonl.gz`，公网showcase 200。代码回滚 `/tmp/qre-deploy-20261116T112053Z.bak`。无回测、未commit/push。
+**单次全期全量回测商品预览（2026-11-16）**：`single_full` 9.9元/1次已部署商品API与会员中心；available=false，下单403，无权益或真实支付。77项相关测试通过/14 skipped，回滚 `/tmp/qre-deploy-20261116T151921Z.bak`，未commit/push。
+
+**六项非支付产品功能包（2026-11-16）**：经典对比筛选、NL质量、日更状态、板块样本过滤、结果导出分享和会员上线通知已部署；feature_subscriptions生产0。206项测试通过/14 skipped，公网+375px验收零pageerror。回滚 `/tmp/qre-deploy-20261116T144908Z.bak`，后续模板修复 `/tmp/qre-deploy-20261116T145549Z.bak`。未commit/push。
 
 **NL持仓与卖出执行语义（2026-11-16）**：部署确定性期限/收盘卖出规范化与execution执行配置，492项相关测试通过；真实模型结果5日+close，无回测。回滚 `/tmp/qre-deploy-20261116T133717Z.bak`，qre-saas/worker active，未commit/push。
 
-**六项非支付产品功能包（2026-11-16）**：经典对比筛选、NL质量、日更状态、板块样本过滤、结果导出分享和会员上线通知已部署；feature_subscriptions生产0。206项测试通过/14 skipped，公网+375px验收零pageerror。回滚 `/tmp/qre-deploy-20261116T144908Z.bak`，后续模板修复 `/tmp/qre-deploy-20261116T145549Z.bak`。未commit/push。
+**支付失败补偿与防重放（2026-11-16）**：Native下单失败关单、300秒通知时间窗与channel_event_id唯一索引已部署；生产事件0异常0，无真实交易。回滚 `/tmp/qre-deploy-20261116T130207Z.bak`，qre-saas active。128项相关测试通过/14 skipped，未commit/push。
+
+**支付证书轮换与主动对账（2026-11-16）**：部署双公钥轮换、管理员查单对账与 payment_reconciliation_issues；9090开放异常同源。生产异常0订单0，未触发渠道；回滚 `/tmp/qre-deploy-20261116T122017Z.bak`，qre-saas active。126项相关测试通过/14 skipped，未commit/push。
+
+**会员订单异常恢复（2026-11-16）**：部署 payments/app/console/cloud_schema，生产 membership_orders 幂等新增 expires_at/closed_at；支持30分钟过期、关闭与履约重试，9090状态计数同源。回滚 `/tmp/qre-deploy-20261116T120307Z.bak`，qre-saas active，订单0，无真实交易。120项相关测试通过/14 skipped，未commit/push。
+
+**经典策略首收盘持有基准迁移（2026-11-16）**：生产118个CF结果 summary/chart_data.metrics 已按首有效复权收盘→末有效复权收盘迁移，showcase CF005由233改232；事务逐项UPDATE 1并复核对账。备份 `.tmp/classic-buy-hold-production-backup.jsonl.gz`，公网showcase 200。代码回滚 `/tmp/qre-deploy-20261116T112053Z.bak`。无回测、未commit/push。
 
 **NL 千帆主备配置（2026-11-16）**：生产替换为千帆 Token Plan OpenAI 兼容主通道 + OpenCode Go 备用；`nl_compiler.py` 支持异常切换和真实客户端/会话头。密钥仅在 `/etc/qre-saas.env`，未读取输出；env备份 `/etc/qre-saas.env.bak-nl-models-20261116`，代码回滚 `/tmp/qre-deploy-20261116T105240Z.bak`。两组真实编译与断主切换通过，308项相关测试通过；qre-saas active。无回测，未commit/push。
 

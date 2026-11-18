@@ -68,6 +68,10 @@
 
 迁移还发现并修复 CF-005 索引误链：job233是smoke，真实全期为job232，索引和生产showcase均已改。静态HTML/XLSX历史报告未重生；未修改交易收益、未重跑回测。生产字段备份 `.tmp/classic-buy-hold-production-backup.jsonl.gz`，逐股本地备份 `.tmp/classic-buy-hold-backup/`。
 
+## 目标历史 run 同步迁移
+
+用户要求一并修改普通历史 run `20261116T080756936506`。已按首收盘→末收盘重算：策略收益仍+19.3519%，持有基准由旧+111.0692%改+97.7408%，超额由−91.7173%改−78.3888%，中位持有+13.2353%，有效5201只。交易记录与策略收益未改、未重跑；证据 `.tmp/latest-run-buy-hold-close.json`，8081 summary API已复核。
+
 ## 当前 NL API 实测（2026-11-16 18:40）
 
 `POST http://127.0.0.1:8081/api/nl_compile` 返回 HTTP 200、耗时0.198s，但业务体为 `ok=false, code=llm_error`：`LLM 调用失败：HTTP Error 401: Authorization Required`。即 8081 路由和进程正常，当前 NL 上游模型凭证/授权无效，无法生成 YAML；没有启动回测。证据 `.tmp/nl-api-live-check.json`。这证明当前故障点在上游认证，但不能反推历史目标 run 当时也是同一原因。
