@@ -310,17 +310,16 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
     metrics: dict[str, Any] = {}
     if perf:
         total = perf.get("strategy_total_return")
-        buy_hold = perf.get("buy_hold_return")
-        excess = perf.get("excess_return_vs_buy_hold")
-        # 引擎目前不写 excess/date_start/date_end（恒 None），降级为现算/取 run 区间
-        if excess is None and isinstance(total, (int, float)) and isinstance(buy_hold, (int, float)):
-            excess = total - buy_hold
+        excess = perf.get("excess_return_vs_benchmark")
         date_start = perf.get("date_start") or record.get("start")
         date_end = perf.get("date_end") or record.get("end")
         metrics = {
             "total_return": total,
             "excess_return": excess,
-            "buy_hold_return": buy_hold,
+            "excess_return_vs_benchmark": excess,
+            "benchmark_return": perf.get("benchmark_return"),
+            "benchmark_code": "000001.SH",
+            "benchmark_name": "上证指数",
             "sharpe": perf.get("sharpe"),
             "max_drawdown": perf.get("max_drawdown"),
             "win_rate": perf.get("win_rate"),
@@ -367,6 +366,18 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
         benchmarks, bench_note = _benchmark_series(dates)
         data["benchmarks"] = benchmarks or None
         data["benchmark_note"] = bench_note
+        # 唯一超额口径：策略总收益减同期上证指数首末有效收盘收益。
+        from quant_research_engine.portfolio.benchmark import excess_return_vs_sse
+        sse = benchmarks.get("000001.SH") or {}
+        closes = [v for v in (sse.get("closes") or []) if isinstance(v, (int, float)) and v > 0]
+        benchmark_return = closes[-1] / closes[0] - 1.0 if len(closes) >= 2 else None
+        total = data["metrics"].get("total_return")
+        excess = excess_return_vs_sse(total, benchmark_return)
+        data["metrics"].update({
+            "benchmark_code": "000001.SH", "benchmark_name": "上证指数",
+            "benchmark_return": benchmark_return,
+            "excess_return": excess, "excess_return_vs_benchmark": excess,
+        })
 
     trades = _trade_points(record)
     data["trades"] = trades
@@ -641,57 +652,6 @@ def _aggregate_tag_layers(
     return result
 
 
-def _fetch_symbol_range_returns(
-    symbols: list[str], start: str | None, end: str | None
-) -> dict[str, float] | None:
-    """批量查 public.stock_daily，算每股区间等权买入持有收益（末收/首收 - 1）。
-
-    收益按 hfq 口径（close × adj_factor）计算，跨除权/分红连续；一次 IN 查询取
-    全部 ts_code 区间内 (trade_date, hfq_close)，按 ts_code 分组在 Python 里取首末。
-    任一个股区间内不足 2 个交易日则跳过。DB 失败 / 无起止日期 / 无数据 → None。
-    """
-    if not symbols or not start or not end:
-        return None
-    try:
-        from sqlalchemy import text
-
-        from quant_research_engine.gui.admin import _store
-        from quant_research_engine.risk.barometer_job import DEFAULT_DB_URL
-
-        try:
-            store = _store()
-        except Exception:
-            store = _store(DEFAULT_DB_URL)
-        with store.market_engine.begin() as conn:
-            # 买入持有收益必须用 hfq 口径（close × adj_factor）：跨除权/分红连续，
-            # 与因子层、引擎 raw 模式同源；不要依赖 QRE_PRICE_BASIS 环境变量。
-            _close_expr = "close * adj_factor"
-            rows = conn.execute(
-                text(
-                    f"SELECT ts_code, trade_date, {_close_expr} FROM public.stock_daily "
-                    "WHERE ts_code = ANY(:codes) AND trade_date BETWEEN :d0 AND :d1 "
-                    "ORDER BY ts_code, trade_date"
-                ),
-                {"codes": symbols, "d0": start, "d1": end},
-            ).fetchall()
-    except Exception:
-        return None
-    closes: dict[str, list[float]] = {}
-    for ts_code, _trade_date, close in rows:
-        if close is not None:
-            closes.setdefault(ts_code, []).append(float(close))
-    rets = {ts: cs[-1] / cs[0] - 1 for ts, cs in closes.items() if len(cs) >= 2 and cs[0]}
-    return rets or None
-
-
-def _tag_bench_ret(symbols: list[str], rets: dict[str, float] | None) -> float | None:
-    """纯函数：板块自然涨幅 = 板块内个股区间收益的等权平均（无数据 → None）。"""
-    if not rets:
-        return None
-    vals = [rets[s] for s in symbols if s in rets]
-    return round(sum(vals) / len(vals), 6) if vals else None
-
-
 def build_lab_tag_analysis(record: dict[str, Any]) -> dict[str, Any]:
     """组装 /api/lab/runs/<id>/tag-analysis 的 JSON payload。"""
     data: dict[str, Any] = {"ok": True, "run_id": record.get("run_id"),
@@ -711,16 +671,6 @@ def build_lab_tag_analysis(record: dict[str, Any]) -> dict[str, Any]:
     })
     industries = _fetch_industries(list(stats))
     layers = _aggregate_tag_layers(stats, tag_rows, names, industries=industries)
-    # QRE-GUI-LAB-RESULT-029：每个 tag 加 bench_ret = 板块内个股在 run 区间的
-    # 等权买入持有自然收益；DB 失败整体降级 None，不报错。
-    # QRE-GUI-LAB-RESULT-032：bench_ret 同时下沉到个股级（下钻表/个股详情对比用）。
-    sym_rets = _fetch_symbol_range_returns(list(stats), record.get("start"), record.get("end"))
-    for items in layers.values():
-        for item in items:
-            item["bench_ret"] = _tag_bench_ret([s["ts_code"] for s in item["symbols"]], sym_rets)
-            for s in item["symbols"]:
-                v = (sym_rets or {}).get(s["ts_code"])
-                s["bench_ret"] = round(v, 6) if v is not None else None
     data["layers"] = layers
     for layer, items in layers.items():
         if not items:
@@ -1180,8 +1130,6 @@ def build_lab_symbol_detail(
         return None
     names = _fetch_company_tags([ts_code])[1]
     pct_map = _percentile_map(stats)
-    # QRE-GUI-LAB-RESULT-032：个股区间买入持有自然收益（对比策略交易收益用）
-    bench = (_fetch_symbol_range_returns([ts_code], record.get("start"), record.get("end")) or {}).get(ts_code)
     data: dict[str, Any] = {
         "ok": True,
         "run_id": record.get("run_id"),
@@ -1193,7 +1141,6 @@ def build_lab_symbol_detail(
             "avg_ret": round(s["sum_ret"] / s["trades"], 6),
             "win_rate": round(s["wins"] / s["trades"], 6),
             "percentile": pct_map[ts_code],
-            "bench_ret": round(bench, 6) if bench is not None else None,
         },
     }
 
@@ -1291,10 +1238,18 @@ def build_lab_symbol_detail(
         data["benchmarks"] = None
         data["benchmark_note"] = None
 
-    # QRE-GUI-LAB-RESULT-034：策略区间收益率（净值末/初-1），与自然涨幅同口径对比
+    # 个股超额与页面曲线同源：该股实际净值日期对应的上证指数区间收益。
     vals = (data["equity"] or {}).get("values") or []
     data["summary"]["total_ret_pct"] = (
         round(vals[-1] / vals[0] - 1, 6) if len(vals) >= 2 and vals[0] else None
+    )
+    from quant_research_engine.portfolio.benchmark import excess_return_vs_sse
+    sse = (data.get("benchmarks") or {}).get("000001.SH") or {}
+    closes = [v for v in (sse.get("closes") or []) if isinstance(v, (int, float)) and v > 0]
+    benchmark_return = closes[-1] / closes[0] - 1.0 if len(closes) >= 2 else None
+    data["summary"]["benchmark_return"] = benchmark_return
+    data["summary"]["excess_return"] = excess_return_vs_sse(
+        data["summary"]["total_ret_pct"], benchmark_return
     )
     # QRE-SAAS-SYMBOL-DETAIL-REFRESH：口径标记——价格型因子已按 K 线前复权锚点
     # 换算（与 K 线同尺度）。历史旧产物无此字段，前端据此显示按需刷新入口；
@@ -1582,9 +1537,7 @@ def _strategy_name_from_yaml(run_id: str) -> str | None:
 
 
 def _excess_return_of(record: dict[str, Any]) -> float | None:
-    """该 run 的超额收益率（总收益 − 买入持有；QRE-LAB-UI-LANDING-R5 记录表新增列）。
-    仅 completed 且产物在的 run 有值，其余 None（前端显示「——」且排序恒排最后）。
-    """
+    """该 run 相对上证指数的超额收益；旧口径绝不回退。"""
     if record.get("status") != "completed":
         return None
     path = _find_output_file(record, "strategy_performance.json")
@@ -1596,10 +1549,7 @@ def _excess_return_of(record: dict[str, Any]) -> float | None:
         return None
     if not isinstance(perf, dict):
         return None
-    excess = perf.get("excess_return_vs_buy_hold")
-    total, buy_hold = perf.get("strategy_total_return"), perf.get("buy_hold_return")
-    if excess is None and isinstance(total, (int, float)) and isinstance(buy_hold, (int, float)):
-        excess = total - buy_hold
+    excess = perf.get("excess_return_vs_benchmark")
     return round(excess, 6) if isinstance(excess, (int, float)) else None
 
 

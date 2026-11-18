@@ -70,7 +70,7 @@ def _make_run(tmp_path: Path, with_files: bool = True) -> Path:
                 {
                     "strategy_name": "test_strategy",
                     "strategy_total_return": 0.03,
-                    "excess_return_vs_buy_hold": 0.01,
+                    "excess_return_vs_benchmark": 0.01,
                     "sharpe": 0.5,
                     "max_drawdown": -0.02,
                     "win_rate": 0.6,
@@ -769,30 +769,17 @@ def test_tag_aggregate_layer_a_only_sw_l1():
     assert [s["ts_code"] for s in unmarked["symbols"]] == ["S2"]
 
 
-def test_tag_analysis_bench_ret(lab_client, monkeypatch):
-    """tag-analysis 每个 tag 带 bench_ret：板块内个股区间收益的等权平均（人造样本核对数值）。"""
+def test_tag_analysis_omits_buy_hold_returns(lab_client, monkeypatch):
     from quant_research_engine.gui import lab_result
-
     monkeypatch.setattr(
         lab_result, "_fetch_company_tags",
         lambda syms: ([("000001.SZ", "申万L1:银行", "A")], {"000001.SZ": "测试股"}, None),
     )
-    # 该 run 只有 000001.SZ 产生交易：bench_ret = 该股区间收益
-    monkeypatch.setattr(
-        lab_result, "_fetch_symbol_range_returns",
-        lambda syms, d0, d1: {"000001.SZ": 0.25},
-    )
     d = lab_client.get(f"/api/lab/runs/{RUN_ID}/tag-analysis").get_json()
-    assert d["ok"] is True
     a0 = d["layers"]["A"][0]
-    assert a0["tag"] == "银行" and a0["bench_ret"] == 0.25
-    # QRE-GUI-LAB-RESULT-032：bench_ret 下沉到个股级
-    assert a0["symbols"][0]["bench_ret"] == 0.25
-    # 无行情的 tag → None 不报错
-    monkeypatch.setattr(lab_result, "_fetch_symbol_range_returns", lambda syms, d0, d1: None)
-    d2 = lab_client.get(f"/api/lab/runs/{RUN_ID}/tag-analysis").get_json()
-    assert d2["layers"]["A"][0]["bench_ret"] is None
-    assert d2["layers"]["A"][0]["symbols"][0]["bench_ret"] is None
+    assert a0["tag"] == "银行"
+    assert "bench_ret" not in a0
+    assert "bench_ret" not in a0["symbols"][0]
 
 
 def test_symbol_detail_benchmarks(lab_client, monkeypatch):
@@ -913,48 +900,6 @@ def test_fetch_factor_panels_col_and_macdh_backfill(monkeypatch, tmp_path):
     assert panels[0]["values"] == [1.0, 1.0] and panels[0]["thresholds"] == [0.0, 0.0]
 
 
-def test_fetch_symbol_range_returns_uses_hfq(monkeypatch):
-    """买入持有收益必须 hfq 口径，且不依赖 QRE_PRICE_BASIS 环境变量。"""
-    import os
-
-    from quant_research_engine.gui.lab_result import _fetch_symbol_range_returns
-
-    captured = {}
-
-    class _Res:
-        def fetchall(self):
-            return [
-                ("000001.SZ", "2024-01-02", 100.0),
-                ("000001.SZ", "2024-01-03", 150.0),
-            ]
-
-    class _Conn:
-        def execute(self, stmt, params=None):
-            captured["sql"] = str(stmt)
-            return _Res()
-
-    class _Begin:
-        def __enter__(self):
-            return _Conn()
-
-        def __exit__(self, *a):
-            return False
-
-    class _Engine:
-        def begin(self):
-            return _Begin()
-
-    class _Store:
-        market_engine = _Engine()
-
-    monkeypatch.setattr("quant_research_engine.gui.admin._store", lambda *a, **k: _Store())
-    monkeypatch.delenv("QRE_PRICE_BASIS", raising=False)
-
-    rets = _fetch_symbol_range_returns(["000001.SZ"], "2024-01-02", "2024-01-03")
-    assert "close * adj_factor" in captured["sql"]
-    assert "QRE_PRICE_BASIS" not in captured["sql"]
-    assert rets == {"000001.SZ": 0.5}
-    assert os.environ.get("QRE_PRICE_BASIS") in (None, "")
 def test_factor_is_price_scaled_pure():
     """价格型/无量纲因子分类（GUI 与游戏同源）；未注册列不猜尺度。"""
     from quant_research_engine.gui.lab_result import _factor_is_price_scaled
@@ -1038,28 +983,11 @@ def test_lab_symbol_detail_response_is_strict_json(lab_client):
     assert body["ok"] is True
 
 
-def test_symbol_detail_bench_ret(lab_client, monkeypatch):
-    """个股详情 summary 带 bench_ret（区间买入持有自然收益）；缺数据降级 None。"""
-    from quant_research_engine.gui import lab_result
-
-    monkeypatch.setattr(
-        lab_result, "_fetch_symbol_range_returns",
-        lambda syms, d0, d1: {syms[0]: 0.42},
-    )
+def test_symbol_detail_omits_buy_hold_return(lab_client):
     d = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
-    assert d["summary"]["bench_ret"] == 0.42
-    monkeypatch.setattr(lab_result, "_fetch_symbol_range_returns", lambda syms, d0, d1: None)
-    d2 = lab_client.get(f"/api/lab/runs/{RUN_ID}/symbol/000001.SZ/detail").get_json()
-    assert d2["summary"]["bench_ret"] is None
-
-
-def test_tag_bench_ret_pure():
-    """纯函数：等权平均只算有数据的个股；全缺 / rets None → None。"""
-    from quant_research_engine.gui.lab_result import _tag_bench_ret
-
-    assert _tag_bench_ret(["A", "B", "C"], {"A": 0.1, "B": -0.2}) == round((0.1 - 0.2) / 2, 6)
-    assert _tag_bench_ret(["A"], {"X": 0.5}) is None
-    assert _tag_bench_ret(["A"], None) is None
+    assert "bench_ret" not in d["summary"]
+    assert "benchmark_return" in d["summary"]
+    assert "excess_return" in d["summary"]
 
 
 # --- 回测参数信息条 + FRM 风险区块（QRE-GUI-LAB-RESULT-031） ---

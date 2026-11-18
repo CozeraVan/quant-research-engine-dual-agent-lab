@@ -638,7 +638,7 @@
           } else {
             var gm = s.gate.metrics || {};
             var gtip = '交易 ' + (gm.total_trade_count != null ? gm.total_trade_count : '—')
-              + ' 次，超额 ' + (gm.excess_return_vs_buy_hold != null ? fmtPct(gm.excess_return_vs_buy_hold) : '—')
+              + ' 次，超额 ' + (gm.excess_return_vs_benchmark != null ? fmtPct(gm.excess_return_vs_benchmark) : '—')
               + '，回撤 ' + (gm.max_drawdown != null ? fmtPct(gm.max_drawdown) : '—')
               + '（判据：交易≥30 且超额>0；评估于 ' + esc(s.gate.evaluated_at || '—') + '）';
             if (s.gate.gate === 'passed') {

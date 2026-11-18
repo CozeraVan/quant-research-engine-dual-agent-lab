@@ -205,54 +205,23 @@ def test_single_symbol_backtest_uses_market_profile_slippage_prices():
     assert result.orders.iloc[1]["price"] == pytest.approx(10.978)
 
 
-def test_single_symbol_backtest_summary_includes_buy_hold_return():
-    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
-    request = SingleSymbolBacktestRequest(
-        symbol="000001.SZ",
-        initial_cash=100000.0,
-        entry_signal="rsi_2 < 10",
-        holding_days=3,
+def test_single_symbol_backtest_summary_omits_buy_hold_statistics():
+    result = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile()).run(
+        make_frame(),
+        SingleSymbolBacktestRequest(symbol="000001.SZ", initial_cash=100000.0, entry_signal="rsi_2 < 10", holding_days=3),
     )
-
-    result = engine.run(make_frame(), request)
-    summary = result.summary
-
-    # first close=10.1, last close=11.3 → buy_hold_return = 11.3/10.1 - 1
-    expected = 11.3 / 10.1 - 1
-    assert summary["buy_hold_return"] == pytest.approx(expected)
-    # strategy total_return is ~0.0772, so excess is negative
-    assert summary["excess_return_vs_buy_hold"] == pytest.approx(0.077216944 - expected)
+    assert "buy_hold_return" not in result.summary
+    assert "excess_return_vs_buy_hold" not in result.summary
+    assert "buy_hold_equity" not in result.equity_curve.columns
 
 
-def test_buy_hold_return_is_independent_of_strategy_price_columns():
-    request = SingleSymbolBacktestRequest(
-        symbol="000001.SZ",
-        initial_cash=100000.0,
-        entry_signal="rsi_2 < 10",
-        holding_days=3,
-        entry_price_column="close",
-        exit_price_column="close",
-        mark_price_column="open",
+def test_empty_single_symbol_backtest_omits_buy_hold_statistics():
+    result = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile()).run(
+        make_frame(),
+        SingleSymbolBacktestRequest(symbol="NOT_FOUND", initial_cash=100000.0, entry_signal="rsi_2 < 10", holding_days=3),
     )
-    result = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile()).run(make_frame(), request)
-
-    # 基准始终是首根收盘 10.1 → 末根收盘 11.3，与策略价格参数无关。
-    assert result.summary["buy_hold_return"] == pytest.approx(11.3 / 10.1 - 1)
-
-
-def test_single_symbol_backtest_buy_hold_return_is_none_for_empty_frame():
-    engine = SingleSymbolBacktestEngine(market_profile=AShareMarketProfile())
-    request = SingleSymbolBacktestRequest(
-        symbol="NOT_FOUND",
-        initial_cash=100000.0,
-        entry_signal="rsi_2 < 10",
-        holding_days=3,
-    )
-
-    result = engine.run(make_frame(), request)
-
-    assert result.summary["buy_hold_return"] is None
-    assert result.summary["excess_return_vs_buy_hold"] is None
+    assert "buy_hold_return" not in result.summary
+    assert "excess_return_vs_buy_hold" not in result.summary
 
 
 def test_single_symbol_backtest_sells_on_exit_signal_next_bar():

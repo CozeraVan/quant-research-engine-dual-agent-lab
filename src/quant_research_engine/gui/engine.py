@@ -948,8 +948,8 @@ SUMMARY_METRIC_FIELDS: list[tuple[str, str, bool]] = [
     ("total_trade_count", "总交易数", False),
     ("win_rate", "胜率", True),
     ("strategy_total_return", "总收益率", True),
-    ("buy_hold_return", "买入持有收益率", True),
-    ("excess_return_vs_buy_hold", "超额收益(对买入持有)", True),
+    ("benchmark_return", "上证指数收益率", True),
+    ("excess_return_vs_benchmark", "超额收益(对上证指数)", True),
     ("max_drawdown", "最大回撤", True),
     ("profit_factor", "盈亏比", False),
     # QRE-PERF-METRICS-CONTRACT：平均持股周期（自然日，与 round_trips.holding_days 同口径）。

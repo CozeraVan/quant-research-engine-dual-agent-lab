@@ -24,7 +24,6 @@
           <th class="num sortable" data-k="best_ret">最佳单笔%</th>
           <th class="num sortable" data-k="worst_ret">最差单笔%</th>
           <th class="num sortable" data-k="avg_hold_days">持仓天数</th>
-          <th class="num sortable" data-k="bench_ret">自然涨幅%</th>
           <th class="num sortable" data-k="percentile">赚钱效应分位</th>
         </tr></thead>
         <tbody></tbody>
@@ -81,7 +80,6 @@ function render(){
     + `<td class="num pos">${pct(s.best_ret)}</td>`
     + `<td class="num neg">${pct(s.worst_ret)}</td>`
     + `<td class="num">${s.avg_hold_days == null ? '—' : Number(s.avg_hold_days).toFixed(1)}</td>`
-    + `<td class="num ${cls(s.bench_ret)}">${pct(s.bench_ret)}</td>`
     + `<td class="num">${s.percentile == null ? '—' : '前' + (s.percentile * 100).toFixed(1) + '%'}</td></tr>`
   ).join('');
   $('#syms-hint').textContent = `共 ${rows.length} 只` + (kw ? '（已筛选）' : '');

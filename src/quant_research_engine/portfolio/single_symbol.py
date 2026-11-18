@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import pandas as pd
 
@@ -22,6 +23,7 @@ class SingleSymbolBacktestRequest:
     stop_loss_pct: float | None = None
     take_profit_pct: float | None = None
     trailing_stop_pct: float | None = None
+    chanlun_config: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -47,8 +49,6 @@ def empty_single_symbol_result(request: SingleSymbolBacktestRequest) -> SingleSy
             "trade_count": 0,
             "win_rate": None,
             "total_cost": 0.0,
-            "buy_hold_return": None,
-            "excess_return_vs_buy_hold": None,
         },
     )
 
@@ -66,17 +66,6 @@ def build_single_symbol_summary(
     win_rate = None if trades.empty else float((trades["net_pnl"] > 0).mean())
     total_return = final_equity / request.initial_cash - 1
 
-    buy_hold_return = None
-    excess_return_vs_buy_hold = None
-    # 同宇宙同区间的持有基准必须与策略无关：固定首根收盘 → 末根收盘，
-    # 不跟随策略的 entry/exit/mark 价格参数。
-    if not frame.empty and "close" in frame.columns:
-        first_entry_price = float(frame.iloc[0]["close"])
-        last_mark_price = float(frame.iloc[-1]["close"])
-        if first_entry_price > 0:
-            buy_hold_return = last_mark_price / first_entry_price - 1.0
-            excess_return_vs_buy_hold = total_return - buy_hold_return
-
     return {
         "initial_cash": request.initial_cash,
         "final_equity": final_equity,
@@ -84,8 +73,6 @@ def build_single_symbol_summary(
         "trade_count": trade_count,
         "win_rate": win_rate,
         "total_cost": total_cost,
-        "buy_hold_return": buy_hold_return,
-        "excess_return_vs_buy_hold": excess_return_vs_buy_hold,
     }
 
 
@@ -104,7 +91,6 @@ class SingleSymbolBacktestEngine:
         if request.exit_signal is not None:
             working["exit_signal"] = evaluate_expression_signal(working, request.exit_signal)
         exit_price_column = request.exit_price_column or request.entry_price_column
-        first_mark_price = float(working.iloc[0][request.mark_price_column])
 
         cash = request.initial_cash
         quantity = 0
@@ -310,9 +296,6 @@ class SingleSymbolBacktestEngine:
                     "position_quantity": quantity,
                     "market_value": market_value,
                     "total_equity": cash + market_value,
-                    "buy_hold_equity": request.initial_cash * mark_price / first_mark_price
-                    if first_mark_price > 0
-                    else None,
                 }
             )
 
@@ -330,6 +313,8 @@ class SingleSymbolBacktestEngine:
         )
 
     def _validate_request(self, request: SingleSymbolBacktestRequest) -> None:
+        if request.chanlun_config is not None:
+            raise ValueError("chanlun_config requires SingleSymbolVectorizedEngine")
         if request.initial_cash <= 0:
             raise ValueError("initial_cash must be positive")
         if request.holding_days < 0:

@@ -4,6 +4,40 @@ import math
 
 import pandas as pd
 
+SSE_CODE = "000001.SH"
+SSE_NAME = "上证指数"
+
+
+def excess_return_vs_sse(strategy_return: float | None, benchmark_return: float | None) -> float | None:
+    """唯一超额口径：策略区间收益减同期上证指数区间收益。"""
+    if not isinstance(strategy_return, (int, float)) or not isinstance(benchmark_return, (int, float)):
+        return None
+    if not math.isfinite(strategy_return) or not math.isfinite(benchmark_return):
+        return None
+    return float(strategy_return - benchmark_return)
+
+
+def fetch_sse_return(start: object, end: object, *, db_url: str | None = None) -> float | None:
+    """只读 reference.index_daily，取区间内上证指数首末有效收盘。"""
+    if not start or not end:
+        return None
+    try:
+        from sqlalchemy import create_engine, text
+        from quant_research_engine.data.settings import DatabaseSettings
+
+        engine = create_engine(db_url or DatabaseSettings.from_env().market_db_url)
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT close FROM reference.index_daily "
+                "WHERE ts_code = :code AND trade_date BETWEEN :start AND :end "
+                "AND close IS NOT NULL AND close > 0 ORDER BY trade_date"
+            ), {"code": SSE_CODE, "start": str(start), "end": str(end)}).scalars().all()
+    except Exception:
+        return None  # 基准库不可用：超额保持空，不回退其他口径。
+    if not rows:
+        return None
+    return float(rows[-1]) / float(rows[0]) - 1.0
+
 
 def summarize_benchmark_relative_performance(
     equity_curve: pd.DataFrame,

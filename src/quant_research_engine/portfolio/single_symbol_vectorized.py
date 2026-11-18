@@ -99,6 +99,7 @@ class _Prepared:
     high_prices: np.ndarray | None
     candidate_bars: np.ndarray
     working: pd.DataFrame | None = None
+    structural_stop_prices: np.ndarray | None = None
 
 
 @dataclass
@@ -116,6 +117,8 @@ class _LoopState:
     pending_sell_index: int = _NO_INDEX
     pending_sell_reason: str | None = None
     trailing_anchor: float = 0.0
+    structural_stop_price: float | None = None
+    structural_take_profit_price: float | None = None
 
 
 @dataclass
@@ -328,6 +331,8 @@ class SingleSymbolVectorizedEngine:
             initial.entry_cost = float(state.entry_cost)
             initial.entry_cost_parts = dict(state.entry_cost_parts or _zero_cost_parts())
             initial.trailing_anchor = float(state.trailing_anchor or 0.0)
+            initial.structural_stop_price = state.structural_stop_price
+            initial.structural_take_profit_price = state.structural_take_profit_price
         return initial
 
     @staticmethod
@@ -365,6 +370,8 @@ class SingleSymbolVectorizedEngine:
             pending_sell_reason=(
                 st.pending_sell_reason if st.pending_sell_index != _NO_INDEX else None
             ),
+            structural_stop_price=st.structural_stop_price if holding else None,
+            structural_take_profit_price=st.structural_take_profit_price if holding else None,
         )
 
     # ------------------------------------------------------------------
@@ -375,9 +382,20 @@ class SingleSymbolVectorizedEngine:
         working = working.copy()
         working["trade_date"] = pd.to_datetime(working["trade_date"])
         working = working.sort_values("trade_date").reset_index(drop=True)
-        working["entry_signal"] = evaluate_expression_signal(working, request.entry_signal)
-        if request.exit_signal is not None:
-            working["exit_signal"] = evaluate_expression_signal(working, request.exit_signal)
+        structural_stop_prices = None
+        if request.chanlun_config is not None:
+            from quant_research_engine.strategies.chanlun import ChanLunConfig, generate_chanlun_signals
+
+            structural = generate_chanlun_signals(
+                working, ChanLunConfig(**dict(request.chanlun_config))
+            )
+            working["entry_signal"] = structural["entry_signal"].to_numpy(dtype=bool)
+            working["exit_signal"] = structural["exit_signal"].to_numpy(dtype=bool)
+            structural_stop_prices = structural["stop_price"].to_numpy(dtype=float)
+        else:
+            working["entry_signal"] = evaluate_expression_signal(working, request.entry_signal)
+            if request.exit_signal is not None:
+                working["exit_signal"] = evaluate_expression_signal(working, request.exit_signal)
 
         n = len(working)
         # Simulator uses row["open"] for limit checks and row[entry_price_column]
@@ -395,7 +413,7 @@ class SingleSymbolVectorizedEngine:
         entry_signals = working["entry_signal"].to_numpy(dtype=bool)
         exit_signals = (
             working["exit_signal"].to_numpy(dtype=bool)
-            if request.exit_signal is not None
+            if "exit_signal" in working.columns
             else None
         )
         flag_arrays = {
@@ -413,6 +431,7 @@ class SingleSymbolVectorizedEngine:
             request.stop_loss_pct is not None
             or request.take_profit_pct is not None
             or request.trailing_stop_pct is not None
+            or request.chanlun_config is not None
         )
         if stops_enabled:
             candidate_bars = np.arange(n)
@@ -434,6 +453,7 @@ class SingleSymbolVectorizedEngine:
             high_prices=high_prices,
             candidate_bars=candidate_bars,
             working=working,
+            structural_stop_prices=structural_stop_prices,
         )
         return prepared
 
@@ -615,6 +635,12 @@ class SingleSymbolVectorizedEngine:
                             st.entry_cost = cost
                             st.entry_cost_parts = cost_parts
                             st.trailing_anchor = float(price)
+                            if request.chanlun_config is not None and prepared.structural_stop_prices is not None:
+                                signal_index = max(0, i - 1)
+                                stop = float(prepared.structural_stop_prices[signal_index])
+                                if np.isfinite(stop) and 0 < stop < price:
+                                    st.structural_stop_price = stop
+                                    st.structural_take_profit_price = price + 2.0 * (price - stop)
                             orders.append(self._order_row(order, cost, price_raw=price_raw, cost_parts=cost_parts))
                             st.pending_buy_index = _NO_INDEX
                             fills.append((i, st.cash, st.quantity))
@@ -636,6 +662,26 @@ class SingleSymbolVectorizedEngine:
                     sell_reason = st.pending_sell_reason or "exit_signal"
                 elif holding_days > 0 and i == st.entry_index + holding_days:
                     sell_reason = "holding_period"
+                elif (
+                    st.structural_stop_price is not None
+                    and float(mark_prices[i]) <= st.structural_stop_price
+                    and can_schedule(i)
+                ):
+                    next_index = i + 1
+                    if st.pending_sell_index == _NO_INDEX or next_index < st.pending_sell_index:
+                        st.pending_sell_index = next_index
+                        st.pending_sell_reason = "structural_stop"
+                        push_execution(next_index)
+                elif (
+                    st.structural_take_profit_price is not None
+                    and float(mark_prices[i]) >= st.structural_take_profit_price
+                    and can_schedule(i)
+                ):
+                    next_index = i + 1
+                    if st.pending_sell_index == _NO_INDEX or next_index < st.pending_sell_index:
+                        st.pending_sell_index = next_index
+                        st.pending_sell_reason = "structural_take_profit"
+                        push_execution(next_index)
                 elif (
                     request.stop_loss_pct is not None
                     and float(mark_prices[i]) <= float(st.entry_price) * (1 - request.stop_loss_pct)
@@ -731,6 +777,8 @@ class SingleSymbolVectorizedEngine:
                         st.entry_cost = 0.0
                         st.entry_cost_parts = _zero_cost_parts()
                         st.trailing_anchor = 0.0
+                        st.structural_stop_price = None
+                        st.structural_take_profit_price = None
                         st.pending_sell_index = _NO_INDEX
                         st.pending_sell_reason = None
                         fills.append((i, st.cash, st.quantity))
@@ -783,10 +831,6 @@ class SingleSymbolVectorizedEngine:
             qty_arr[s:e] = seg_qty[k]
         market_values = qty_arr * mark_prices[start_index:]
         total_equity = cash_arr + market_values
-        first_mark = float(mark_prices[0]) if n else 0.0
-        buy_hold_full = (
-            initial_cash * mark_prices / first_mark if first_mark > 0 else np.full(n, np.nan)
-        )
         return pd.DataFrame(
             {
                 "trade_date": trade_dates[start_index:],
@@ -794,7 +838,6 @@ class SingleSymbolVectorizedEngine:
                 "position_quantity": qty_arr,
                 "market_value": market_values,
                 "total_equity": total_equity,
-                "buy_hold_equity": buy_hold_full[start_index:],
             }
         )
 

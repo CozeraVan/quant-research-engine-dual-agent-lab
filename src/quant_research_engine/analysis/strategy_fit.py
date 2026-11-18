@@ -7,7 +7,7 @@ Statistics (pure Python, no new dependencies):
 - Per-symbol significance: exact one-sided binomial test on the strategy's
   per-symbol win rate (fraction of net-profitable trades) vs H0: p=0.5.
 - Confidence tiers: 90% / 99% / 99.9% (p <= 0.10 / 0.01 / 0.001).
-- Magnitude gate: total_return > 0 AND excess_return_vs_buy_hold > 0 — the
+- Magnitude gate: total_return > 0 AND excess_return_vs_benchmark > 0 — the
   strategy must beat the stock's own natural (buy-and-hold) return.
 - Strategy meta-test: significant-stock count vs binomial false-positive
   expectation (eligible_symbols x tier alpha). A no-edge strategy lands at
@@ -180,14 +180,14 @@ def analyze_strategy(
     eligible = frame.loc[
         (frame["trade_count"].fillna(0) >= config.min_trades)
         & frame["total_return"].notna()
-        & frame["excess_return_vs_buy_hold"].notna()
+        & frame["excess_return_vs_benchmark"].notna()
     ].copy()
     eligible_symbols = int(len(eligible))
 
     free_riders = frame.loc[
         (frame["trade_count"].fillna(0) >= config.min_trades)
         & (frame["total_return"] > 0)
-        & (frame["excess_return_vs_buy_hold"] <= 0)
+        & (frame["excess_return_vs_benchmark"] <= 0)
     ]
     free_rider_count = int(len(free_riders))
 
@@ -196,7 +196,7 @@ def analyze_strategy(
         binomial_pvalue_ge(int(k), int(n), 0.5)
         for k, n in zip(wins, eligible["trade_count"].astype(int))
     ]
-    magnitude_gate = (eligible["total_return"] > 0) & (eligible["excess_return_vs_buy_hold"] > 0)
+    magnitude_gate = (eligible["total_return"] > 0) & (eligible["excess_return_vs_benchmark"] > 0)
     eligible["gate_pass"] = magnitude_gate
 
     tier_counts: dict[float, int] = {}
@@ -233,22 +233,21 @@ def analyze_strategy(
                 "trade_count": int(row.trade_count),
                 "win_rate": float(row.win_rate),
                 "total_return": float(row.total_return),
-                "buy_hold_return": float(row.buy_hold_return),
-                "excess_return_vs_buy_hold": float(row.excess_return_vs_buy_hold),
+                "benchmark_return": float(row.benchmark_return),
+                "excess_return_vs_benchmark": float(row.excess_return_vs_benchmark),
                 "board": row.board,
                 "industry_group": row.industry_group,
                 "market_cap_bucket": row.market_cap_bucket,
                 "liquidity_bucket": row.liquidity_bucket,
             }
         )
-    stock_rows.sort(key=lambda r: (r["strategy_id"], r["binomial_p"], -r["excess_return_vs_buy_hold"], r["symbol"]))
+    stock_rows.sort(key=lambda r: (r["strategy_id"], r["binomial_p"], -r["excess_return_vs_benchmark"], r["symbol"]))
 
     pool = eligible.loc[eligible["gate_pass"] & (eligible["binomial_p_"] <= config.pool_tier)]
     pool_size = int(len(pool))
-    market_mean_excess = float(eligible["excess_return_vs_buy_hold"].mean()) if eligible_symbols else None
-    pool_mean_excess = float(pool["excess_return_vs_buy_hold"].mean()) if pool_size else None
+    market_mean_excess = float(eligible["excess_return_vs_benchmark"].mean()) if eligible_symbols else None
+    pool_mean_excess = float(pool["excess_return_vs_benchmark"].mean()) if pool_size else None
     pool_mean_total = float(pool["total_return"].mean()) if pool_size else None
-    pool_mean_bh = float(pool["buy_hold_return"].mean()) if pool_size else None
 
     stability_months_covered = None
     stability_ratio = None
@@ -288,7 +287,7 @@ def analyze_strategy(
                     "pool_count": pool_in_class,
                     "pool_share": pool_in_class / pool_size if pool_size else None,
                     "universe_share": int(universe_count) / eligible_symbols if eligible_symbols else None,
-                    "pool_mean_excess": float(class_pool["excess_return_vs_buy_hold"].mean()) if pool_in_class else None,
+                    "pool_mean_excess": float(class_pool["excess_return_vs_benchmark"].mean()) if pool_in_class else None,
                     "p_value": p_value,
                 }
             )
@@ -305,7 +304,6 @@ def analyze_strategy(
         "pool_size": pool_size,
         "pool_mean_excess": pool_mean_excess,
         "pool_mean_total_return": pool_mean_total,
-        "pool_mean_buy_hold_return": pool_mean_bh,
         "meta_tier": meta_tier,
         "stability_months_covered": stability_months_covered,
         "stability_ratio": stability_ratio,

@@ -150,6 +150,36 @@ def test_missing_required_columns_raises():
         summarize_batch_rolling_summary(bad, window_size=2)
 
 
+def test_lazy_mapping_input_matches_oracle_with_nat_rows():
+    """Streaming batch passes a read-on-demand Mapping instead of a dict.
+
+    Also covers rows whose trade_date is NaT (dropped before windowing) so the
+    per-symbol collector keeps the old cross-symbol semantics.
+    """
+    from types import SimpleNamespace
+
+    from quant_research_engine.portfolio.io import _LazyEquityCurves
+
+    curve_a = _equity_curve([0.01, -0.02, 0.03, 0.01, 0.02])
+    curve_a.loc[1, "trade_date"] = pd.NaT
+    curve_b = _equity_curve([-0.01, 0.0, 0.02])
+    curve_c = _equity_curve([0.005] * 3, start="2024-12-30")
+    curves = {"000001.SZ": curve_a, "000002.SZ": curve_b, "300003.SZ": curve_c}
+    lazy = _LazyEquityCurves({symbol: SimpleNamespace(equity_curve=frame) for symbol, frame in curves.items()})
+
+    for window in ("M", "Q", "Y"):
+        pd.testing.assert_frame_equal(
+            _oracle_window_summary(curves, window),
+            summarize_batch_window_summary(lazy, window=window),
+            check_dtype=True,
+        )
+    pd.testing.assert_frame_equal(
+        _oracle_rolling_summary(curves, 20),
+        summarize_batch_rolling_summary(lazy, window_size=20),
+        check_dtype=True,
+    )
+
+
 def test_random_curves_match_oracle():
     rng = np.random.default_rng(99)
     for trial in range(10):

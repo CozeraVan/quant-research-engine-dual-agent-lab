@@ -1,9 +1,8 @@
 /* ============================================================================
-   QRE-EQUITY-CHART —— 收益曲线（策略 / 各基准 / 买入持有 / 回撤）的唯一构造来源
+   QRE-EQUITY-CHART —— 收益曲线（策略 / 各基准 / 回撤）的唯一构造来源
    ----------------------------------------------------------------------------
    为什么单独一个文件：job.html 与 symbol.html 原先各自内联一份 ECharts 组件，
-   前者只有「策略 + 单基准 + 回撤」，后者是「策略净值(元) + 买入持有% + 各基准%
-   + 双 y 轴」，同一张图两套口径、配色与网格参数，且 symbol 的基准曲线全部同色。
+   前者只有「策略 + 单基准 + 回撤」，后者曾使用另一套曲线口径、配色与网格参数。
    现在曲线数据（归一化收益率、回撤）与图表选项都收敛到这里，模板只负责把结果
    塞进 DOM / 交给 QREReplay。纯函数，不碰 DOM，便于 Node 单测。
 
@@ -14,7 +13,7 @@
      · benchPct(closes)  等同 toPct（基准指数用收盘价归一化）。
 
    配色（12 号 UI 规范：策略紫，禁蓝/橙）：
-     策略/买入持有 #6750A4；回撤 #d43030；各基准沿用书里的固定色。
+     策略 #6750A4；回撤 #d43030；各基准沿用书里的固定色。
    ============================================================================ */
 (function (root) {
   'use strict';
@@ -146,13 +145,11 @@
             { type: 'slider', xAxisIndex: idx, bottom: 6, height: 22 }];
   }
 
-  // 静态图：job（策略+各基准+回撤）与 symbol（再加买入持有）共用
+  // 静态图：job 与 symbol 共用（策略+各基准+回撤）
   function option(o) {
     o = o || {};
     var benches = benchList(o.benches, o.benchmarks);
-    var holdPct = Array.isArray(o.holdPct) ? o.holdPct : null;
     var dd = Array.isArray(o.drawdownPct) ? o.drawdownPct : null;
-    var hasHold = hasValue(holdPct);
     var hasDD = hasValue(dd);
     var series = [{
       name: '策略', id: 'strategy', type: 'line', data: o.strategyPct || [],
@@ -165,11 +162,6 @@
         showSymbol: false, color: b.color,
         lineStyle: { width: 1.2, type: 'dashed' }
       });
-    });
-    if (hasHold) series.push({
-      name: '买入持有', id: 'hold', type: 'line', data: holdPct,
-      showSymbol: false, color: STRATEGY_COLOR,
-      lineStyle: { width: 1.2, type: 'dashed' }
     });
     if (hasDD) series.push({
       name: '回撤', id: 'dd', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dd,

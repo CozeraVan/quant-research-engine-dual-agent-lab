@@ -45,7 +45,7 @@ class ResearchFrameAssembler:
                 start=start,
                 end=end,
             )
-            # 行情是时间轴与买入持有基准的唯一来源；因子缺口只产生 NaN 信号，
+            # 行情是回测时间轴的来源；因子缺口只产生 NaN 信号，
             # 不得删除 K 线并让基准起止点随策略因子覆盖变化。
             frame = frame.merge(factors, on=["ts_code", "trade_date"], how="left")
         if include_metadata:

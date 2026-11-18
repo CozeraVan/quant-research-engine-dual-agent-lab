@@ -73,8 +73,8 @@ SUMMARY_COLUMNS = [
     "trade_count",
     "win_rate",
     "total_cost",
-    "buy_hold_return",
-    "excess_return_vs_buy_hold",
+    "benchmark_return",
+    "excess_return_vs_benchmark",
     "order_count",
     "failed_order_count",
 ]
@@ -239,16 +239,9 @@ def _recompute_summary(
         win_rate = None if trade_count == 0 else float((sym_trades["net_pnl"] > 0).mean())
         total_cost = 0.0 if trade_count == 0 else float(sym_trades["cost"].sum())
 
-        buy_hold_return = None
-        excess_return = None
         metadata: dict[str, Any] = {}
         entry = inputs.get(symbol)
         if entry is not None:
-            first_price = entry.get("first_entry_price")
-            last_price = entry.get("last_mark_price")
-            if first_price and last_price is not None and first_price > 0:
-                buy_hold_return = last_price / first_price - 1.0
-                excess_return = total_return - buy_hold_return
             metadata = dict(entry.get("metadata") or {})
 
         row: dict[str, Any] = {
@@ -259,8 +252,8 @@ def _recompute_summary(
             "trade_count": trade_count,
             "win_rate": win_rate,
             "total_cost": total_cost,
-            "buy_hold_return": buy_hold_return,
-            "excess_return_vs_buy_hold": excess_return,
+            "benchmark_return": None,
+            "excess_return_vs_benchmark": None,
         }
         row.update(metadata)
         row["order_count"] = (
@@ -496,19 +489,6 @@ def run_incremental(store, spec: StrategySpec, request: IncrementalRequest) -> I
                 new_failed.append(result.failed_orders)
             if not result.equity_curve.empty:
                 equity = result.equity_curve.copy()
-                # Re-anchor buy-hold to the ORIGINAL backtest window's first
-                # mark price (the engine's frame-local anchor is the warmup
-                # start in continuation windows, which would break equality
-                # with a full single-pass run).
-                anchor = summary_inputs.get(symbol, {}).get("first_mark_price")
-                if anchor is None or anchor <= 0:
-                    anchor = float(sub.iloc[0][single_request.mark_price_column])
-                mark_by_date = sub.set_index("trade_date")[single_request.mark_price_column]
-                equity["buy_hold_equity"] = (
-                    single_request.initial_cash
-                    * equity["trade_date"].map(mark_by_date).astype(float)
-                    / anchor
-                )
                 equity.insert(0, "symbol", symbol)
                 equity = equity.rename(columns={"position_quantity": "quantity"})
                 new_equity.append(equity)

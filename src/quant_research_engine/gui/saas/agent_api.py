@@ -972,12 +972,14 @@ def _owner_policy(app, engine, uid: int) -> dict[str, int]:
     from sqlalchemy import text
 
     with engine.connect() as conn:
-        tier = conn.execute(
-            text("SELECT tier FROM users WHERE id = :uid"), {"uid": uid}
-        ).first()
+        row = conn.execute(
+            text("SELECT tier,member_expire_at FROM users WHERE id = :uid"), {"uid": uid}
+        ).mappings().first()
+    from quant_research_engine.gui.saas import membership
     from quant_research_engine.gui.saas.app import _get_policy
 
-    return _get_policy(app, engine, str(tier[0]) if tier else "member")
+    return _get_policy(app, engine, membership.effective_tier(
+        str(row["tier"]) if row else "member", row["member_expire_at"] if row else None))
 
 
 def _expand_grid(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
@@ -1485,7 +1487,7 @@ def agent_sweep_aggregate(sweep_id: int):
             "trades": _num(metrics.get("trades")),
             "avg_holding_days": _num(metrics.get("avg_holding_days")),
             "excess_return": _num(metrics.get("excess_return")),
-            "buy_hold_return": _num(metrics.get("buy_hold_return")),
+            "benchmark_return": _num(metrics.get("benchmark_return")),
         })
     rows.sort(key=lambda r: (r[sort_by] is None, r[sort_by] if r[sort_by] is not None else 0),
               reverse=(sort_by != "max_drawdown"))

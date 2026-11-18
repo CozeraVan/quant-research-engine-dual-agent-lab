@@ -211,10 +211,10 @@ RESULT_METRIC_KEYS = (
     "date_end",
     "traded_symbol_count",
     "symbol_count",
-    "excess_return_vs_buy_hold",
+    "excess_return_vs_benchmark",
     "max_drawdown",
     "strategy_total_return",
-    "buy_hold_return",
+    "benchmark_return",
     "win_rate",
     "profit_factor",
     "total_trade_count",
@@ -222,7 +222,7 @@ RESULT_METRIC_KEYS = (
 )
 
 # 增量产物（outputs/refresh/incremental/<sid>/）中代表"新鲜度"的字段；
-# 全量指标（excess_return_vs_buy_hold/max_drawdown/date_start 等）增量没有，仍取自全量批次。
+# 全量指标（excess_return_vs_benchmark/max_drawdown/date_start 等）增量没有，仍取自全量批次。
 _INCREMENTAL_METRIC_KEYS = (
     "symbol_count",
     "traded_symbol_count",
@@ -245,12 +245,6 @@ def _load_batch_result(
     except (json.JSONDecodeError, OSError):
         return None
     metrics = {k: payload.get(k) for k in RESULT_METRIC_KEYS if payload.get(k) is not None}
-    # benchmark 超额兜底（存在 benchmark_excess* 键时取其一）
-    if "excess_return_vs_buy_hold" not in metrics:
-        for key, value in payload.items():
-            if key.startswith("benchmark_") and "excess" in key and isinstance(value, (int, float)):
-                metrics["benchmark_excess"] = value
-                break
     return metrics, latest, latest.stat().st_mtime
 
 
@@ -293,7 +287,7 @@ def latest_strategy_result(
     - 新鲜度字段（date_end/symbol_count/traded_symbol_count/mean_total_return/
       total_trades/positive_return_symbol_rate）：增量 mtime 更新时取增量，
       date_end ← 增量 state.json 的 data_watermark/last_processed_date；
-    - 全量指标（excess_return_vs_buy_hold/max_drawdown/date_start/strategy_name 等）：
+    - 全量指标（excess_return_vs_benchmark/max_drawdown/date_start/strategy_name 等）：
       始终取最新全量批次，并附 full_metrics_as_of（该批次 date_end）供前端标注
       "截至 <date> 全量"；
     - source ∈ {"batch", "incremental", "merged"}；artifact_dir 指向最新来源所在目录
@@ -442,7 +436,7 @@ def refresh_overview(
                 "date_end": date_end,
                 "traded_symbol_count": metrics.get("traded_symbol_count"),
                 "symbol_count": metrics.get("symbol_count"),
-                "excess_return": metrics.get("excess_return_vs_buy_hold", metrics.get("benchmark_excess")),
+                "excess_return": metrics.get("excess_return_vs_benchmark"),
                 "max_drawdown": metrics.get("max_drawdown"),
                 "source": (result or {}).get("source"),
                 # 超额/回撤等全量指标落后于 date_end 时，前端据此标注"截至 <date> 全量"

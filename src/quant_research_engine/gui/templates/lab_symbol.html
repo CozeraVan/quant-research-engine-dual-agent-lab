@@ -29,7 +29,7 @@
 <div class="metric-strip" id="sum-strip"></div>
 
 <div class="chart-box">
-  <div class="chart-title">收益曲线 <span class="opt">（策略净值 vs 个股买入持有 vs 基准指数；拖动滑块缩放）</span></div>
+  <div class="chart-title">收益曲线 <span class="opt">（策略净值 vs 基准指数；拖动滑块缩放）</span></div>
   <div id="chart-equity" style="height:320px;"></div>
   <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
 </div>
@@ -167,11 +167,12 @@
   }
 
   function renderSummary(s) {
-    // 统一百分比口径（QRE-GUI-LAB-RESULT-034）：策略区间收益% vs 区间自然涨幅%，金额作辅助
+    // 统一百分比口径：策略区间收益% vs 上证指数区间收益%，金额作辅助
     document.getElementById('sum-strip').innerHTML =
       card('股票', s.ts_code + ' ' + (s.name || ''), 'flat') +
       card('策略区间收益', (s.total_ret_pct == null ? '—' : pct(s.total_ret_pct)) + '（' + f2(s.total_pnl) + ' 元）', cls(s.total_ret_pct == null ? s.total_pnl : s.total_ret_pct)) +
-      card('区间自然涨幅', s.bench_ret == null ? '—' : pct(s.bench_ret), s.bench_ret == null ? 'flat' : cls(s.bench_ret)) +
+      card('上证指数区间收益', s.benchmark_return == null ? '—' : pct(s.benchmark_return), s.benchmark_return == null ? 'flat' : cls(s.benchmark_return)) +
+      card('超额收益·vs上证指数', s.excess_return == null ? '—' : pct(s.excess_return), s.excess_return == null ? 'flat' : cls(s.excess_return)) +
       card('交易笔数', s.trades, 'flat') +
       card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret)) +
       card('胜率', pct(s.win_rate), cls(s.win_rate)) +
@@ -295,24 +296,10 @@
   function renderEquity(d) {
     var eq = d.equity;
     if (!eq || !eq.dates.length) { empty('chart-equity'); return; }
-    // QRE-GUI-LAB-RESULT-033：净值曲线叠加对比项——个股持有到期收益 + 基准指数收益（右轴 %）
-    var kmap = {};
-    if (d.kline && d.kline.dates) {
-      d.kline.dates.forEach(function(dt, i) { kmap[dt] = d.kline.ohlc[i][1]; });  // ohlc=[open,close,low,high]
-    }
-    var k0 = null;
-    var holdPct = eq.dates.map(function(dt) {
-      var c = kmap[dt];
-      if (c == null) return null;
-      if (k0 == null) k0 = c;
-      return (c / k0 - 1) * 100;
-    });
+    // 净值曲线只叠加策略与基准指数，超额固定使用上证指数。
     var series = [
       { name: '策略净值(元)', type: 'line', data: eq.values, showSymbol: false, lineStyle: { width: 1.5 }, color: '#6750A4' },
     ];
-    if (holdPct.some(function(v) { return v != null; })) {
-      series.push({ name: '个股持有到期收益%', type: 'line', yAxisIndex: 1, data: holdPct, showSymbol: false, lineStyle: { width: 1.2, type: 'dashed' }, color: '#9A93A6' });
-    }
     if (d.benchmarks) {
       Object.keys(d.benchmarks).forEach(function(code) {
         var b = d.benchmarks[code];
@@ -328,7 +315,7 @@
     // 基准默认只显示上证指数，其余经图例点开（图例可开关各系列）
     var legendSelected = {};
     series.forEach(function(s) {
-      var isBench = s.name.slice(-1) === '%' && s.name !== '个股持有到期收益%';
+      var isBench = s.name.slice(-1) === '%';
       if (isBench && s.name.indexOf('上证指数') !== 0) legendSelected[s.name] = false;
     });
     var chart = echarts.init(document.getElementById('chart-equity'));
@@ -346,7 +333,7 @@
       series: series,
     });
     // 区间信息卡（QRE-LAB-UI-LANDING：与策略页同口径，随滑块 rAF 节流重算）
-    var benchCode = d.benchmarks && d.benchmarks['000001.SH'] ? '000001.SH' : (d.benchmarks ? Object.keys(d.benchmarks)[0] : null);
+    var benchCode = d.benchmarks && d.benchmarks['000001.SH'] ? '000001.SH' : null;
     function sliceRetPct(pctArr, i0, i1) {  // 由全期累计收益%序列换算区间收益
       var a = null, b = null;
       for (var i = i0; i <= i1; i++) if (pctArr[i] != null) { if (a == null) a = pctArr[i]; b = pctArr[i]; }
@@ -368,14 +355,12 @@
       i0 = Math.max(0, Math.min(i0, n - 1)); i1 = Math.max(i0, Math.min(i1, n - 1));
       var ev = eq.values.slice(i0, i1 + 1).filter(function(v) { return v != null; });
       var sRet = ev.length >= 2 ? ev[ev.length - 1] / ev[0] - 1 : null;
-      var hRet = sliceRetPct(holdPct, i0, i1);
       var bRet = benchPct ? sliceRetPct(benchPct, i0, i1) : null;
-      var excess = (sRet != null && hRet != null) ? sRet - hRet : null;
+      var excess = (sRet != null && bRet != null) ? sRet - bRet : null;
       strip.innerHTML =
         card('区间策略收益', pct(sRet), cls(sRet)) +
-        card('区间买入持有收益', pct(hRet), cls(hRet)) +
         card('区间基准收益·' + (benchCode ? d.benchmarks[benchCode].name : '基准'), pct(bRet), cls(bRet)) +
-        card('区间超额·vs买入持有', pct(excess), cls(excess)) +
+        card('区间超额·vs上证指数', pct(excess), cls(excess)) +
         card('交易日数', i1 - i0 + 1, 'flat');
     }
     var rafEq = false;

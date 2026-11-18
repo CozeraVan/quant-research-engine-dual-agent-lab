@@ -50,8 +50,8 @@ DEFAULT_NUMERIC_FEATURES: tuple[str, ...] = (
     "trade_count",
     "win_rate",
     "total_return",
-    "buy_hold_return",
-    "excess_return_vs_buy_hold",
+    "benchmark_return",
+    "excess_return_vs_benchmark",
 )
 
 # Required columns of the M10.1 strategy_fit_stocks.csv input.
@@ -64,8 +64,8 @@ REQUIRED_INPUT_COLUMNS = (
     "trade_count",
     "win_rate",
     "total_return",
-    "buy_hold_return",
-    "excess_return_vs_buy_hold",
+    "benchmark_return",
+    "excess_return_vs_benchmark",
 )
 
 STATUS_OK = "ok"
@@ -320,7 +320,7 @@ def cluster_strategy(
     context_columns = [
         c for c in (
             "symbol", "tier", "in_pool", "trade_count", "win_rate",
-            "total_return", "buy_hold_return", "excess_return_vs_buy_hold",
+            "total_return", "benchmark_return", "excess_return_vs_benchmark",
             "board", "industry_group", "market_cap_bucket", "liquidity_bucket",
         )
         if c in work.columns
@@ -406,8 +406,8 @@ def cluster_strategy(
                 dominants.append(f"{dim}={value} ({_fmt_share(share)})")
         mean_total = float(members["total_return"].mean()) if "total_return" in members.columns else None
         mean_excess = (
-            float(members["excess_return_vs_buy_hold"].mean())
-            if "excess_return_vs_buy_hold" in members.columns else None
+            float(members["excess_return_vs_benchmark"].mean())
+            if "excess_return_vs_benchmark" in members.columns else None
         )
         mean_win = float(members["win_rate"].mean()) if "win_rate" in members.columns else None
         dominant_text = "; ".join(dominants)
@@ -458,7 +458,7 @@ def cluster_strategy(
                 "status": "noise",
                 "size": noise_count,
                 "mean_total_return": float(noise_rows["total_return"].mean()) if "total_return" in noise_rows.columns else None,
-                "mean_excess_return": float(noise_rows["excess_return_vs_buy_hold"].mean()) if "excess_return_vs_buy_hold" in noise_rows.columns else None,
+                "mean_excess_return": float(noise_rows["excess_return_vs_benchmark"].mean()) if "excess_return_vs_benchmark" in noise_rows.columns else None,
                 "mean_win_rate": float(noise_rows["win_rate"].mean()) if "win_rate" in noise_rows.columns else None,
                 "n_tier_90": tier_counts_by_cluster.get(NOISE_LABEL, {}).get("90", 0),
                 "n_tier_99": tier_counts_by_cluster.get(NOISE_LABEL, {}).get("99", 0),

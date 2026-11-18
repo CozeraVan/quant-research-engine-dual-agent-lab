@@ -428,23 +428,21 @@ assert.equal(el.innerHTML.indexOf('夏普') >= 0, false, 'Sharpe 已在指标条
 console.log('ra-job-render-ok');
 """.replace("%CASE%", json.dumps(_CASES["correlated"] | {"dates": []})))
 
-    def test_symbol_uses_buy_hold_benchmark_from_kline(self):
-        """symbol 版基准 = 买入持有该股，从 kline 收盘按 equity 日期对齐。"""
+    def test_symbol_uses_sse_benchmark(self):
+        """symbol 版与策略页一致，固定使用上证指数。"""
         _run_ra(SYMBOL_TPL, r"""
 const c = %CASE%;
-// 构造与 equity 等长的 kline：dates 用真实日期，ohlc[i][1] = bench_closes[i]
 const dates = c.equity.map((_, i) => new Date(Date.UTC(2024, 0, 2 + i)).toISOString().slice(0, 10));
-const ohlc = c.bench_closes.map(v => [v, v, v, v]);
-ctx.renderRiskAdjusted({equity: {dates, values: c.equity}, kline: {dates, ohlc}});
+const bench = {name: '上证指数', dates, closes: c.bench_closes};
+ctx.renderRiskAdjusted({equity: {dates, values: c.equity}, benchmarks: {'000001.SH': bench}});
 const el = els['ra-strip'];
 assert.equal(el.style.display, '', '有数据必须显示');
 const betaCard = el.innerHTML.split('data-label="β"')[1].split('</div>')[0];
 assert.equal(betaCard.indexOf(Number(c.beta).toFixed(2)) >= 0, true, 'β 数值不符: ' + betaCard);
-assert.equal(el.innerHTML.indexOf('基准 = 区间内买入并持有该股') >= 0, true, '必须披露基准口径');
-// 无 kline → 隐藏（不抛错）
-ctx.renderRiskAdjusted({equity: {dates, values: c.equity}, kline: null});
-assert.equal(el.style.display, 'none', '缺 kline 必须隐藏');
-console.log('ra-symbol-ok');
+assert.equal(el.innerHTML.indexOf('基准 = 上证指数') >= 0, true, '必须披露基准口径');
+ctx.renderRiskAdjusted({equity: {dates, values: c.equity}, benchmarks: {}});
+assert.equal(el.style.display, 'none', '缺上证指数必须隐藏');
+console.log('ra-symbol-sse-ok');
 """.replace("%CASE%", json.dumps(_CASES["correlated"])))
 
 

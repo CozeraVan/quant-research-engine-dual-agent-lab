@@ -73,7 +73,7 @@ _REQUIRED_COLUMNS_BY_ROLE = {
     "drawdown_curve_chart": set(),
     "html_report": set(),
     "strategy_fit_summary": {"strategy_id", "eligible_symbols", "meta_tier"},
-    "strategy_fit_stocks": {"strategy_id", "symbol", "tier", "binomial_p", "total_return", "buy_hold_return", "excess_return_vs_buy_hold"},
+    "strategy_fit_stocks": {"strategy_id", "symbol", "tier", "binomial_p", "total_return", "benchmark_return", "excess_return_vs_benchmark"},
     "strategy_fit_classes": {"strategy_id", "dimension", "class_value", "p_value", "q_value"},
     "strategy_fit_report": set(),
     "ml_cluster_stocks": {"strategy_id", "symbol", "tier", "cluster", "is_noise"},

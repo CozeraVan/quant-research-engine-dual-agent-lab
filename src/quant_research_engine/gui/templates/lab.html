@@ -1538,7 +1538,7 @@
               var parts = [];
               if (m.total_trade_count != null) parts.push("交易 " + m.total_trade_count);
               if (m.strategy_total_return != null) parts.push("收益 " + (m.strategy_total_return * 100).toFixed(2) + "%");
-              if (m.excess_return_vs_buy_hold != null) parts.push("超额 " + (m.excess_return_vs_buy_hold * 100).toFixed(2) + "%");
+              if (m.excess_return_vs_benchmark != null) parts.push("超额 " + (m.excess_return_vs_benchmark * 100).toFixed(2) + "%");
               if (m.max_drawdown != null) parts.push("回撤 " + (m.max_drawdown * 100).toFixed(2) + "%");
               if (parts.length) {
                 smoke += ' <span class="opt">(' + escHtml(parts.join("，")) + ')</span>';

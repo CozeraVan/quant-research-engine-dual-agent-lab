@@ -47,11 +47,11 @@
   </div>
   <div class="metric-strip" id="sum-strip"></div>
 
-  {# QRE-PERF-METRICS-CONTRACT：风险调整收益（α/β/IR，基准=区间买入持有该股）。全 null 时 JS 整块隐藏 #}
+  {# QRE-PERF-METRICS-CONTRACT：风险调整收益（α/β/IR，基准=上证指数）。全 null 时 JS 整块隐藏 #}
   <div class="metric-strip" id="ra-strip" style="display:none"></div>
 
   <div class="chart-box" id="box-equity" style="display:none">
-    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略、个股买入持有和基准指数；基准可多选，拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
+    <div class="chart-title">收益曲线 <button type="button" class="tip-trigger" data-tip="对比策略与基准指数；超额收益固定使用上证指数，拖动滑块缩放区间。" aria-label="收益曲线说明">?</button></div>
     <div class="bench-bar" id="bench-bar">基准：</div>
     <div id="chart-equity" style="height:420px"></div>
     <div class="metric-strip" id="range-strip" style="margin-top:8px"></div>
@@ -150,7 +150,7 @@
 <script src="/static/price-scale.js?v={{ asset_v }}"></script>
 {# QRE-PERF-METRICS-CONTRACT：α/β/IR 与持股周期的共享纯函数层（公式与 risk/performance.py 对齐） #}
 <script src="/static/perf-metrics.js?v={{ asset_v }}"></script>
-{# QRE-EQUITY-CHART：收益曲线（策略/各基准/买入持有/回撤）的唯一构造来源，纯函数 #}
+{# QRE-EQUITY-CHART：收益曲线（策略/各基准/回撤）的唯一构造来源，纯函数 #}
 <script src="/static/equity-chart.js?v={{ asset_v }}"></script>
 <script>
 // QRE-SAAS-GUEST-UX：游客可查看自己的任务/结果（同 IP guest_key 归属，API 侧鉴权），不强制登录
@@ -622,37 +622,35 @@ function renderRiskAdjusted(d){
   const strip = $('#ra-strip');
   if (!strip) return;
   if (typeof QREPerfMetrics === 'undefined'){ strip.style.display = 'none'; return; }
-  const eq = d.equity, kl = d.kline;
-  if (!eq || !eq.dates || !eq.dates.length || !kl || !kl.dates || !kl.dates.length){
+  const eq = d.equity;
+  const bench = (d.benchmarks || {})['000001.SH'];
+  if (!eq || !eq.dates || !eq.dates.length || !bench){
     strip.style.display = 'none'; return;
   }
-  const closes = (kl.ohlc || []).map(r => (r && r[1] != null) ? r[1] : null);
-  const ra = QREPerfMetrics.riskAdjusted({
-    equity: eq.values, dates: eq.dates,
-    benchmark: {name: '买入持有该股', dates: kl.dates, closes},
-  });
+  const ra = QREPerfMetrics.riskAdjusted({equity: eq.values, dates: eq.dates, benchmark: bench});
   const vals = ra ? [ra.alpha_annual, ra.beta, ra.ir] : [];
   if (!ra || vals.every(v => v == null)){ strip.style.display = 'none'; strip.innerHTML = ''; return; }
-  const tipBase = '基准 = 区间内买入并持有该股；按净值曲线差分的日收益计算，与上方收益曲线同源；rf=3%、年化 252 日。';
+  const tipBase = '基准 = 上证指数；按净值曲线差分的日收益计算，与上方收益曲线同源；rf=3%、年化 252 日。';
   strip.style.display = '';
   strip.innerHTML =
     card('α（年化）', ra.alpha_annual == null ? '—' : pct(ra.alpha_annual), cls(ra.alpha_annual),
-         'Jensen\'s α：策略超额收益对「买入持有该股」回归的截距，年化 = 日频截距 × 252；正值 = 交易节奏跑赢了单纯拿着不动。' + tipBase) +
+         'Jensen\'s α：策略超额收益对上证指数回归的截距，年化 = 日频截距 × 252。' + tipBase) +
     card('β', ra.beta == null ? '—' : Number(ra.beta).toFixed(2), 'flat',
-         '策略日收益对「买入持有该股」日收益的回归斜率；>1 表示比持股本身波动更大。' + tipBase) +
+         '策略日收益对上证指数日收益的回归斜率。' + tipBase) +
     card('信息比率', ra.ir == null ? '—' : Number(ra.ir).toFixed(2), cls(ra.ir),
-         '平均主动收益 ÷ 跟踪误差（主动收益的标准差），再乘 √252；衡量每承担一份偏离持股的风险换来多少超额。' + tipBase);
+         '平均主动收益 ÷ 跟踪误差，再乘 √252；衡量相对上证指数的主动收益质量。' + tipBase);
 }
 
 function renderSummary(s, trades, risk){
   $('#sym-title').innerHTML = (s.name || '') + ' <span class="opt">' + dispCode(s.ts_code) + '</span>';
   // 与 job 页同口径：夏普属于核心绩效指标，统一放在顶部指标条（FRM 只留风险类指标）
   const sharpe = (risk && risk.performance && risk.performance.sharpe) ? risk.performance.sharpe.sharpe : null;
-  // 与 lab 版同款的 9 指标卡（含夏普）：策略区间收益% vs 区间自然涨幅%，金额作辅助
+  // 与 lab 版同款指标卡（含夏普）：策略收益% vs 上证指数收益%，金额作辅助
   $('#sum-strip').innerHTML =
     card('股票', dispCode(s.ts_code) + ' ' + (s.name || ''), 'flat') +
     card('策略区间收益', (s.total_ret_pct == null ? '—' : pct(s.total_ret_pct)) + '（' + f2(s.total_pnl) + ' 元）', cls(s.total_ret_pct == null ? s.total_pnl : s.total_ret_pct), '该股在本次回测区间的策略累计收益，括号内为净盈亏金额。') +
-    card('区间自然涨幅', s.bench_ret == null ? '—' : pct(s.bench_ret), s.bench_ret == null ? 'flat' : cls(s.bench_ret), '同一区间买入并持有该股的自然涨幅。') +
+    card('上证指数区间收益', s.benchmark_return == null ? '—' : pct(s.benchmark_return), s.benchmark_return == null ? 'flat' : cls(s.benchmark_return), '该股策略净值首末交易日对应的上证指数收益。') +
+    card('超额收益·vs上证指数', s.excess_return == null ? '—' : pct(s.excess_return), s.excess_return == null ? 'flat' : cls(s.excess_return), '该股策略区间收益 − 同期上证指数收益。') +
     card('夏普比率', sharpe == null ? '—' : Number(sharpe).toFixed(2), cls(sharpe), '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
     card('交易笔数', s.trades, 'flat', '该股已完成的完整买卖交易数量。') +
     card('平均每笔净收益', pct(s.avg_ret), cls(s.avg_ret), '全部完整交易单笔净收益的算术平均。') +
@@ -672,16 +670,7 @@ function renderEquity(d){
   if (!eq || !eq.dates || !eq.dates.length) return;
   $('#box-equity').style.display = '';
   const dates = eq.dates, n = dates.length;
-  const kmap = {};
-  if (d.kline && d.kline.dates) d.kline.dates.forEach((dt, i) => { kmap[dt] = d.kline.ohlc[i][1]; });
-  let k0 = null;
-  const holdPct = dates.map(dt => {
-    const c = kmap[dt];
-    if (c == null) return null;
-    if (k0 == null) k0 = c;
-    return (c / k0 - 1) * 100;
-  });
-  // QRE-EQUITY-CHART：策略%/各基准%/买入持有%/回撤% 统一由共享纯函数层构造
+  // QRE-EQUITY-CHART：策略%/各基准%/回撤% 统一由共享纯函数层构造
   // （与 job 页同源：单 y 轴「累计收益率%」、轴联动、回撤副网格）
   const benches = d.benchmarks || {};
   const benchPc = {};
@@ -698,7 +687,6 @@ function renderEquity(d){
     strategyPct: QREEquityChart.toPct(eq.values),
     benches: benches,
     benchmarks: benches,
-    holdPct: holdPct,
     drawdownPct: QREEquityChart.drawdownPct(eq.values),
   }));
   // 基准多选：按钮态与 ECharts 图例双向同步，全部关闭 = 只看策略；
@@ -798,14 +786,13 @@ function renderEquity(d){
     i0 = Math.max(0, Math.min(i0, n - 1)); i1 = Math.max(i0, Math.min(i1, n - 1));
     const ev = eq.values.slice(i0, i1 + 1).filter(v => v != null);
     const sRet = (ev.length >= 2 && ev[0]) ? ev[ev.length - 1] / ev[0] - 1 : null;
-    const hRet = sliceRetPct(holdPct, i0, i1);
     const bRet = (curBench && benchPc[curBench]) ? sliceRetPct(benchPc[curBench], i0, i1) : null;
-    const excess = (sRet != null && hRet != null) ? sRet - hRet : null;
+    const sseRet = benchPc['000001.SH'] ? sliceRetPct(benchPc['000001.SH'], i0, i1) : null;
+    const excess = (sRet != null && sseRet != null) ? sRet - sseRet : null;
     $('#range-strip').innerHTML =
       card('区间策略收益', pct(sRet), cls(sRet), '当前缩放窗口内，策略首末净值之比 − 1。') +
-      card('区间买入持有收益', pct(hRet), cls(hRet), '当前缩放窗口内，买入并持有该股的收益。') +
       card('区间基准收益·' + (curBench ? benches[curBench].name : '基准'), pct(bRet), cls(bRet), '当前缩放窗口内，基准指数首末收盘价之比 − 1。') +
-      card('区间超额·vs买入持有', pct(excess), cls(excess), '当前缩放窗口内，策略收益 − 买入持有收益。') +
+      card('区间超额·vs上证指数', pct(excess), cls(excess), '当前缩放窗口内，策略收益 − 上证指数收益。') +
       card('交易日数', i1 - i0 + 1, 'flat', '当前缩放窗口包含的交易日数量。') +
       exposureCards(i0, i1, sRet);
   }

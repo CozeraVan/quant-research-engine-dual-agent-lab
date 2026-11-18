@@ -257,19 +257,15 @@ eq(o.series.map(s => s.name), ['策略']);
 console.log('option-nodd-ok');
 """)
 
-    def test_hold_line_and_array_benches(self):
+    def test_array_benches_without_buy_hold(self):
         _run(r"""
 const o = R.option({
   dates: ['a', 'b', 'c'], strategyPct: [0, 1, 2],
   benches: [{code: '000300.SH', name: '沪深300', pct: [0, 0.5, 1]}],
   holdPct: [0, 1.5, 3],
 });
-eq(o.series.map(s => s.name), ['策略', '沪深300', '买入持有']);
-const hold = o.series[2];
-assert.equal(hold.color, '#6750A4');
-assert.equal(hold.lineStyle.type, 'dashed');
-assert.equal(hold.lineStyle.width, 1.2);
-eq(o.legend.data, ['策略', '沪深300', '买入持有']);
+eq(o.series.map(s => s.name), ['策略', '沪深300']);
+eq(o.legend.data, ['策略', '沪深300']);
 // 无数据的基准不进序列也不进图例（只在按钮条里显示「暂无数据」）
 const empty = R.option({dates: ['a'], strategyPct: [0], benches: {'000001.SH': {name: '上证指数'}}});
 eq(empty.series.map(s => s.name), ['策略']);
@@ -295,6 +291,12 @@ const flat = R.replaySpec({strategyPct: [0], benches: {}});
 assert.equal(flat.hasDD, false);
 eq(flat.grids, [{left: 68, right: 20, top: 30, height: '72%'}]);
 console.log('replay-spec-ok');
+""")
+    def test_replay_spec_ignores_legacy_buy_hold_series(self):
+        _run(r"""
+const spec = R.replaySpec({strategyPct: [0, 1], strategyRaw: [1, 1.01],
+  holdPct: [0, 2], benches: {}});
+eq(spec.series.map(s => s.name), ['策略']);
 """)
 
 
@@ -334,6 +336,11 @@ class TestTemplateContract:
             assert 'class="opt" tabindex="0" data-tip="基准是用于对照' not in tpl, (
                 f"{name} 基准说明仍用 .opt 灰字"
             )
+
+    def test_job_static_and_replay_exclude_buy_hold_curve(self):
+        assert "function buyHoldPct(d)" not in JOB_TPL
+        assert "buyHoldPct" not in JOB_TPL
+        assert "buy_hold_curve" not in JOB_TPL
 
     def test_replay_passes_legend_selection(self):
         assert "legendSelected: spec.legendSelected" in JOB_TPL, "job.html 重播未传图例默认态"

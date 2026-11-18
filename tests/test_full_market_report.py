@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -331,7 +332,7 @@ class TestBuildStrategyPerformance:
             summary, rt, eq,
             run_id="test-run", strategy_id="strat-1",
         )
-        assert perf["benchmark_code"] == "000300.SH"
+        assert perf["benchmark_code"] == "000001.SH"
         assert perf["benchmark_aligned_period_count"] == 3
         assert perf["benchmark_portfolio_total_return"] == 0.10
         assert perf["benchmark_benchmark_total_return"] == 0.08
@@ -351,8 +352,9 @@ class TestBuildStrategyPerformance:
             summary, rt, eq,
             run_id="test-run", strategy_id="strat-1",
         )
-        benchmark_keys = [k for k in perf if k.startswith("benchmark_")]
-        assert len(benchmark_keys) == 0
+        assert perf["benchmark_code"] == "000001.SH"
+        assert perf["benchmark_return"] is None
+        assert perf["excess_return_vs_benchmark"] is None
 
     def test_date_and_excess_fallback_when_summary_metrics_missing(self):
         """QRE-ENG-046：summary_metrics 无 date_start/date_end/excess 时，
@@ -365,7 +367,7 @@ class TestBuildStrategyPerformance:
         rt = build_round_trips({"000001.SZ": r})
         eq = build_full_market_equity_curve({"000001.SZ": r})
         perf = build_strategy_performance(
-            {"symbol_count": 1, "traded_symbol_count": 1, "buy_hold_return": 0.10},
+            {"symbol_count": 1, "traded_symbol_count": 1, "benchmark_return": 0.10},
             summary, rt, eq,
             run_id="test-run", strategy_id="strat-1",
         )
@@ -373,7 +375,7 @@ class TestBuildStrategyPerformance:
         eq_last = str(eq["trade_date"].iloc[-1])[:10]
         assert perf["date_start"] == eq_first
         assert perf["date_end"] == eq_last
-        assert perf["excess_return_vs_buy_hold"] == pytest.approx(
+        assert perf["excess_return_vs_benchmark"] == pytest.approx(
             perf["strategy_total_return"] - 0.10
         )
 
@@ -389,13 +391,13 @@ class TestBuildStrategyPerformance:
         perf = build_strategy_performance(
             {"symbol_count": 1, "traded_symbol_count": 1,
              "date_start": "2020-01-01", "date_end": "2020-12-31",
-             "buy_hold_return": 0.10, "excess_return_vs_buy_hold": 0.05},
+             "benchmark_return": 0.10, "excess_return_vs_benchmark": 0.05},
             summary, rt, eq,
             run_id="test-run", strategy_id="strat-1",
         )
         assert perf["date_start"] == "2020-01-01"
         assert perf["date_end"] == "2020-12-31"
-        assert perf["excess_return_vs_buy_hold"] == 0.05
+        assert perf["excess_return_vs_benchmark"] == pytest.approx(0.08)
 
 
 class TestBuildTradeAnalysis:
@@ -628,8 +630,8 @@ class TestWriteFullMarketExcel:
             "total_trade_count": 2,
             "sharpe": 1.5,
             "strategy_total_return": 0.15,
-            "buy_hold_return": 0.10,
-            "excess_return_vs_buy_hold": 0.05,
+            "benchmark_return": 0.10,
+            "excess_return_vs_benchmark": 0.05,
             "benchmark_code": "000300.SH",
             "benchmark_portfolio_total_return": 0.12,
         }
@@ -647,8 +649,8 @@ class TestWriteFullMarketExcel:
         assert perf_data.get("交易笔数") == 2
         assert perf_data.get("夏普比率") == 1.5
         assert perf_data.get("策略总收益率") == 0.15
-        assert perf_data.get("买入持有收益率") == 0.10
-        assert perf_data.get("超额收益率") == 0.05
+        assert perf_data.get("上证指数收益率") == 0.10
+        assert perf_data.get("超额收益率（对上证指数）") == 0.05
         assert perf_data.get("基准代码") == "000300.SH"
         assert perf_data.get("benchmark_portfolio_total_return") == 0.12
 
@@ -1057,8 +1059,8 @@ class TestBuildStrategyPerformanceSharedCash:
         perf = build_strategy_performance(
             result.summary, round_trips=round_trips, equity_curve=eq, engine_mode="shared_cash",
         )
-        assert perf["buy_hold_return"] is None
-        assert perf["excess_return_vs_buy_hold"] is None
+        assert perf["benchmark_return"] is None
+        assert perf["excess_return_vs_benchmark"] is None
         assert perf["positive_symbol_rate"] is None
         assert perf["mean_symbol_return"] is None
         assert perf["median_symbol_return"] is None
@@ -1184,3 +1186,161 @@ def test_shared_cash_round_trips_cost_breakdown_chain():
         assert r["commission"] > 0
         assert r["stamp_tax"] > 0  # 卖出印花税（entry 无印花税，聚合列即 exit 口径）
         assert abs(r["commission"] + r["stamp_tax"] + r["transfer_fee"] - r["total_cost"]) < 1e-6
+def _legacy_full_market_equity_curve(results) -> pd.DataFrame:
+    """CF-005 前的整份 concat 实现，作为分块实现的口径参照（仅测试用）。"""
+    frames: list[pd.DataFrame] = []
+    for symbol, single_result in results.items():
+        eq = getattr(single_result, "equity_curve", None)
+        if eq is None or eq.empty or "trade_date" not in eq.columns:
+            continue
+        keep = ["trade_date", "total_equity"]
+        for optional in ("cash", "market_value", "position_quantity"):
+            if optional in eq.columns:
+                keep.append(optional)
+        frame = eq.loc[:, keep].copy()
+        frame["symbol"] = symbol
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame()
+    big = pd.concat(frames, ignore_index=True)
+    big["trade_date"] = pd.to_datetime(big["trade_date"])
+    big = big.dropna(subset=["trade_date"])
+    big = big.drop_duplicates(subset=["trade_date", "symbol"], keep="first")
+    big = big.sort_values("trade_date", kind="mergesort")
+    for column in ("cash", "market_value", "position_quantity"):
+        if column not in big.columns:
+            big[column] = 0.0
+    for column in ("total_equity", "cash", "market_value", "position_quantity"):
+        big[column] = pd.to_numeric(big[column], errors="coerce").fillna(0.0)
+    daily = big.groupby("trade_date", sort=True).agg(
+        total_equity=("total_equity", "sum"),
+        cash=("cash", "sum"),
+        market_value=("market_value", "sum"),
+    )
+    daily["position_count"] = (
+        (big["position_quantity"] > 0).groupby(big["trade_date"]).sum().astype(int)
+    )
+    dates = daily.index
+    next_of = {dates[i - 1]: dates[i] for i in range(1, len(dates))}
+    cur = big[["trade_date", "symbol", "total_equity"]]
+    prev = cur.rename(columns={"total_equity": "prev_equity"}).copy()
+    prev["trade_date"] = prev["trade_date"].map(next_of)
+    prev = prev.dropna(subset=["trade_date"])
+    merged = cur.merge(prev, on=["trade_date", "symbol"], how="left")
+    both = merged.dropna(subset=["prev_equity"])
+    numerator = both.groupby("trade_date")["total_equity"].sum()
+    denominator = both.groupby("trade_date")["prev_equity"].sum()
+    daily["daily_return"] = (numerator / denominator.where(denominator > 0)) - 1.0
+    daily["cumulative_return"] = (1.0 + daily["daily_return"].fillna(0.0)).cumprod() - 1.0
+    return pd.DataFrame({
+        "trade_date": daily.index,
+        "cash": daily["cash"].to_numpy(),
+        "market_value": daily["market_value"].to_numpy(),
+        "total_equity": daily["total_equity"].to_numpy(),
+        "daily_return": daily["daily_return"].to_numpy(),
+        "cumulative_return": daily["cumulative_return"].to_numpy(),
+        "position_count": daily["position_count"].to_numpy(),
+        "turnover": None,
+    })
+
+
+class TestChunkedFullMarketEquityCurve:
+    """CF-005 回归：分块聚合必须与旧整份实现同口径（含停牌缺口/中途进入/重复行）。"""
+
+    def _fixtures(self):
+        dates = pd.date_range("2026-01-05", periods=6, freq="B")
+
+        def frame(rows):
+            return pd.DataFrame(
+                rows, columns=["trade_date", "cash", "market_value", "position_quantity", "total_equity"]
+            )
+
+        results = {
+            "000001.SZ": SimpleNamespace(equity_curve=frame([
+                [dates[i], 50000.0, 50000.0 + 1000.0 * i, 100, 100000.0 + 1000.0 * i] for i in range(6)
+            ])),
+            # 停牌/缺口：只在中间 4 天有记录
+            "000002.SZ": SimpleNamespace(equity_curve=frame([
+                [dates[i], 100000.0, 100000.0 + 500.0 * (i - 1), 200, 200000.0 + 1000.0 * (i - 1)] for i in range(1, 5)
+            ])),
+            # 中途进入 + 部分日期空仓
+            "000003.SZ": SimpleNamespace(equity_curve=frame([
+                [dates[2], 300000.0, 0.0, 0, 300000.0],
+                [dates[3], 299000.0, 0.0, 0, 299000.0],
+                [dates[4], 0.0, 298000.0, 100, 298000.0],
+                [dates[5], 0.0, 297000.0, 100, 297000.0],
+            ])),
+            # NaT 行 + 重复 (date, symbol)（keep first）+ NaN 数值按 0 计
+            "600000.SH": SimpleNamespace(equity_curve=frame([
+                [dates[0], 1.0, 1.0, 10, np.nan],
+                [pd.NaT, 999.0, 999.0, 9, 999.0],
+                [dates[1], 2.0, 2.0, 0, 1111.0],
+                [dates[1], 3.0, 3.0, 0, 2222.0],
+                [dates[3], np.nan, np.nan, 0, 333.0],
+            ])),
+            "600001.SH": SimpleNamespace(equity_curve=pd.DataFrame()),
+            "600002.SH": SimpleNamespace(equity_curve=pd.DataFrame({"total_equity": [1.0, 2.0]})),
+        }
+        return dates, results
+
+    def test_chunked_matches_legacy_reference(self, monkeypatch):
+        _, results = self._fixtures()
+        monkeypatch.setattr(
+            "quant_research_engine.portfolio.full_market_report._REPORT_CHUNK_SYMBOLS", 2
+        )
+        new = build_full_market_equity_curve(results)
+        legacy = _legacy_full_market_equity_curve(results)
+
+        assert list(new.columns) == list(legacy.columns)
+        pd.testing.assert_index_equal(
+            pd.DatetimeIndex(new["trade_date"]), pd.DatetimeIndex(legacy["trade_date"])
+        )
+        assert new["position_count"].tolist() == legacy["position_count"].tolist()
+        for column in ("cash", "market_value", "total_equity", "daily_return", "cumulative_return"):
+            np.testing.assert_allclose(
+                new[column].to_numpy(dtype=float),
+                legacy[column].to_numpy(dtype=float),
+                rtol=1e-12,
+                atol=1e-6,
+                equal_nan=True,
+            )
+        assert new["turnover"].isna().all()
+
+    def test_single_chunk_matches_multi_chunk(self, monkeypatch):
+        _, results = self._fixtures()
+        monkeypatch.setattr(
+            "quant_research_engine.portfolio.full_market_report._REPORT_CHUNK_SYMBOLS", 2
+        )
+        chunked = build_full_market_equity_curve(results)
+        monkeypatch.setattr(
+            "quant_research_engine.portfolio.full_market_report._REPORT_CHUNK_SYMBOLS", 10000
+        )
+        whole = build_full_market_equity_curve(results)
+        pd.testing.assert_frame_equal(chunked, whole, rtol=1e-12, atol=1e-6)
+
+
+class TestRowTableChunking:
+    """CF-005：ledger/round_trips 分块落表不得改变列与行序。"""
+
+    def test_chunk_boundary_does_not_change_output(self, monkeypatch):
+        results = {f"{i:06d}.SZ": _make_single_result(f"{i:06d}.SZ") for i in range(7)}
+
+        monkeypatch.setattr(
+            "quant_research_engine.portfolio.full_market_report._REPORT_CHUNK_SYMBOLS", 2
+        )
+        ledger_chunked = build_trades_ledger(results)
+        trips_chunked = build_round_trips(results)
+
+        monkeypatch.setattr(
+            "quant_research_engine.portfolio.full_market_report._REPORT_CHUNK_SYMBOLS", 10000
+        )
+        ledger_whole = build_trades_ledger(results)
+        trips_whole = build_round_trips(results)
+
+        assert len(ledger_chunked) == len(ledger_whole) == 14
+        assert len(trips_chunked) == len(trips_whole) == 14
+        pd.testing.assert_frame_equal(ledger_chunked, ledger_whole)
+        pd.testing.assert_frame_equal(trips_chunked, trips_whole)
+        assert ledger_chunked["symbol"].tolist() == [
+            symbol for symbol in results for _ in range(2)
+        ]

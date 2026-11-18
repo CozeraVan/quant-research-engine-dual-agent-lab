@@ -206,7 +206,7 @@ def read_smoke(name: str, sandbox_dir: Path | None = None) -> dict[str, Any] | N
 SMOKE_METRIC_KEYS = (
     "total_trade_count",
     "strategy_total_return",
-    "excess_return_vs_buy_hold",
+    "excess_return_vs_benchmark",
     "max_drawdown",
 )
 
@@ -291,12 +291,12 @@ def list_sandbox(sandbox_dir: Path | None = None) -> list[dict[str, Any]]:
 # 晋升全量回测闸（promotion gate）：run 收尾评估 + 结果落盘
 # ---------------------------------------------------------------------------
 
-# 写死的最简判据（QRE-GUI-PROMO-GATE-001）：交易次数 >= 30 且超额(对买入持有) > 0
+# 写死的最简判据（QRE-GUI-PROMO-GATE-001）：交易次数 >= 30 且超额(对上证指数) > 0
 GATE_MIN_TRADES = 30
 GATE_METRIC_KEYS = (
     "total_trade_count",
     "strategy_total_return",
-    "excess_return_vs_buy_hold",
+    "excess_return_vs_benchmark",
     "max_drawdown",
 )
 
@@ -310,7 +310,7 @@ def finalize_promotion_gate(
     """run 结束时评估晋升闸并回写 ``outputs/refresh/gates/<name>.json``。
 
     由 engine._execute_and_finalize 在 run 收尾时调用（record 带 promotion_gate
-    标记）。判据写死：交易次数 >= 30 且 excess_return_vs_buy_hold > 0 → passed，
+    标记）。判据写死：交易次数 >= 30 且 excess_return_vs_benchmark > 0 → passed，
     否则 failed；run 本身失败也记 failed（附 error）。force 晋升的策略照常评估，
     ``forced=True`` 透传（日更不跳过，仅展示「强制在库」）。
     R4 风险判据：附加 ``risk`` 节（见 risk_report.evaluate_gate_risk），
@@ -334,7 +334,7 @@ def finalize_promotion_gate(
             "forced": forced,
             "criteria": {
                 "min_trades": GATE_MIN_TRADES,
-                "min_excess_return_vs_buy_hold": 0,
+                "min_excess_return_vs_benchmark": 0,
             },
             "evaluated_at": _now_iso(),
             # R4 风险判据：读该 run 的 risk_report.json；不存在 →
@@ -353,7 +353,7 @@ def finalize_promotion_gate(
         metrics_src = summary.get("metrics", {})
         metrics = {k: metrics_src[k] for k in GATE_METRIC_KEYS if k in metrics_src}
         trades = metrics.get("total_trade_count")
-        excess = metrics.get("excess_return_vs_buy_hold")
+        excess = metrics.get("excess_return_vs_benchmark")
         passed = (
             isinstance(trades, (int, float))
             and trades >= GATE_MIN_TRADES

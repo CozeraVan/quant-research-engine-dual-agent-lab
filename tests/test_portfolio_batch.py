@@ -175,48 +175,14 @@ def test_batch_backtest_includes_industry_group_in_metadata():
     assert result.summary.loc[1, "industry_group"] == "technology"
 
 
-def test_batch_backtest_summary_includes_buy_hold_fields():
-    frame = make_batch_frame()
-
-    engine = BatchBacktestEngine(AShareMarketProfile())
-    request = BatchBacktestRequest(
-        symbols=["000001.SZ", "000002.SZ"],
-        initial_cash_per_symbol=100000.0,
-        entry_signal="rsi_2 < 10",
-        holding_days=3,
+def test_batch_backtest_omits_buy_hold_statistics():
+    result = BatchBacktestEngine(AShareMarketProfile()).run(
+        make_batch_frame(),
+        BatchBacktestRequest(symbols=["000001.SZ", "000002.SZ"], initial_cash_per_symbol=100000.0, entry_signal="rsi_2 < 10", holding_days=3),
     )
-
-    result = engine.run(frame, request)
-
-    # buy-and-hold fields flow through from single-symbol summary
-    assert "buy_hold_return" in result.summary.columns
-    assert "excess_return_vs_buy_hold" in result.summary.columns
-    # 000001.SZ: first close=10.1, last close=11.3
-    assert result.summary.loc[0, "buy_hold_return"] == pytest.approx(11.3 / 10.1 - 1)
-    # 000002.SZ: first close=19.9, last close=18.5
-    assert result.summary.loc[1, "buy_hold_return"] == pytest.approx(18.5 / 19.9 - 1)
-
-
-def test_batch_backtest_summary_metrics_includes_buy_hold_aggregates():
-    frame = make_batch_frame()
-
-    engine = BatchBacktestEngine(AShareMarketProfile())
-    request = BatchBacktestRequest(
-        symbols=["000001.SZ", "000002.SZ"],
-        initial_cash_per_symbol=100000.0,
-        entry_signal="rsi_2 < 10",
-        holding_days=3,
-    )
-
-    result = engine.run(frame, request)
-    metrics = result.summary_metrics
-
-    # buy-and-hold aggregates are present
-    assert "buy_hold_return" in metrics
-    assert "mean_buy_hold_return" in metrics
-    assert "median_buy_hold_return" in metrics
-    assert "mean_excess_return_vs_buy_hold" in metrics
-    assert "median_excess_return_vs_buy_hold" in metrics
-    expected = ((11.3 / 10.1 - 1) + (18.5 / 19.9 - 1)) / 2
-    assert metrics["mean_buy_hold_return"] == pytest.approx(expected)
-    assert metrics["median_buy_hold_return"] == pytest.approx(expected)
+    assert "buy_hold_return" not in result.summary.columns
+    assert "excess_return_vs_buy_hold" not in result.summary.columns
+    assert "buy_hold_return" not in result.summary_metrics
+    assert "mean_excess_return_vs_buy_hold" not in result.summary_metrics
+    for single in result.results.values():
+        assert "buy_hold_equity" not in single.equity_curve.columns

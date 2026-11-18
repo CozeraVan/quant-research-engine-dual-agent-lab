@@ -11,6 +11,9 @@ import pandas as pd
 from quant_research_engine.portfolio.risk import summarize_equity_curve
 from quant_research_engine.data.tushare_security import derive_board as _derive_board
 
+#: 全市场报告聚合的分块粒度（只影响内存峰值，不影响产物口径/行序）
+_REPORT_CHUNK_SYMBOLS = 250
+
 _TRADES_LEDGER_COLUMNS = [
     "run_id", "strategy_id", "symbol", "trade_date", "side", "quantity",
     "lot_count", "price_raw", "price_executed", "notional", "commission",
@@ -31,8 +34,8 @@ _SYMBOL_PERFORMANCE_COLUMNS = [
     "symbol", "board", "trade_count", "open_trade_count",
     "win_count", "loss_count", "win_rate", "gross_profit", "gross_loss",
     "net_profit", "profit_factor", "expectancy", "strategy_total_return",
-    "buy_hold_return", "excess_return_vs_buy_hold", "sharpe", "sortino",
-    "information_ratio_vs_buy_hold", "max_drawdown", "turnover", "total_cost",
+    "benchmark_return", "excess_return_vs_benchmark", "sharpe", "sortino",
+    "max_drawdown", "turnover", "total_cost",
     "failed_order_count", "has_trades",
 ]
 
@@ -105,11 +108,10 @@ COLUMN_LABELS: dict[str, str] = {
     "profit_factor": "盈亏比",
     "expectancy": "单笔期望",
     "strategy_total_return": "策略总收益率",
-    "buy_hold_return": "买入持有收益率",
-    "excess_return_vs_buy_hold": "超额收益率",
+    "benchmark_return": "上证指数收益率",
+    "excess_return_vs_benchmark": "超额收益率（对上证指数）",
     "sharpe": "夏普比率",
     "sortino": "索提诺比率",
-    "information_ratio_vs_buy_hold": "信息比率",
     "max_drawdown": "最大回撤",
     "turnover": "换手率",
     "failed_order_count": "失败委托数",
@@ -345,42 +347,52 @@ def build_trades_ledger(
                 "status": "filled",
             })
     else:
-        for symbol, single_result in results.items():  # type: ignore[union-attr]
+        # 分块落表（内存有界）：逐股解析仍按原逻辑，仅每 250 只把 rows 转成
+        # 块级 DataFrame 暂存；行顺序（results 迭代顺序）与列不变。
+        chunks: list[pd.DataFrame] = []
+        rows: list[dict[str, Any]] = []
+        for index, (symbol, single_result) in enumerate(results.items()):  # type: ignore[union-attr]
             orders = getattr(single_result, "orders", None)
-            if orders is None or (hasattr(orders, "empty") and orders.empty):
-                continue
-            for record in orders.to_dict("records"):
-                side = str(record.get("side", ""))
-                price_raw = record.get("price_raw", record.get("price"))
-                price_executed = record.get("price")
-                quantity = record.get("quantity")
-                slippage_amount = (
-                    abs(_safe_float(price_executed) - _safe_float(price_raw)) * _safe_float(quantity)
-                    if price_raw is not None and price_executed is not None and quantity is not None
-                    else None
-                )
-                rows.append({
-                    "run_id": run_id,
-                    "strategy_id": strategy_id,
-                    "symbol": record.get("symbol", symbol),
-                    "trade_date": _to_date(record.get("trade_date")),
-                    "side": side,
-                    "quantity": quantity,
-                    "lot_count": None,
-                    "price_raw": price_raw,
-                    "price_executed": price_executed,
-                    "notional": record.get("notional"),
-                    "commission": record.get("commission"),
-                    "stamp_tax": record.get("stamp_tax"),
-                    "transfer_fee": record.get("transfer_fee"),
-                    "slippage_amount": slippage_amount,
-                    "total_cost": record.get("cost"),
-                    "realized_pnl": None,
-                    "cash_after": None,
-                    "position_after": None,
-                    "order_reason": None,
-                    "status": "filled",
-                })
+            if orders is not None and not (hasattr(orders, "empty") and orders.empty):
+                for record in orders.to_dict("records"):
+                    side = str(record.get("side", ""))
+                    price_raw = record.get("price_raw", record.get("price"))
+                    price_executed = record.get("price")
+                    quantity = record.get("quantity")
+                    slippage_amount = (
+                        abs(_safe_float(price_executed) - _safe_float(price_raw)) * _safe_float(quantity)
+                        if price_raw is not None and price_executed is not None and quantity is not None
+                        else None
+                    )
+                    rows.append({
+                        "run_id": run_id,
+                        "strategy_id": strategy_id,
+                        "symbol": record.get("symbol", symbol),
+                        "trade_date": _to_date(record.get("trade_date")),
+                        "side": side,
+                        "quantity": quantity,
+                        "lot_count": None,
+                        "price_raw": price_raw,
+                        "price_executed": price_executed,
+                        "notional": record.get("notional"),
+                        "commission": record.get("commission"),
+                        "stamp_tax": record.get("stamp_tax"),
+                        "transfer_fee": record.get("transfer_fee"),
+                        "slippage_amount": slippage_amount,
+                        "total_cost": record.get("cost"),
+                        "realized_pnl": None,
+                        "cash_after": None,
+                        "position_after": None,
+                        "order_reason": None,
+                        "status": "filled",
+                    })
+            if (index + 1) % _REPORT_CHUNK_SYMBOLS == 0:
+                chunks.append(pd.DataFrame(rows, columns=_TRADES_LEDGER_COLUMNS))
+                rows = []
+        if rows:
+            chunks.append(pd.DataFrame(rows, columns=_TRADES_LEDGER_COLUMNS))
+        if chunks:
+            return pd.concat(chunks, ignore_index=True)
     if not rows:
         return pd.DataFrame(columns=_TRADES_LEDGER_COLUMNS)
     return pd.DataFrame(rows, columns=_TRADES_LEDGER_COLUMNS)
@@ -457,68 +469,81 @@ def build_round_trips(
                 "max_adverse_return": None,
             })
     else:
-        for symbol, single_result in results.items():  # type: ignore[union-attr]
+        # 分块落表（内存有界）：逐股解析仍按原逻辑，仅每 250 只把 rows 转成
+        # 块级 DataFrame；行顺序（results 迭代顺序）与列不变。
+        # equity_curve 提到 records 循环外：磁盘懒加载代理每次属性访问都会重读
+        # CSV，逐笔取 MFE/MAE 会造成 (trades × 全市场行数) 级重复读盘。
+        chunks: list[pd.DataFrame] = []
+        rows: list[dict[str, Any]] = []
+        for index, (symbol, single_result) in enumerate(results.items()):  # type: ignore[union-attr]
             trades = getattr(single_result, "trades", None)
-            if trades is None or (hasattr(trades, "empty") and trades.empty):
-                continue
-            for record in trades.to_dict("records"):
-                entry_date = _to_date(record.get("entry_date"))
-                exit_date = _to_date(record.get("exit_date"))
-                holding_days = None
-                if entry_date is not None and exit_date is not None:
-                    try:
-                        holding_days = int((pd.Timestamp(exit_date) - pd.Timestamp(entry_date)).days)
-                    except Exception:
-                        holding_days = None
-                quantity = record.get("quantity")
-                entry_price = record.get("entry_price")
-                exit_price = record.get("exit_price")
-                entry_notional = _safe_float(quantity) * _safe_float(entry_price) if quantity is not None and entry_price is not None else None
-                exit_notional = _safe_float(quantity) * _safe_float(exit_price) if quantity is not None and exit_price is not None else None
-                gross_pnl = record.get("gross_pnl")
-                net_pnl = record.get("net_pnl")
-                gross_return = _safe_float(gross_pnl) / _safe_float(entry_notional) if entry_notional and gross_pnl is not None else None
-                net_return = _safe_float(net_pnl) / _safe_float(entry_notional) if entry_notional and net_pnl is not None else None
-                entry_commission = record.get("entry_commission")
-                exit_commission = record.get("exit_commission")
-                stamp_tax = record.get("exit_stamp_tax")
-                transfer_fee = (
-                    _safe_float(record.get("entry_transfer_fee") or 0.0)
-                    + _safe_float(record.get("exit_transfer_fee") or 0.0)
-                    if record.get("entry_transfer_fee") is not None or record.get("exit_transfer_fee") is not None
-                    else None
-                )
-                commission = (
-                    _safe_float(entry_commission or 0.0) + _safe_float(exit_commission or 0.0)
-                    if entry_commission is not None or exit_commission is not None
-                    else None
-                )
-                equity_curve = getattr(single_result, "equity_curve", None) if single_result is not None else None
-                mfe, mae = _mfe_mae_from_equity(equity_curve, entry_date, exit_date)
-                rows.append({
-                    "run_id": run_id,
-                    "strategy_id": strategy_id,
-                    "symbol": record.get("symbol", symbol),
-                    "entry_date": entry_date,
-                    "exit_date": exit_date,
-                    "holding_days": holding_days,
-                    "entry_price": entry_price,
-                    "exit_price": exit_price,
-                    "quantity": quantity,
-                    "entry_notional": entry_notional,
-                    "exit_notional": exit_notional,
-                    "gross_pnl": gross_pnl,
-                    "net_pnl": net_pnl,
-                    "gross_return": gross_return,
-                    "net_return": net_return,
-                    "commission": commission,
-                    "stamp_tax": stamp_tax,
-                    "transfer_fee": transfer_fee,
-                    "total_cost": record.get("cost"),
-                    "exit_reason": record.get("exit_reason"),
-                    "max_favorable_return": mfe,
-                    "max_adverse_return": mae,
-                })
+            if trades is not None and not (hasattr(trades, "empty") and trades.empty):
+                equity_curve = getattr(single_result, "equity_curve", None)
+                for record in trades.to_dict("records"):
+                    entry_date = _to_date(record.get("entry_date"))
+                    exit_date = _to_date(record.get("exit_date"))
+                    holding_days = None
+                    if entry_date is not None and exit_date is not None:
+                        try:
+                            holding_days = int((pd.Timestamp(exit_date) - pd.Timestamp(entry_date)).days)
+                        except Exception:
+                            # 日期为坏值/NaT 时无法算持仓天数，按缺省 None 落表。
+                            holding_days = None
+                    quantity = record.get("quantity")
+                    entry_price = record.get("entry_price")
+                    exit_price = record.get("exit_price")
+                    entry_notional = _safe_float(quantity) * _safe_float(entry_price) if quantity is not None and entry_price is not None else None
+                    exit_notional = _safe_float(quantity) * _safe_float(exit_price) if quantity is not None and exit_price is not None else None
+                    gross_pnl = record.get("gross_pnl")
+                    net_pnl = record.get("net_pnl")
+                    gross_return = _safe_float(gross_pnl) / _safe_float(entry_notional) if entry_notional and gross_pnl is not None else None
+                    net_return = _safe_float(net_pnl) / _safe_float(entry_notional) if entry_notional and net_pnl is not None else None
+                    entry_commission = record.get("entry_commission")
+                    exit_commission = record.get("exit_commission")
+                    stamp_tax = record.get("exit_stamp_tax")
+                    transfer_fee = (
+                        _safe_float(record.get("entry_transfer_fee") or 0.0)
+                        + _safe_float(record.get("exit_transfer_fee") or 0.0)
+                        if record.get("entry_transfer_fee") is not None or record.get("exit_transfer_fee") is not None
+                        else None
+                    )
+                    commission = (
+                        _safe_float(entry_commission or 0.0) + _safe_float(exit_commission or 0.0)
+                        if entry_commission is not None or exit_commission is not None
+                        else None
+                    )
+                    mfe, mae = _mfe_mae_from_equity(equity_curve, entry_date, exit_date)
+                    rows.append({
+                        "run_id": run_id,
+                        "strategy_id": strategy_id,
+                        "symbol": record.get("symbol", symbol),
+                        "entry_date": entry_date,
+                        "exit_date": exit_date,
+                        "holding_days": holding_days,
+                        "entry_price": entry_price,
+                        "exit_price": exit_price,
+                        "quantity": quantity,
+                        "entry_notional": entry_notional,
+                        "exit_notional": exit_notional,
+                        "gross_pnl": gross_pnl,
+                        "net_pnl": net_pnl,
+                        "gross_return": gross_return,
+                        "net_return": net_return,
+                        "commission": commission,
+                        "stamp_tax": stamp_tax,
+                        "transfer_fee": transfer_fee,
+                        "total_cost": record.get("cost"),
+                        "exit_reason": record.get("exit_reason"),
+                        "max_favorable_return": mfe,
+                        "max_adverse_return": mae,
+                    })
+            if (index + 1) % _REPORT_CHUNK_SYMBOLS == 0:
+                chunks.append(pd.DataFrame(rows, columns=_ROUND_TRIPS_COLUMNS))
+                rows = []
+        if rows:
+            chunks.append(pd.DataFrame(rows, columns=_ROUND_TRIPS_COLUMNS))
+        if chunks:
+            return pd.concat(chunks, ignore_index=True)
     if not rows:
         return pd.DataFrame(columns=_ROUND_TRIPS_COLUMNS)
     return pd.DataFrame(rows, columns=_ROUND_TRIPS_COLUMNS)
@@ -535,22 +560,6 @@ def _sortino_from_equity(equity_curve: pd.DataFrame, annualization: int = 252) -
     if downside_std == 0.0:
         return None
     return float(returns.mean() / downside_std * (annualization ** 0.5))
-
-
-def _ir_vs_buy_hold(equity_curve: pd.DataFrame, annualization: int = 252) -> float | None:
-    if equity_curve is None or equity_curve.empty:
-        return None
-    if "total_equity" not in equity_curve.columns or "buy_hold_equity" not in equity_curve.columns:
-        return None
-    strat = equity_curve["total_equity"].astype(float).pct_change()
-    buy_hold = equity_curve["buy_hold_equity"].astype(float).pct_change()
-    active = (strat - buy_hold).dropna()
-    if len(active) < 2:
-        return None
-    std = float(active.std())
-    if std == 0.0:
-        return None
-    return float(active.mean() / std * (annualization ** 0.5))
 
 
 def _mfe_mae_from_equity(
@@ -637,11 +646,10 @@ def build_symbol_performance(
                 "profit_factor": profit_factor,
                 "expectancy": expectancy,
                 "strategy_total_return": None,
-                "buy_hold_return": None,
-                "excess_return_vs_buy_hold": None,
+                "benchmark_return": None,
+                "excess_return_vs_benchmark": None,
                 "sharpe": None,
                 "sortino": None,
-                "information_ratio_vs_buy_hold": None,
                 "max_drawdown": None,
                 "turnover": None,
                 "total_cost": float(sym_trades["total_cost"].sum()) if "total_cost" in sym_trades.columns else None,
@@ -717,11 +725,10 @@ def build_symbol_performance(
                 "profit_factor": profit_factor,
                 "expectancy": expectancy,
                 "strategy_total_return": record.get("total_return"),
-                "buy_hold_return": record.get("buy_hold_return"),
-                "excess_return_vs_buy_hold": record.get("excess_return_vs_buy_hold"),
+                "benchmark_return": None,
+                "excess_return_vs_benchmark": None,
                 "sharpe": risk_metrics.get("sharpe"),
                 "sortino": _sortino_from_equity(equity_curve),
-                "information_ratio_vs_buy_hold": _ir_vs_buy_hold(equity_curve),
                 "max_drawdown": record.get("max_drawdown") or risk_metrics.get("max_drawdown"),
                 "turnover": turnover,
                 "total_cost": record.get("total_cost"),
@@ -768,68 +775,92 @@ def build_full_market_equity_curve(
     # batch mode
     # daily_return 口径：仅由「上一交易日已在市」的股票贡献；当日新进入（如 IPO 上市）
     # 的股票自带完整 initial_cash 进入总和，视为外部资金注入，不计入当日收益。
-    frames: list[pd.DataFrame] = []
-    for symbol, single_result in results.items():  # type: ignore[union-attr]
+    #
+    # 内存控制（CF-005）：旧实现把全市场逐股 equity_curve concat 成 ~22M 行
+    # （5000 只 × 5 年）再排序/merge，中间存在多份全量拷贝。这里改为两趟分块：
+    # 第一趟只收集全局交易日历，第二趟按块 concat/聚合；日期求和、持仓计数、
+    # 日收益的分子/分母在块间线性可加，统计口径与旧实现一致。
+    chunk_size = _REPORT_CHUNK_SYMBOLS
+    items = list(results.items())  # type: ignore[union-attr]
+    global_dates: set[Any] = set()
+    for _symbol, single_result in items:
         eq = getattr(single_result, "equity_curve", None)
         if eq is None or eq.empty or "trade_date" not in eq.columns:
             continue
-        keep = ["trade_date", "total_equity"]
-        for optional in ("cash", "market_value", "position_quantity"):
-            if optional in eq.columns:
-                keep.append(optional)
-        frame = eq.loc[:, keep].copy()
-        frame["symbol"] = symbol
-        frames.append(frame)
-
-    if not frames:
+        parsed = pd.to_datetime(eq["trade_date"], errors="coerce").dropna()
+        global_dates.update(parsed.unique())
+    if not global_dates:
         return pd.DataFrame(columns=_EQUITY_CURVE_COLUMNS)
 
-    big = pd.concat(frames, ignore_index=True)
-    big["trade_date"] = pd.to_datetime(big["trade_date"])
-    big = big.dropna(subset=["trade_date"])
-    big = big.drop_duplicates(subset=["trade_date", "symbol"], keep="first")
-    big = big.sort_values("trade_date", kind="mergesort")
-    if big.empty:
-        return pd.DataFrame(columns=_EQUITY_CURVE_COLUMNS)
-
-    for column in ("cash", "market_value", "position_quantity"):
-        if column not in big.columns:
-            big[column] = 0.0
-    for column in ("total_equity", "cash", "market_value", "position_quantity"):
-        big[column] = pd.to_numeric(big[column], errors="coerce").fillna(0.0)
-
-    daily = big.groupby("trade_date", sort=True).agg(
-        total_equity=("total_equity", "sum"),
-        cash=("cash", "sum"),
-        market_value=("market_value", "sum"),
-    )
-    daily["position_count"] = (
-        (big["position_quantity"] > 0).groupby(big["trade_date"]).sum().astype(int)
-    )
-
-    # 交集口径日收益：对每个交易日，只在「当日与前一全局交易日均在市」的股票上
-    # 计算 Σequity_t / Σequity_{t-1} − 1；新股进入当日收益贡献为 0。
-    dates = daily.index
+    dates = pd.DatetimeIndex(sorted(global_dates))
     next_of = {dates[i - 1]: dates[i] for i in range(1, len(dates))}
-    cur = big[["trade_date", "symbol", "total_equity"]]
-    prev = cur.rename(columns={"total_equity": "prev_equity"}).copy()
-    prev["trade_date"] = prev["trade_date"].map(next_of)
-    prev = prev.dropna(subset=["trade_date"])
-    merged = cur.merge(prev, on=["trade_date", "symbol"], how="left")
-    both = merged.dropna(subset=["prev_equity"])
-    numerator = both.groupby("trade_date")["total_equity"].sum()
-    denominator = both.groupby("trade_date")["prev_equity"].sum()
-    daily["daily_return"] = (numerator / denominator.where(denominator > 0)) - 1.0
-    daily["cumulative_return"] = (1.0 + daily["daily_return"].fillna(0.0)).cumprod() - 1.0
+    totals = {
+        "total_equity": pd.Series(0.0, index=dates),
+        "cash": pd.Series(0.0, index=dates),
+        "market_value": pd.Series(0.0, index=dates),
+    }
+    position_count = pd.Series(0, index=dates)
+    numerator = pd.Series(0.0, index=dates)
+    denominator = pd.Series(0.0, index=dates)
+
+    for start in range(0, len(items), chunk_size):
+        frames: list[pd.DataFrame] = []
+        for symbol, single_result in items[start : start + chunk_size]:
+            eq = getattr(single_result, "equity_curve", None)
+            if eq is None or eq.empty or "trade_date" not in eq.columns:
+                continue
+            keep = ["trade_date", "total_equity"]
+            for optional in ("cash", "market_value", "position_quantity"):
+                if optional in eq.columns:
+                    keep.append(optional)
+            frame = eq.loc[:, keep].copy()
+            frame["symbol"] = symbol
+            frames.append(frame)
+        if not frames:
+            continue
+
+        big = pd.concat(frames, ignore_index=True)
+        big["trade_date"] = pd.to_datetime(big["trade_date"])
+        big = big.dropna(subset=["trade_date"])
+        big = big.drop_duplicates(subset=["trade_date", "symbol"], keep="first")
+        if big.empty:
+            continue
+
+        for column in ("cash", "market_value", "position_quantity"):
+            if column not in big.columns:
+                big[column] = 0.0
+        for column in ("total_equity", "cash", "market_value", "position_quantity"):
+            big[column] = pd.to_numeric(big[column], errors="coerce").fillna(0.0)
+
+        grouped = big.groupby("trade_date", sort=False)
+        for column in totals:
+            totals[column] = totals[column].add(grouped[column].sum(), fill_value=0.0)
+        position_count = position_count.add(
+            (big["position_quantity"] > 0).groupby(big["trade_date"]).sum(), fill_value=0
+        )
+
+        # 交集口径日收益：对每个交易日，只在「当日与前一全局交易日均在市」的股票上
+        # 计算 Σequity_t / Σequity_{t-1} − 1；新股进入当日收益贡献为 0。
+        cur = big[["trade_date", "symbol", "total_equity"]]
+        prev = cur.rename(columns={"total_equity": "prev_equity"}).copy()
+        prev["trade_date"] = prev["trade_date"].map(next_of)
+        prev = prev.dropna(subset=["trade_date"])
+        merged = cur.merge(prev, on=["trade_date", "symbol"], how="left")
+        both = merged.dropna(subset=["prev_equity"])
+        numerator = numerator.add(both.groupby("trade_date")["total_equity"].sum(), fill_value=0.0)
+        denominator = denominator.add(both.groupby("trade_date")["prev_equity"].sum(), fill_value=0.0)
+
+    daily_return = (numerator / denominator.where(denominator > 0)) - 1.0
+    cumulative_return = (1.0 + daily_return.fillna(0.0)).cumprod() - 1.0
 
     return pd.DataFrame({
-        "trade_date": daily.index,
-        "cash": daily["cash"].to_numpy(),
-        "market_value": daily["market_value"].to_numpy(),
-        "total_equity": daily["total_equity"].to_numpy(),
-        "daily_return": daily["daily_return"].to_numpy(),
-        "cumulative_return": daily["cumulative_return"].to_numpy(),
-        "position_count": daily["position_count"].to_numpy(),
+        "trade_date": dates,
+        "cash": totals["cash"].to_numpy(),
+        "market_value": totals["market_value"].to_numpy(),
+        "total_equity": totals["total_equity"].to_numpy(),
+        "daily_return": daily_return.to_numpy(),
+        "cumulative_return": cumulative_return.to_numpy(),
+        "position_count": position_count.astype(int).to_numpy(),
         "turnover": None,
     }, columns=_EQUITY_CURVE_COLUMNS)
 
@@ -897,7 +928,12 @@ def build_strategy_performance(
     strategy_name: str | None = None,
     strategy_family: str | None = None,
     engine_mode: str = "batch",
+    benchmark_return: float | None = None,
 ) -> dict[str, Any]:
+    from quant_research_engine.portfolio.benchmark import SSE_CODE, SSE_NAME, excess_return_vs_sse
+
+    if benchmark_return is None:
+        benchmark_return = summary_metrics.get("benchmark_return")
     rt = round_trips if round_trips is not None else pd.DataFrame()
     eq = equity_curve if equity_curve is not None else pd.DataFrame()
 
@@ -956,8 +992,10 @@ def build_strategy_performance(
             "sortino": sortino,
             "information_ratio": None,
             "strategy_total_return": summary_metrics.get("total_return") or risk.get("total_return"),
-            "buy_hold_return": None,
-            "excess_return_vs_buy_hold": None,
+            "benchmark_code": SSE_CODE,
+            "benchmark_name": SSE_NAME,
+            "benchmark_return": benchmark_return,
+            "excess_return_vs_benchmark": excess_return_vs_sse(summary_metrics.get("total_return") or risk.get("total_return"), benchmark_return),
             "positive_symbol_rate": None,
             "mean_symbol_return": None,
             "median_symbol_return": None,
@@ -982,21 +1020,15 @@ def build_strategy_performance(
             "worst_symbols": worst_symbols,
         }
 
-    # batch mode
-    # QRE-ENG-046：date_start/date_end 缺省时取净值曲线首末交易日；
-    # excess_return_vs_buy_hold 缺省且组合总收益与买入持有均可用时现算（总收益 − 买入持有）。
+    # batch mode：超额只相对上证指数；没有指数值时保持空，不回退其他口径。
     # 策略总收益口径：Σfinal_equity / Σinitial_cash − 1（全体参与股票等权聚合），
     # 与 profit_factor/净盈亏可勾稽；新股 initial_cash 注入不计收益。
     eq_dates: list[str] = []
     if not eq.empty and "trade_date" in eq.columns:
         eq_dates = [str(d)[:10] for d in eq["trade_date"]]
-    buy_hold = summary_metrics.get("buy_hold_return")
     strat_total = _aggregate_batch_total_return(summary)
     if strat_total is None:
         strat_total = risk.get("total_return")
-    excess = summary_metrics.get("excess_return_vs_buy_hold")
-    if excess is None and isinstance(strat_total, (int, float)) and isinstance(buy_hold, (int, float)):
-        excess = float(strat_total - buy_hold)
     result: dict[str, Any] = {
         "run_id": run_id,
         "strategy_id": strategy_id,
@@ -1021,8 +1053,10 @@ def build_strategy_performance(
         "sortino": sortino,
         "information_ratio": None,
         "strategy_total_return": strat_total,
-        "buy_hold_return": summary_metrics.get("buy_hold_return"),
-        "excess_return_vs_buy_hold": excess,
+        "benchmark_code": SSE_CODE,
+        "benchmark_name": SSE_NAME,
+        "benchmark_return": benchmark_return,
+        "excess_return_vs_benchmark": excess_return_vs_sse(strat_total, benchmark_return),
         "positive_symbol_rate": summary_metrics.get("positive_return_symbol_rate"),
         "mean_symbol_return": summary_metrics.get("mean_total_return"),
         "median_symbol_return": summary_metrics.get("median_total_return"),
@@ -1237,51 +1271,71 @@ def write_full_market_excel(
     drawdown_curve_chart: Path | None = None,
 ) -> Path:
     from openpyxl import Workbook
+    from openpyxl.cell import WriteOnlyCell
     from openpyxl.styles import Font
 
-    wb = Workbook()
+    # write_only mode streams rows to disk instead of retaining one cell object
+    # per value. The full-market TradesLedger/RoundTrips sheets carry ~1.4M rows
+    # each; the regular Workbook path materialised ~55M cells (multiple GB RSS).
+    wb = Workbook(write_only=True)
     header_font = Font(bold=True)
     section_font = Font(bold=True)
 
+    def _styled_cell(ws, value: Any, *, font=None, number_format: str | None = None) -> Any:
+        cell = WriteOnlyCell(ws, value=value)
+        if font is not None:
+            cell.font = font
+        if number_format is not None and isinstance(value, (int, float)) and not isinstance(value, bool):
+            cell.number_format = number_format
+        return cell
+
     def _write_df_sheet(ws, df: pd.DataFrame) -> None:
-        ws.append([COLUMN_LABELS.get(str(c), str(c)) for c in df.columns])
-        for cell in ws[1]:
-            cell.font = header_font
-        number_formats = [_column_number_format(str(c), df[c]) for c in df.columns]
+        columns = list(df.columns)
+        ws.append([
+            _styled_cell(ws, COLUMN_LABELS.get(str(c), str(c)), font=header_font) for c in columns
+        ])
+        number_formats = [_column_number_format(str(c), df[c]) for c in columns]
         for _, row in df.iterrows():
-            ws.append([_excel_value(v) for v in row])
-        for col_idx, fmt in enumerate(number_formats, start=1):
-            for row_idx in range(2, ws.max_row + 1):
-                cell = ws.cell(row=row_idx, column=col_idx)
-                if isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool):
-                    cell.number_format = fmt
+            ws.append([
+                _styled_cell(ws, _excel_value(value), number_format=fmt)
+                for value, fmt in zip(row, number_formats)
+            ])
 
     def _write_kv_sheet(ws, data: dict[str, Any]) -> None:
-        ws.append(["项目", "值"])
-        for cell in ws[1]:
-            cell.font = header_font
-        row_formats: dict[int, str] = {}
+        ws.append([
+            _styled_cell(ws, "项目", font=header_font),
+            _styled_cell(ws, "值", font=header_font),
+        ])
         for key, value in data.items():
             label = _key_label(key)
             if isinstance(value, dict):
                 # Nested block (e.g. 策略说明): section row then its items.
-                ws.append([label, ""])
-                ws.cell(row=ws.max_row, column=1).font = section_font
+                ws.append([
+                    _styled_cell(ws, label, font=section_font),
+                    _styled_cell(ws, ""),
+                ])
                 for sub_key, sub_value in value.items():
                     sub_label = _key_label(sub_key)
-                    ws.append([sub_label, _excel_value(sub_value)])
-                    row_formats[ws.max_row] = _column_number_format(str(sub_key))
+                    ws.append([
+                        _styled_cell(ws, sub_label),
+                        _styled_cell(
+                            ws,
+                            _excel_value(sub_value),
+                            number_format=_column_number_format(str(sub_key)),
+                        ),
+                    ])
                 continue
-            ws.append([label, _excel_value(value)])
-            row_formats[ws.max_row] = _column_number_format(str(key))
-        for row_idx, fmt in row_formats.items():
-            cell = ws.cell(row=row_idx, column=2)
-            if isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool):
-                cell.number_format = fmt
+            ws.append([
+                _styled_cell(ws, label),
+                _styled_cell(
+                    ws,
+                    _excel_value(value),
+                    number_format=_column_number_format(str(key)),
+                ),
+            ])
 
     # Overview
-    _write_kv_sheet(wb.active, overview)
-    wb.active.title = "Overview"
+    _write_kv_sheet(wb.create_sheet("Overview"), overview)
 
     # Performance
     ws_perf = wb.create_sheet("Performance")
@@ -1335,9 +1389,10 @@ def write_full_market_excel(
 
     # Artifacts
     ws_art = wb.create_sheet("Artifacts")
-    ws_art.append(["文件", "说明"])
-    for cell in ws_art[1]:
-        cell.font = header_font
+    ws_art.append([
+        _styled_cell(ws_art, "文件", font=header_font),
+        _styled_cell(ws_art, "说明", font=header_font),
+    ])
     for name, desc in _ARTIFACT_DESCRIPTIONS:
         ws_art.append([name, desc])
 
@@ -1594,12 +1649,19 @@ def write_full_market_report(
         )
         fm_equity_curve = build_full_market_equity_curve(eq_curve, engine_mode="shared_cash")
         drawdown_curve = build_drawdown_curve(fm_equity_curve)
+        from quant_research_engine.portfolio.benchmark import fetch_sse_return
+        benchmark_return = fetch_sse_return(
+            shared_summary.get("date_start") or req.get("date_start") or (run_request or {}).get("start"),
+            shared_summary.get("date_end") or req.get("date_end") or (run_request or {}).get("end"),
+        )
         strategy_perf = build_strategy_performance(
             shared_summary, round_trips=round_trips, equity_curve=fm_equity_curve,
             run_id=run_id, strategy_id=strategy_id,
             strategy_name=strategy_name, strategy_family=strategy_family,
-            engine_mode="shared_cash",
+            engine_mode="shared_cash", benchmark_return=benchmark_return,
         )
+        symbol_perf["benchmark_return"] = benchmark_return
+        symbol_perf["excess_return_vs_benchmark"] = None
         if run_request is not None:
             _req = run_request.get("request", {})
             if strategy_perf.get("date_start") is None:
@@ -1706,10 +1768,20 @@ def write_full_market_report(
     symbol_perf = build_symbol_performance(summary, results) if not summary.empty else pd.DataFrame(columns=_SYMBOL_PERFORMANCE_COLUMNS)
     equity_curve = build_full_market_equity_curve(results)
     drawdown_curve = build_drawdown_curve(equity_curve)
+    from quant_research_engine.portfolio.benchmark import excess_return_vs_sse, fetch_sse_return
+    benchmark_return = fetch_sse_return(
+        summary_metrics.get("date_start") or req.get("date_start") or (run_request or {}).get("start"),
+        summary_metrics.get("date_end") or req.get("date_end") or (run_request or {}).get("end"),
+    )
     strategy_perf = build_strategy_performance(
         summary_metrics, summary, round_trips, equity_curve,
         run_id=run_id, strategy_id=strategy_id,
         strategy_name=strategy_name, strategy_family=strategy_family,
+        benchmark_return=benchmark_return,
+    )
+    symbol_perf["benchmark_return"] = benchmark_return
+    symbol_perf["excess_return_vs_benchmark"] = symbol_perf["strategy_total_return"].map(
+        lambda value: excess_return_vs_sse(value, benchmark_return)
     )
     if run_request is not None:
         # Backfill run-window fields the engine summary does not carry

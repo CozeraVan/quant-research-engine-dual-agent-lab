@@ -99,7 +99,7 @@
     <div class="metric-strip" id="ra-strip" style="display:none"></div>
 
     <div class="chart-box" id="box-main">
-      <div class="chart-title">策略收益 vs 基准指数 <button type="button" class="tip-trigger" id="curve-tip" data-tip="曲线为日收益累乘口径（交集口径、剔除新股注资）的累计收益率，起点 0%；与上方「总收益率」（初始资金加权）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
+      <div class="chart-title">策略收益 vs 指数 <button type="button" class="tip-trigger" id="curve-tip" data-tip="曲线为日收益累乘口径（交集口径、剔除新股注资）的累计收益率，起点 0%；超额收益固定使用上证指数。与上方「总收益率」（初始资金加权）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
         <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button>
         <button class="btn-sm hidden" id="btn-replay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
       <div class="bench-bar" id="bench-bar">基准：</div>
@@ -196,7 +196,7 @@
 {% block scripts %}
 <script src="/static/echarts.min.js?v={{ asset_v }}"></script>
 <script src="/static/vol-regime.js?v={{ asset_v }}"></script>
-{# QRE-EQUITY-CHART：收益曲线（策略/各基准/买入持有/回撤）的唯一构造来源，纯函数 #}
+{# QRE-EQUITY-CHART：收益曲线（策略/各基准/回撤）的唯一构造来源，纯函数 #}
 <script src="/static/equity-chart.js?v={{ asset_v }}"></script>
 <script src="/static/replay.js?v={{ asset_v }}"></script>
 {# QRE-PERF-METRICS-CONTRACT：α/β/IR 与持股周期的共享纯函数层（公式与 risk/performance.py 对齐） #}
@@ -251,7 +251,7 @@ function renderMetrics(m){
   strip.innerHTML =
     card('总收益率', pct(m.total_return ?? m.strategy_total_return), cls(m.total_return ?? m.strategy_total_return), '初始资金加权总收益：Σ期末权益/Σ初始资金−1，与成交净盈亏、profit_factor 直接勾稽；批量全市场按资金加权汇总。') +
     card('年化收益', pct(m.annual_return), cls(m.annual_return), '由初始资金加权总收益按回测起止区间几何年化：(1+总收益)^(1/年数)−1') +
-    card('超额收益·vs持有不动', pct(m.excess_return), cls(m.excess_return), '策略全期总收益 − 同期买入并持有这些股票的收益；负值 = 跑输持有不动') +
+    card('超额收益·vs上证指数', pct(m.excess_return), cls(m.excess_return), '策略全期总收益 − 同期上证指数收益；负值 = 跑输上证指数') +
     card('夏普比率', (m.sharpe == null ? '—' : Number(m.sharpe).toFixed(2)), cls(m.sharpe), '日收益均值扣除无风险利率后除以日波动，再乘 √252 年化。') +
     card('最大回撤', pct(m.max_drawdown), 'neg', '净值从历史高点到随后低点的最大跌幅。') +
     card('胜率', pct(m.win_rate), cls(m.win_rate), '盈利交易笔数 ÷ 全部完整交易笔数。') +
@@ -268,12 +268,8 @@ function renderRiskAdjusted(d){
   const strip = document.getElementById('ra-strip');
   if (!strip) return;
   if (typeof QREPerfMetrics === 'undefined'){ strip.style.display = 'none'; return; }
-  let bench = null;
   const bs = d.benchmarks || {};
-  for (const code of Object.keys(bs)){
-    const b = bs[code] || {};
-    if (b.closes && b.closes.length){ bench = b; break; }
-  }
+  const bench = bs['000001.SH'] || null;
   const ra = (d.equity && d.equity.length && bench)
     ? QREPerfMetrics.riskAdjusted({equity: d.equity, dates: d.dates, benchmark: bench}) : null;
   const vals = ra ? [ra.alpha_annual, ra.beta, ra.ir] : [];
@@ -457,11 +453,13 @@ function renderMain(d){
       const closes = benches[curBench].closes;
       bRet = sliceRet(closes, i0, i1);
     }
-    const excess = (sRet != null && bRet != null) ? sRet - bRet : null;
+    const sse = benches['000001.SH'];
+    const sseRet = sse ? sliceRet(sse.closes, i0, i1) : null;
+    const excess = (sRet != null && sseRet != null) ? sRet - sseRet : null;
     strip.innerHTML =
       card('区间策略收益', pct(sRet), cls(sRet), '当前缩放窗口内，策略首末累计净值之比 − 1。') +
       card('区间基准收益·' + bName, bRet == null ? '—' : pct(bRet), cls(bRet), '当前缩放窗口内，基准指数首末收盘价之比 − 1。') +
-      card('区间超额·vs ' + bName, excess == null ? '—' : pct(excess), cls(excess), '滑块窗口内：策略累计收益% − ' + bName + ' 累计收益%') +
+      card('区间超额·vs上证指数', excess == null ? '—' : pct(excess), cls(excess), '滑块窗口内：策略累计收益% − 上证指数累计收益%') +
       card('区间最大回撤', pct(mdd), 'neg', '当前缩放窗口内，净值高点到随后低点的最大跌幅。') +
       card('交易日数', i1 - i0 + 1, 'flat', '当前缩放窗口包含的交易日数量。') +
       exposureCards(i0, i1, sRet);
@@ -581,7 +579,6 @@ const DETAIL_COLS = [
   {key: 'best_ret', label: '最佳单笔收益%', pct: true},
   {key: 'worst_ret', label: '最差单笔收益%', pct: true},
   {key: 'avg_hold_days', label: '平均持仓天数'},
-  {key: 'bench_ret', label: '区间自然涨幅%', pct: true},
   {key: 'percentile', label: '赚钱效应分位', pctRank: true},
 ];
 let detailSort = {key: 'total_pnl', dir: -1};
@@ -624,12 +621,10 @@ function drawDetailTable(t){
   }).join('');
   const note = t.symbols_truncated
     ? '　共 ' + t.symbols_total + ' 只，仅显示盈亏前/后各 50' : '';
-  const benchTxt = t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%';
   const el = document.getElementById('tag-detail');
   el.innerHTML = '<div style="font-size:15.5px;margin-bottom:16px">' + escH(t.tag) +
     '　个股贡献（点击行看个股详情；点列头排序）' + note +
-    '　策略平均每笔 <span class="' + cls(t.avg_ret) + '">' + (t.avg_ret * 100).toFixed(2) + '%</span>' +
-    ' vs 板块同期自然涨幅 <span class="' + cls(t.bench_ret) + '">' + benchTxt + '</span></div>' +
+    '　策略平均每笔 <span class="' + cls(t.avg_ret) + '">' + (t.avg_ret * 100).toFixed(2) + '%</span></div>' +
     '<table class="tbl"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table>';
   el.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
     const key = th.dataset.key;

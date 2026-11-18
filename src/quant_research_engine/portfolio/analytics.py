@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -27,20 +28,12 @@ def summarize_batch_summary(summary: pd.DataFrame) -> dict[str, Any]:
             "mean_trade_count": None,
             "total_cost": 0.0,
             "total_failed_orders": 0,
-            "buy_hold_return": None,
-            "mean_buy_hold_return": None,
-            "median_buy_hold_return": None,
-            "mean_excess_return_vs_buy_hold": None,
-            "median_excess_return_vs_buy_hold": None,
         }
 
     returns = summary["total_return"].dropna()
     trade_counts = summary["trade_count"].fillna(0)
     best_index = returns.idxmax() if not returns.empty else None
     worst_index = returns.idxmin() if not returns.empty else None
-
-    buy_hold_returns = summary["buy_hold_return"].dropna() if "buy_hold_return" in summary.columns else pd.Series(dtype=float)
-    excess_returns = summary["excess_return_vs_buy_hold"].dropna() if "excess_return_vs_buy_hold" in summary.columns else pd.Series(dtype=float)
 
     return {
         "symbol_count": int(len(summary)),
@@ -61,11 +54,6 @@ def summarize_batch_summary(summary: pd.DataFrame) -> dict[str, Any]:
         "total_failed_orders": (
             int(summary["failed_order_count"].fillna(0).sum()) if "failed_order_count" in summary.columns else 0
         ),
-        "buy_hold_return": None if buy_hold_returns.empty else float(buy_hold_returns.mean()),
-        "mean_buy_hold_return": None if buy_hold_returns.empty else float(buy_hold_returns.mean()),
-        "median_buy_hold_return": None if buy_hold_returns.empty else float(buy_hold_returns.median()),
-        "mean_excess_return_vs_buy_hold": None if excess_returns.empty else float(excess_returns.mean()),
-        "median_excess_return_vs_buy_hold": None if excess_returns.empty else float(excess_returns.median()),
     }
 
 
@@ -119,7 +107,7 @@ def summarize_batch_ranked_symbols_by(summary: pd.DataFrame, group_column: str, 
     return pd.DataFrame(rows)
 
 
-def summarize_batch_window_summary(equity_curves: dict[str, pd.DataFrame], window: str = "M") -> pd.DataFrame:
+def summarize_batch_window_summary(equity_curves: Mapping[str, pd.DataFrame], window: str = "M") -> pd.DataFrame:
     rows = _collect_window_return_rows(equity_curves, window)
     if rows.empty:
         return pd.DataFrame(columns=_batch_window_summary_columns())
@@ -127,15 +115,18 @@ def summarize_batch_window_summary(equity_curves: dict[str, pd.DataFrame], windo
     return _summarize_window_return_rows(rows, group_columns=["window"])
 
 
-def _collect_window_return_rows(equity_curves: dict[str, pd.DataFrame], window: str) -> pd.DataFrame:
-    """Vectorized row collection for summarize_batch_window_summary.
+def _collect_window_return_rows(equity_curves: Mapping[str, pd.DataFrame], window: str) -> pd.DataFrame:
+    """Row collection for summarize_batch_window_summary.
 
     Produces the same (window, symbol, total_return) row set (and row order:
-    equity_curves dict order, windows ascending per symbol) as the previous
-    per-symbol/per-window loop, where total_return = last_equity/first_equity - 1
-    within each calendar window (NaN when the first equity is not positive).
-    Cross-symbol concatenated implementation: one datetime conversion and one
-    groupby aggregation instead of per-symbol pandas groupby objects.
+    equity_curves iteration order, windows ascending per symbol) as the
+    previous per-symbol/per-window loop, where total_return =
+    last_equity/first_equity - 1 within each calendar window (NaN when the
+    first equity is not positive).
+
+    Each symbol is aggregated on its own so that only one equity curve is
+    resident at a time; concatenating all curves first cost a full copy of
+    every row (22M+ rows at full-market scale) per window.
     """
     frames: list[pd.DataFrame] = []
     for symbol, equity_curve in equity_curves.items():
@@ -147,29 +138,27 @@ def _collect_window_return_rows(equity_curves: dict[str, pd.DataFrame], window: 
         if frame.empty:
             continue
         frame = frame.sort_values("trade_date", kind="mergesort")
-        frames.append(frame.assign(symbol=symbol))
+        labels = pd.to_datetime(frame["trade_date"]).dt.to_period(window).astype(str)
+        grouped = frame["total_equity"].astype(float).groupby(labels.values, sort=False)
+        first = grouped.first()
+        last = grouped.last()
+        total_return = (last / first - 1).where(first > 0, np.nan)
+        frames.append(
+            pd.DataFrame(
+                {
+                    "window": np.asarray(first.index.astype(str)),
+                    "symbol": symbol,
+                    "total_return": total_return.to_numpy(),
+                }
+            )
+        )
     if not frames:
         return pd.DataFrame(columns=["window", "symbol", "total_return"])
 
-    big = pd.concat(frames, ignore_index=True)
-    big["trade_date"] = pd.to_datetime(big["trade_date"])
-    labels = big["trade_date"].dt.to_period(window).astype(str)
-    grouped = big["total_equity"].astype(float).groupby(
-        [labels.values, big["symbol"].values], sort=False
-    )
-    first = grouped.first()
-    last = grouped.last()
-    total_return = (last / first - 1).where(first > 0, np.nan)
-    return pd.DataFrame(
-        {
-            "window": np.asarray(first.index.get_level_values(0).astype(str)),
-            "symbol": np.asarray(first.index.get_level_values(1).astype(str)),
-            "total_return": total_return.to_numpy(),
-        }
-    )
+    return pd.concat(frames, ignore_index=True)
 
 
-def summarize_batch_rolling_summary(equity_curves: dict[str, pd.DataFrame], window_size: int = 20) -> pd.DataFrame:
+def summarize_batch_rolling_summary(equity_curves: Mapping[str, pd.DataFrame], window_size: int = 20) -> pd.DataFrame:
     rows = _collect_rolling_return_rows(equity_curves, window_size)
     if rows.empty:
         return pd.DataFrame(columns=_batch_rolling_summary_columns())
@@ -181,7 +170,7 @@ def summarize_batch_rolling_summary(equity_curves: dict[str, pd.DataFrame], wind
     )
 
 
-def _collect_rolling_return_rows(equity_curves: dict[str, pd.DataFrame], window_size: int) -> pd.DataFrame:
+def _collect_rolling_return_rows(equity_curves: Mapping[str, pd.DataFrame], window_size: int) -> pd.DataFrame:
     """Vectorized row collection for summarize_batch_rolling_summary.
 
     Produces the same (window_size, end_date, symbol, total_return,
@@ -236,7 +225,7 @@ def _collect_rolling_return_rows(equity_curves: dict[str, pd.DataFrame], window_
 
 def summarize_batch_rolling_summary_by(
     summary: pd.DataFrame,
-    equity_curves: dict[str, pd.DataFrame],
+    equity_curves: Mapping[str, pd.DataFrame],
     group_column: str,
     window_size: int = 20,
 ) -> pd.DataFrame:
@@ -286,7 +275,7 @@ def summarize_batch_rolling_summary_by(
 
 def summarize_batch_ranked_rolling_symbols_by(
     summary: pd.DataFrame,
-    equity_curves: dict[str, pd.DataFrame],
+    equity_curves: Mapping[str, pd.DataFrame],
     group_column: str,
     window_size: int = 20,
     top_n: int = 5,
@@ -341,7 +330,7 @@ def summarize_batch_ranked_rolling_symbols_by(
 
 def summarize_batch_window_summary_by(
     summary: pd.DataFrame,
-    equity_curves: dict[str, pd.DataFrame],
+    equity_curves: Mapping[str, pd.DataFrame],
     group_column: str,
     window: str = "M",
 ) -> pd.DataFrame:
@@ -389,7 +378,7 @@ def summarize_batch_window_summary_by(
 
 def summarize_batch_ranked_window_symbols_by(
     summary: pd.DataFrame,
-    equity_curves: dict[str, pd.DataFrame],
+    equity_curves: Mapping[str, pd.DataFrame],
     group_column: str,
     window: str = "M",
     top_n: int = 5,

@@ -20,8 +20,8 @@ def test_adapter_drops_duplicate_metadata_and_handles_empty_winner_pool(tmp_path
             "trade_count": [10, 10],
             "win_rate": [0.2, 0.3],
             "total_return": [-0.1, -0.2],
-            "buy_hold_return": [0.1, 0.1],
-            "excess_return_vs_buy_hold": [-0.2, -0.3],
+            "benchmark_return": [0.1, 0.1],
+            "excess_return_vs_benchmark": [-0.2, -0.3],
             "board": ["main_board", "main_board"],
         }
     ).to_csv(batch / "summary.csv", index=False)

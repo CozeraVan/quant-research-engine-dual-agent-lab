@@ -38,8 +38,8 @@ from quant_research_engine.analysis.ml_cluster import (
 
 FIT_COLUMNS = [
     "strategy_id", "category", "symbol", "tier", "in_pool", "binomial_p",
-    "trade_count", "win_rate", "total_return", "buy_hold_return",
-    "excess_return_vs_buy_hold", "board", "industry_group",
+    "trade_count", "win_rate", "total_return", "benchmark_return",
+    "excess_return_vs_benchmark", "board", "industry_group",
     "market_cap_bucket", "liquidity_bucket",
 ]
 
@@ -83,8 +83,8 @@ def _stock_row(
         "trade_count": trade_count,
         "win_rate": win_rate,
         "total_return": total_return,
-        "buy_hold_return": buy_hold,
-        "excess_return_vs_buy_hold": excess,
+        "benchmark_return": buy_hold,
+        "excess_return_vs_benchmark": excess,
         "board": board,
         "industry_group": industry_group,
         "market_cap_bucket": market_cap_bucket,

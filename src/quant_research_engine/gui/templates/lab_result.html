@@ -244,7 +244,6 @@
           var tops = (t.symbols || []).slice(0, 3).map(function(s) { return (s.name || s.ts_code) + ' ' + s.total_pnl.toFixed(0); }).join('、');
           return t.tag + '<br>总净盈亏 ' + t.total_pnl.toFixed(2) + ' 元' +
                  '<br>平均每笔净收益 ' + (t.avg_ret * 100).toFixed(2) + '%' +
-                 '<br>板块同期自然涨幅 ' + (t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%') +
                  '<br>交易笔数 ' + t.trades + '　胜率 ' + (t.win_rate * 100).toFixed(2) + '%' +
                  '<br>个股 ' + (t.symbols || []).length + ' 只' + (tops ? '；贡献居前：' + tops : '');
         },
@@ -320,7 +319,6 @@
     { key: 'best_ret', label: '最佳单笔收益%', pct: true },
     { key: 'worst_ret', label: '最差单笔收益%', pct: true },
     { key: 'avg_hold_days', label: '平均持仓天数' },
-    { key: 'bench_ret', label: '区间自然涨幅%', pct: true },
     { key: 'percentile', label: '赚钱效应分位', pctRank: true },
   ];
 
@@ -358,11 +356,9 @@
       return '<th class="sortable" data-key="' + c.key + '">' + c.label + arrow + '</th>';
     }).join('');
     var el = document.getElementById('tag-detail');
-    var benchTxt = t.bench_ret == null ? '—' : (t.bench_ret * 100).toFixed(2) + '%';
     el.innerHTML = '<div class="opt" style="font-size:12px;margin-bottom:4px;">' + t.tag +
                    '　个股贡献（点击行看个股详情；点列头排序）' +
-                   '　策略平均每笔 <span class="' + cls(t.avg_ret) + '">' + (t.avg_ret * 100).toFixed(2) + '%</span>' +
-                   ' vs 板块同期自然涨幅 <span class="' + cls(t.bench_ret) + '">' + benchTxt + '</span></div>' +
+                   '　策略平均每笔 <span class="' + cls(t.avg_ret) + '">' + (t.avg_ret * 100).toFixed(2) + '%</span></div>' +
                    '<table><thead><tr>' + head + '<th></th></tr></thead><tbody>' + rows + '</tbody></table>';
     el.querySelectorAll('th.sortable').forEach(function(th) {
       th.addEventListener('click', function() {
@@ -399,7 +395,7 @@
     strip.innerHTML =
       card('总收益率', pct(m.total_return), cls(m.total_return)) +
       card('年化收益', pct(m.annual_return), cls(m.annual_return), '全期总收益按回测起止区间几何年化：(1+总收益)^(1/年数)−1') +
-      card('超额收益·vs持有不动', pct(m.excess_return), cls(m.excess_return), '策略全期总收益 − 同期买入并持有这些股票的收益；负值 = 跑输「装死持有」') +
+      card('超额收益·vs上证指数', pct(m.excess_return), cls(m.excess_return), '策略全期总收益 − 同期上证指数收益；负值 = 跑输上证指数') +
       card('夏普比率', num(m.sharpe), cls(m.sharpe)) +
       card('最大回撤', pct(m.max_drawdown), 'neg') +
       card('胜率', pct(m.win_rate), cls(m.win_rate));
@@ -859,12 +855,18 @@
       var bc = benches[curBench].closes.slice(i0, i1 + 1).filter(function(v) { return v != null; });
       if (bc.length >= 2) benchRet = bc[bc.length - 1] / bc[0] - 1;
     }
-    var excess = (stratRet != null && benchRet != null) ? stratRet - benchRet : null;
+    var sse = benches['000001.SH'];
+    var sseRet = null;
+    if (sse) {
+      var sc = sse.closes.slice(i0, i1 + 1).filter(function(v) { return v != null; });
+      if (sc.length >= 2) sseRet = sc[sc.length - 1] / sc[0] - 1;
+    }
+    var excess = (stratRet != null && sseRet != null) ? stratRet - sseRet : null;
     var benchName = (curBench && benches[curBench]) ? benches[curBench].name : '基准';
     strip.innerHTML =
       card('区间策略收益', pct(stratRet), cls(stratRet)) +
       card('区间基准收益·' + benchName, pct(benchRet), cls(benchRet)) +
-      card('区间超额·vs ' + benchName, pct(excess), cls(excess), '滑块窗口内：策略累计收益% − ' + benchName + ' 累计收益%') +
+      card('区间超额·vs上证指数', pct(excess), cls(excess), '滑块窗口内：策略累计收益% − 上证指数累计收益%') +
       card('区间最大回撤', pct(mdd), 'neg') +
       card('交易日数', days, 'flat');
   }

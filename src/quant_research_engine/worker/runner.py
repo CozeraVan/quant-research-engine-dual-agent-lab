@@ -378,6 +378,13 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None,
 
     chart_data = build_lab_chart_data(record)
     _fill_excess_return(record, chart_data)
+    # 结果摘要与图表共用上证指数口径，旧持有字段不再外发。
+    chart_metrics = chart_data.get("metrics") or {}
+    summary.pop("buy_hold_return", None)
+    summary.pop("excess_return_vs_buy_hold", None)
+    for key in ("benchmark_code", "benchmark_name", "benchmark_return", "excess_return_vs_benchmark"):
+        summary[key] = chart_metrics.get(key)
+    summary["excess_return"] = chart_metrics.get("excess_return")
     # 板块/个股归因：与 8081 结果页同一组装函数（数据形态完全一致），
     # 截断后挂到 chart_data.tag_analysis（体积控制见 trim_tag_analysis）。
     # smoke 只需最小结果摘要（成交数/收益/费用）证明链路通，跳过全量归因与
@@ -419,42 +426,12 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None,
 
 
 def _fill_excess_return(record: dict[str, Any], chart_data: dict[str, Any]) -> None:
-    """补齐 shared 模式的持有基准：回测宇宙内个股区间收益等权平均。
-
-    超额 = 策略全期总收益 − 该等权买入持有收益；DB 不可用保持 None。
-    """
+    """保留旧函数名作内部兼容；超额已由 chart metrics 固定为上证指数口径。"""
     metrics = chart_data.get("metrics")
-    if not isinstance(metrics, dict) or metrics.get("excess_return") is not None:
+    if not isinstance(metrics, dict):
         return
-    total = metrics.get("total_return")
-    if not isinstance(total, (int, float)):
-        return
-    try:
-        from quant_research_engine.gui.lab_result import _fetch_symbol_range_returns
-
-        start = metrics.get("date_start") or record.get("start")
-        end = metrics.get("date_end") or record.get("end")
-        symbols = record.get("codes") or []
-        if isinstance(symbols, str):
-            symbols = [s.strip() for s in symbols.split(",") if s.strip()]
-        if not symbols:
-            # 全市场/shared 的持有基准覆盖回测宇宙，而非只覆盖产生交易的股票。
-            from quant_research_engine.data.universe_rules import filter_untrusted_symbols
-            from quant_research_engine.gui.admin import _store
-
-            symbols = _store().list_symbols_with_bars(start, end)
-            symbols = filter_untrusted_symbols(symbols, load_start=date.fromisoformat(str(start)))
-        if not symbols:
-            return
-        rets = _fetch_symbol_range_returns(symbols, start, end)
-    except Exception:
-        return
-    if not rets:
-        return
-    buy_hold = round(sum(rets.values()) / len(rets), 6)
-    metrics["buy_hold_return"] = buy_hold
-    metrics["excess_return"] = round(total - buy_hold, 6)
-    metrics["buy_hold_note"] = f"等权买入持有（回测范围 {len(rets)} 只）"
+    metrics.pop("buy_hold_return", None)
+    metrics.pop("buy_hold_note", None)
 
 
 #: per-symbol 详情产物总体积上限（gzip 后；超出按 |总净盈亏| 降序截断）

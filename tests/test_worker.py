@@ -118,7 +118,7 @@ def _fake_run_backtest(output_dir: str):
     out.mkdir(parents=True, exist_ok=True)
     perf = out / "strategy_performance.json"
     perf.write_text(json.dumps({
-        "strategy_name": "t", "strategy_total_return": 0.1, "buy_hold_return": 0.05,
+        "strategy_name": "t", "strategy_total_return": 0.1, "benchmark_return": 0.05,
         "win_rate": 0.6, "max_drawdown": -0.02, "total_trade_count": 3,
     }), encoding="utf-8")
     equity = out / "equity_curve.csv"
@@ -152,8 +152,6 @@ def mock_engine(monkeypatch, tmp_path):
     )
     monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_industries",
                         lambda symbols: {})
-    monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_symbol_range_returns",
-                        lambda symbols, start, end: {"000001.SZ": 0.02})
 
 
 class TestEndToEnd:
@@ -317,8 +315,6 @@ class TestParamPassthrough:
                             lambda symbols: ([], {}, None))
         monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_industries",
                             lambda symbols: {})
-        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_symbol_range_returns",
-                            lambda symbols, start, end: {})
 
         params = {
             "start": "2024-01-01", "end": "2026-01-01", "mode": "shared",
@@ -368,8 +364,6 @@ class TestParamPassthrough:
                             lambda symbols: ([], {}, None))
         monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_industries",
                             lambda symbols: {})
-        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_symbol_range_returns",
-                            lambda symbols, start, end: {})
 
         job_id = _create_job(cloud, params={
             "start": "2024-01-01", "end": "2026-01-01", "codes": ["000001.SZ"],
@@ -407,8 +401,6 @@ class TestParamPassthrough:
                             lambda symbols: ([], {}, None))
         monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_industries",
                             lambda symbols: {})
-        monkeypatch.setattr("quant_research_engine.gui.lab_result._fetch_symbol_range_returns",
-                            lambda symbols, start, end: {})
 
         job_id = _create_job(cloud, params={"start": "2026-01-01", "end": "2026-03-01",
                                             "codes": ["000001.SZ"]})

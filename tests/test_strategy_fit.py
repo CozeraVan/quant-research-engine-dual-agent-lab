@@ -77,8 +77,8 @@ def _summary_row(symbol, trades, win_rate, total_return, buy_hold, excess):
         "trade_count": trades,
         "win_rate": win_rate,
         "total_cost": 100.0,
-        "buy_hold_return": buy_hold,
-        "excess_return_vs_buy_hold": excess,
+        "benchmark_return": buy_hold,
+        "excess_return_vs_benchmark": excess,
         "order_count": trades * 2,
         "failed_order_count": 0,
     }
@@ -150,7 +150,7 @@ def test_analyze_strategy_significance_tiers_and_gates():
     # stocks file contains only significant + gate-passing rows
     assert len(result.stock_rows) == 10
     assert all(r["in_pool"] for r in result.stock_rows)
-    assert all(r["excess_return_vs_buy_hold"] > 0 for r in result.stock_rows)
+    assert all(r["excess_return_vs_benchmark"] > 0 for r in result.stock_rows)
 
 
 def test_analyze_strategy_noedge_is_not_significant():
@@ -267,7 +267,7 @@ def test_analyze_batch_and_write_outputs(tmp_path):
     assert "broken_c" in report_text  # skipped listed
 
     stocks_loaded = pd.read_csv(paths["strategy_fit_stocks"])
-    assert {"total_return", "buy_hold_return", "excess_return_vs_buy_hold"} <= set(stocks_loaded.columns)
+    assert {"total_return", "benchmark_return", "excess_return_vs_benchmark"} <= set(stocks_loaded.columns)
 
 
 def test_meta_test_under_random_noise():
