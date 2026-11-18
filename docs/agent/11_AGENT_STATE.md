@@ -19,6 +19,12 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-18 四项主线（DONE）
+
+- MACD单行修复完成，备份/影子/正式各1行，测试2 passed；详见 `CR-2026-11-18_macd_single_day_repair.md`。
+- 工作树219项相关测试通过；聚类metadata键修复43项通过；job374现有产物新口径fit/聚类完成：165显著、4簇、54噪声，策略meta_tier为空，不伪称有效。
+- Alpha191统一模板+CLI完成，60项通过；无新回测。千问Managed Agent实测仍按用户要求暂停。
+
 ### 2026-11-18 MCP 公共上架暂停（用户裁定）
 
 - 法人主体暂缺，千问公共商店、云市场服务商及付费计量接入暂停；已完成的千问自定义 MCP `mcp-ZjZhNDVjNmQzYjM1` 保留，不等同公共上架。

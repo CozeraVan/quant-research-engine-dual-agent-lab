@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-18 四项主线自审
+
+- Review Status：PASS（本轮范围），无新增Required Fixes。MACD数据修改范围1行且有备份/影子/精确WHERE；聚类43项、工作树219项、Alpha191 60项测试通过。
+- 聚类结果仅作筛选证据：meta_tier为空、行业维度unknown，不据此宣称策略整体有效或类别显著。无全量回测、无支付/公共上架动作。
+- Alpha191模板主动去除旧pv06展示性扩展键以满足安全白名单，默认T+1语义沿用引擎；未修改旧策略文件。
+
 ## 2026-11-17 上证指数唯一超额口径自审
 
 - Review Status：PASS（DONE），无 Required Fixes。策略与个股均不再回退持有口径；缺指数明确null；交易、费用、回撤和总收益公式未改。

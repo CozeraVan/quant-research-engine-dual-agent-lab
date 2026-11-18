@@ -1,5 +1,12 @@
 # Implementation Brief
 
+## 2026-11-18 Alpha191 策略模板化
+
+1. 新增纯函数生成标准 StrategySpec 字典：alpha 编号、high/low 方向、entry/exit 阈值、持仓与止损均为显式参数。
+2. 高秩默认 `entry > -0.2 / exit < -0.5`，低秩使用 `entry < 0.2 / exit > 0.5`；参数和阈值关系 fail fast。
+3. CLI 用 `yaml.safe_dump` 输出，写文件不覆盖；不改引擎、不跑回测。
+4. TDD 校验与 pv06a 核心字段一致、StrategySpec/YAML Guard 可消费、非法输入拒绝。
+
 ## 2026-11-17 上证指数唯一超额口径（取代11-16持有曲线方案）
 
 1. 在 portfolio/benchmark.py 提供上证指数区间收益与超额纯函数/只读取数，报告写盘时统一注入 `benchmark_code/name/return` 与 `excess_return_vs_benchmark`；移除持有收益、持有超额和持有IR的新计算及产物列。

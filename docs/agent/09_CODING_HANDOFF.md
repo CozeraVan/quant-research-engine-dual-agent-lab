@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-18 聚类与Alpha191模板
+
+- `ml_cluster.build_feature_matrix` 接受直传 `ts_code` 元数据并归一为symbol；新增真实路径回归，43项相关测试通过。fit输入用独立副本从strategy_performance注入上证指数收益，不改原CSV。
+- `strategies/alpha191.py` 生成白名单兼容YAML，支持高低秩/阈值/持仓/止损；`scripts/alpha191_strategy.py` 输出stdout或不覆盖写文件。60项相关测试通过。
+- 工作树审查219项通过；MACD数据修复无代码，详见独立CR。
+
 ## 2026-11-17 上证指数唯一超额口径
 
 - `portfolio/benchmark.py` 固定000001.SH及算术差；引擎不再生成buy_hold_return/excess/buy_hold_equity，报告写盘时只读取上证指数首末有效收盘。

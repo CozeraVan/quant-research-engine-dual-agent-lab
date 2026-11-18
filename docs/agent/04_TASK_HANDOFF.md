@@ -1,5 +1,11 @@
 # Task Handoff
 
+## 2026-11-18 MACD/工作树/聚类/Alpha191（DONE）
+
+- MACD仅修000001.SZ/2026-11-05一行12字段，备份和影子表各1行，测试2通过。
+- 历史改动219项测试通过；聚类键修复43项通过；真实job374 fit+聚类：165显著/4簇/54噪声，meta_tier空、class_edge=false，产物 `/home/van/qre-outputs/strategy-fit/ema_5_200_hold20_20261118/`。
+- Alpha191生成器与CLI 60项通过；示例 `/home/van/qre-outputs/strategy-templates/alpha042_low_rank.yaml`。未跑新回测。
+
 > 2026-11-18 Git 校准：`305f3a7`、`18ae9ff`、`fcf1e13`、`d68844b`、`2c0582d` 均已推送。本文较早条目中的“未commit/push”为当时状态，当前以 Git 为准。
 
 ## 2026-11-17 上证指数唯一超额口径（DONE，2026-11-18验收）
