@@ -400,7 +400,8 @@ class TestSymbolDataUntilAndVarSign:
         resp = client.post(
             "/api/saas/jobs",
             json={"yaml": "signal:\n  entry: 'true'\n", "kind": "full",
-                  "params": {"codes": ["000001"]}, "name": "t"},
+                  "params": {"codes": ["000001.SZ"], "start": "2025-01-01",
+                             "end": "2026-01-01"}, "name": "t"},
             headers={"X-User-Id": "1"},
         )
         job_id = resp.get_json()["job_id"]

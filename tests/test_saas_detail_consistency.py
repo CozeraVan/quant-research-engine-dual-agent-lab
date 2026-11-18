@@ -121,7 +121,7 @@ def test_profile_center_preserves_background_refresh_fix() -> None:
     records = (TEMPLATES / "_records_scripts.html").read_text(encoding="utf-8")
     css = (STATIC / "account.css").read_text(encoding="utf-8")
     assert '{% include "_membership_benefits.html" %}' not in profile
-    assert profile.count('data-profile-view="') == 4
+    assert profile.count('data-profile-view="') == 5  # 记录/分享/MCP/会员/账号
     assert "/api/saas/membership" in profile
     assert "let recordsHasLoadedOnce = false;" in records
     assert "recordsHasLoadedOnce = true;" in records

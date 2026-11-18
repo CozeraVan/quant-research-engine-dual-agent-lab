@@ -76,9 +76,12 @@ def _clean(app):
 
 
 def _create_job(client, uid=1, kind="full", yaml_text="signal:\n  entry: 'true'\n", params=None):
+    if params is None:
+        params = {"cash": 1000000, "codes": ["000001.SZ"],
+                  "start": "2025-01-01", "end": "2026-01-01"}
     return client.post(
         "/api/saas/jobs",
-        json={"yaml": yaml_text, "kind": kind, "params": params or {"cash": 1000000}, "name": "t"},
+        json={"yaml": yaml_text, "kind": kind, "params": params, "name": "t"},
         headers={"X-User-Id": str(uid)},
     )
 
