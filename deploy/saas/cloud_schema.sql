@@ -123,6 +123,7 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_class TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS parent_job_id BIGINT;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS upload_token TEXT;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS entitlement_order_id TEXT;
 -- R2 多租户弹性调度（2026-10-03）：任务轻重分级列（老库自愈；应用启动亦幂等 ALTER）
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS weight_class TEXT NOT NULL DEFAULT 'heavy';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idem
@@ -696,10 +697,14 @@ END $$;
 CREATE TABLE IF NOT EXISTS membership_entitlements (
     id BIGSERIAL PRIMARY KEY,order_id TEXT NOT NULL REFERENCES membership_orders(id),
     user_id BIGINT NOT NULL REFERENCES users(id),tier TEXT NOT NULL,
-    starts_at TIMESTAMPTZ NOT NULL,ends_at TIMESTAMPTZ NOT NULL,
+    starts_at TIMESTAMPTZ NOT NULL,ends_at TIMESTAMPTZ,
     status TEXT NOT NULL,revoked_at TIMESTAMPTZ,revoke_reason TEXT,
+    consumed_at TIMESTAMPTZ,consumed_job_id BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),UNIQUE(order_id)
 );
+ALTER TABLE membership_entitlements ALTER COLUMN ends_at DROP NOT NULL;
+ALTER TABLE membership_entitlements ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMPTZ;
+ALTER TABLE membership_entitlements ADD COLUMN IF NOT EXISTS consumed_job_id BIGINT;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='aguhuice') THEN

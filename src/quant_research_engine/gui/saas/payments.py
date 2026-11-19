@@ -13,7 +13,7 @@ PRODUCTS = {
     "advanced": {"tier": "advanced", "name": "高级会员", "price_cents": 6990, "days": 30},
     "diamond": {"tier": "diamond", "name": "钻石会员", "price_cents": 19900, "days": 30},
     "single_full": {"tier": "single_full", "name": "单次全期全量回测",
-                    "price_cents": 990, "days": 0, "available": False},
+                    "price_cents": 990, "days": 0, "available": True},
 }
 
 
@@ -54,6 +54,35 @@ def ensure_payment_tables(engine) -> None:
                 issue_type TEXT NOT NULL,detail TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 resolved_at TIMESTAMPTZ,UNIQUE(order_id,issue_type))
         """))
+        ensure_single_run_schema(conn)
+
+
+def ensure_single_run_schema(conn) -> None:
+    """仅在列缺失时 ALTER，避免生产应用账号重复触碰 postgres 自有表。"""
+    rows = conn.execute(text(
+        "SELECT table_name,column_name,is_nullable FROM information_schema.columns "
+        "WHERE table_name IN ('membership_entitlements','jobs') AND column_name IN "
+        "('ends_at','consumed_at','consumed_job_id','entitlement_order_id')"
+    )).all()
+    existing = {(row.table_name, row.column_name): row.is_nullable for row in rows}
+    if existing.get(("membership_entitlements", "ends_at")) == "NO":
+        conn.execute(text("ALTER TABLE membership_entitlements ALTER COLUMN ends_at DROP NOT NULL"))
+    for table, column, definition in (
+        ("membership_entitlements", "consumed_at", "TIMESTAMPTZ"),
+        ("membership_entitlements", "consumed_job_id", "BIGINT"),
+        ("jobs", "entitlement_order_id", "TEXT"),
+    ):
+        if (table, column) not in existing:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
+
+
+def single_run_balance(conn, uid: int) -> dict[str, int]:
+    row = conn.execute(text(
+        "SELECT count(*) FILTER (WHERE status='active') AS remaining,"
+        "count(*) FILTER (WHERE status='consumed') AS consumed "
+        "FROM membership_entitlements WHERE user_id=:uid AND tier='single_full'"
+    ), {"uid": uid}).mappings().one()
+    return {"remaining": int(row["remaining"]), "consumed": int(row["consumed"])}
 
 
 def expire_due_orders(engine) -> int:
@@ -146,14 +175,16 @@ def fulfill_order(engine, order_id: str, uid: int | None = None) -> dict[str, An
             "INSERT INTO payment_events (order_id,event_type) VALUES (:id,'paid'),(:id,'fulfilled') "
             "ON CONFLICT DO NOTHING"
         ), {"id": order_id})
-        conn.execute(text(
-            "UPDATE users SET tier=:tier,member_since=now(),member_expire_at="
-            "CASE WHEN member_expire_at>now() THEN member_expire_at ELSE now() END "
-            "+ make_interval(days=>:days) WHERE id=:uid"
-        ), {"tier": product["tier"], "days": product["days"], "uid": order["user_id"]})
-        expiry = conn.execute(text(
-            "SELECT member_expire_at FROM users WHERE id=:uid"
-        ), {"uid": order["user_id"]}).scalar_one()
+        expiry = None
+        if order["sku"] != "single_full":
+            conn.execute(text(
+                "UPDATE users SET tier=:tier,member_since=now(),member_expire_at="
+                "CASE WHEN member_expire_at>now() THEN member_expire_at ELSE now() END "
+                "+ make_interval(days=>:days) WHERE id=:uid"
+            ), {"tier": product["tier"], "days": product["days"], "uid": order["user_id"]})
+            expiry = conn.execute(text(
+                "SELECT member_expire_at FROM users WHERE id=:uid"
+            ), {"uid": order["user_id"]}).scalar_one()
         conn.execute(text(
             "INSERT INTO membership_entitlements (order_id,user_id,tier,starts_at,ends_at,status) "
             "VALUES (:id,:uid,:tier,now(),:expiry,'active') ON CONFLICT (order_id) DO NOTHING"
@@ -401,9 +432,15 @@ def register_payment_routes(app) -> None:
                 return jsonify({"ok": True, "order": dict(order), "deduped": True})
             if order["status"] != "fulfilled":
                 return jsonify({"ok": False, "error": "仅已生效订单可退款"}), 409
+            entitlement_status = conn.execute(text(
+                "SELECT status FROM membership_entitlements WHERE order_id=:id"
+            ), {"id": order_id}).scalar_one_or_none()
+            if order["sku"] == "single_full" and entitlement_status == "consumed":
+                return jsonify({"ok": False, "error": "单次回测权益已使用，不可退款"}), 409
             conn.execute(text("UPDATE membership_orders SET status='refunded' WHERE id=:id"), {"id": order_id})
             conn.execute(text("INSERT INTO payment_events (order_id,event_type) VALUES (:id,'refunded') ON CONFLICT DO NOTHING"), {"id": order_id})
             conn.execute(text("UPDATE membership_entitlements SET status='revoked',revoked_at=now(),revoke_reason='refunded' WHERE order_id=:id AND status='active'"), {"id": order_id})
-            conn.execute(text("UPDATE users SET tier='member',member_expire_at=now() WHERE id=:uid"), {"uid": uid})
+            if order["sku"] != "single_full":
+                conn.execute(text("UPDATE users SET tier='member',member_expire_at=now() WHERE id=:uid"), {"uid": uid})
             order = load_order(conn, order_id, uid)
         return jsonify({"ok": True, "order": dict(order), "simulated": True})

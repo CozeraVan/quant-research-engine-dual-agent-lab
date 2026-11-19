@@ -134,9 +134,11 @@ def ensure_usage_ledger(engine) -> bool:
 
 
 def record_shadow_usage(conn, job: dict[str, Any], summary: dict[str, Any], strategy_yaml: str) -> None:
-    """在结果接收事务内幂等写入；不包含用户可见扣费语义。"""
+    """在结果接收事务内幂等写入；单次权益任务不参与 SU 评估。"""
     from sqlalchemy import text
 
+    if job.get("quota_pool") == "single" or job.get("entitlement_order_id"):
+        return
     try:
         usage = usage_from_result(job, summary, strategy_yaml)
     except (ValueError, TypeError, AttributeError, yaml.YAMLError):

@@ -1,5 +1,12 @@
 # Review Report
 
+## 2026-11-19 单次回测独立权益自审
+
+- Review Status：PASS（本轮范围），无Required Fixes。每个订单仅一条权益，行锁+任务同事务核销，幂等优先；正常会员任务不误扣，只有原闸拒绝才兜底。SU与会员周期用量均排除single。
+- 单次履约/退款不修改tier或会员到期；已核销不允许模拟退款。因子限制未放开，避免把“不限股票和周期”扩大成无限资源。
+- 自审发现生产postgres-owned表重复ALTER风险，已改information_schema条件DDL并重新部署；临时登录会话实测membership 200、single_run零计数，数据清理为0。
+- 相关246项、支付聚焦70项、JS/静默49项通过/14 skipped。未配置商户、无真实资金或回测，未commit/push。
+
 ## 2026-11-18 四项主线自审
 
 - Review Status：PASS（本轮范围），无新增Required Fixes。MACD数据修改范围1行且有备份/影子/精确WHERE；聚类43项、工作树219项、Alpha191 60项测试通过。

@@ -465,7 +465,7 @@ def _quota_user_row(conn, uid: int):
     start, _end = metering.period_window(tier, date.today(), since)
     used = conn.execute(
         text("SELECT count(*) FROM jobs WHERE user_id=:uid AND kind='full' "
-             "AND created_at >= :start "
+             "AND created_at >= :start AND quota_pool IS DISTINCT FROM 'single' "
              + ("AND quota_pool='large'" if tier in metering.FULL_SCALE_CYCLES else "")),
         {"uid": uid, "start": start},
     ).scalar_one()
@@ -500,9 +500,12 @@ def _ensure_quota_pool_column(engine: Engine) -> None:
     key = id(engine)
     if key in _QUOTA_POOL_ENSURED:
         return
+    from quant_research_engine.gui.saas import payments
+
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS quota_pool TEXT"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_quota_pool ON jobs (user_id, quota_pool, created_at)"))
+        payments.ensure_single_run_schema(conn)
     _QUOTA_POOL_ENSURED.add(key)
 
 
@@ -1287,7 +1290,7 @@ def _membership_ops_view(engine) -> dict[str, int]:
     """会员订单与权益真实计数；无表时返回零，不伪造运营数据。"""
     empty = {"orders": 0, "fulfilled": 0, "refunded": 0, "active_entitlements": 0,
              "pending": 0, "expired": 0, "closed": 0, "reconciliation_issues": 0,
-             "launch_subscriptions": 0}
+             "launch_subscriptions": 0, "single_run_active": 0, "single_run_consumed": 0}
     try:
         with engine.connect() as conn:
             orders = conn.execute(text(
@@ -1297,9 +1300,12 @@ def _membership_ops_view(engine) -> dict[str, int]:
                 "count(*) FILTER (WHERE status='expired') AS expired,"
                 "count(*) FILTER (WHERE status='closed') AS closed FROM membership_orders"
             )).mappings().one()
-            active = conn.execute(text(
-                "SELECT count(*) FROM membership_entitlements WHERE status='active'"
-            )).scalar_one()
+            entitlements = conn.execute(text(
+                "SELECT count(*) FILTER (WHERE status='active') AS active,"
+                "count(*) FILTER (WHERE tier='single_full' AND status='active') AS single_active,"
+                "count(*) FILTER (WHERE tier='single_full' AND status='consumed') AS single_consumed "
+                "FROM membership_entitlements"
+            )).mappings().one()
             issues = conn.execute(text(
                 "SELECT count(*) FROM payment_reconciliation_issues WHERE resolved_at IS NULL"
             )).scalar_one()
@@ -1307,10 +1313,12 @@ def _membership_ops_view(engine) -> dict[str, int]:
                 "SELECT count(*) FROM feature_subscriptions WHERE feature='membership_launch'"
             )).scalar_one()
         return {**empty, "orders": int(orders["total"]), "fulfilled": int(orders["fulfilled"]),
-                "refunded": int(orders["refunded"]), "active_entitlements": int(active),
+                "refunded": int(orders["refunded"]), "active_entitlements": int(entitlements["active"]),
                 "pending": int(orders["pending"]), "expired": int(orders["expired"]),
                 "closed": int(orders["closed"]), "reconciliation_issues": int(issues),
-                "launch_subscriptions": int(subscriptions)}
+                "launch_subscriptions": int(subscriptions),
+                "single_run_active": int(entitlements["single_active"]),
+                "single_run_consumed": int(entitlements["single_consumed"])}
     except Exception:
         return empty
 
@@ -3027,6 +3035,7 @@ def create_saas_app() -> Flask:
             return jsonify({"ok": False, "error": "未登录"}), 401
         _ensure_tier_policies(engine)
         _ensure_signal_tables(engine)
+        _ensure_quota_pool_column(engine)
         with engine.connect() as conn:
             user = conn.execute(
                 text(
@@ -3061,11 +3070,14 @@ def create_saas_app() -> Flask:
                        "remaining": max(0, max_watches - watches_used), "unlimited": False}
         with engine.connect() as conn:
             used_in_cycle = _quota_user_row(conn, uid)["used_today"]
+            from quant_research_engine.gui.saas import payments
+            single_run = payments.single_run_balance(conn, uid)
         item = {
             "tier": tier,
             "tier_label": membership.tier_label(tier),
             "is_admin": is_admin,
             "daily_full": membership.quota_view(policy, used_in_cycle, is_admin),
+            "single_run": single_run,
             "watches": watches,
             "scan_enabled": bool(policy.get("scan_enabled", True)),
             "member_since": user["member_since"],
@@ -3135,10 +3147,25 @@ def create_saas_app() -> Flask:
             "max_fields": int(factor_pol.get("max_factor_fields", 20)),
             "max_tables": int(factor_pol.get("max_factor_tables", 3)),
         }
+        _ensure_quota_pool_column(engine)
+        idem = str(data.get("idempotency_key") or "").strip() or None
+        if idem and uid is not None:
+            with engine.connect() as conn:
+                existing = conn.execute(
+                    text("SELECT id FROM jobs WHERE user_id=:uid AND idempotency_key=:k"),
+                    {"uid": uid, "k": idem},
+                ).first()
+            if existing is not None:
+                return jsonify({"ok": True, "job_id": existing.id, "deduped": True})
+        single_run_available = False
+        if uid is not None and kind == "full":
+            from quant_research_engine.gui.saas import payments
+            with engine.connect() as conn:
+                single_run_available = payments.single_run_balance(conn, uid)["remaining"] > 0
         scope_issue = membership.validate_scope_policy(
             params_raw, factor_pol, logged_in=uid is not None, check_period=kind == "full",
         )
-        if scope_issue:
+        if scope_issue and not single_run_available:
             return jsonify({"ok": False, "error": scope_issue}), 403
 
         # --- 游客通道（15 号文档 D 阶段定稿；2026-10-03 限额参数化读 tier_policies；
@@ -3224,6 +3251,7 @@ def create_saas_app() -> Flask:
         _ensure_job_input_snapshot_column(engine)
         weight_class = classify_job_weight(kind, params)
         quota_pool = membership.quota_pool(params, available_symbols=5201)
+        single_run_order_id = None
 
         with engine.begin() as conn:
             # 幂等去重（17 协议 §4.4）：同用户同 key 返回既有 job（游客不开放）
@@ -3247,10 +3275,22 @@ def create_saas_app() -> Flask:
                 quota_row = _quota_user_row(conn, uid)
                 # admin 不限测试次数（运营/开发者账号）；限额参数化读 tier_policies
                 pol = _get_policy(app, engine, str(quota_row["tier"] or "member"))
+                quota_error = None
                 if kind == "full" and membership.is_quota_exceeded(
                         pol, quota_row["used_today"], quota_row["role"] == "admin"):
                     limit = int(pol.get("daily_full_limit") or 0)
-                    return jsonify({"ok": False, "error": f"当前账号本周期可回测 {limit} 次（已用完），下个周期恢复"}), 403
+                    quota_error = f"当前账号本周期可回测 {limit} 次（已用完），下个周期恢复"
+                if kind == "full" and (scope_issue or quota_error):
+                    from quant_research_engine.gui.saas import payments
+                    entitlement = conn.execute(text(
+                        "SELECT order_id FROM membership_entitlements "
+                        "WHERE user_id=:uid AND tier='single_full' AND status='active' "
+                        "ORDER BY created_at,id LIMIT 1 FOR UPDATE"
+                    ), {"uid": uid}).mappings().first()
+                    if entitlement is None:
+                        return jsonify({"ok": False, "error": quota_error or scope_issue}), 403
+                    single_run_order_id = entitlement["order_id"]
+                    quota_pool = "single"
             # 会员：按 (user_id, name) upsert 复用策略库行（QRE-SAAS-D3）
             if uid is not None:
                 existing = conn.execute(
@@ -3282,16 +3322,24 @@ def create_saas_app() -> Flask:
             job_id = conn.execute(
                 text(
                     "INSERT INTO jobs (user_id, strategy_id, kind, params, input_snapshot, "
-                    "idempotency_key, guest_key, weight_class, quota_pool) "
+                    "idempotency_key, guest_key, weight_class, quota_pool, entitlement_order_id) "
                     "VALUES (:uid, :sid, :kind, CAST(:params AS jsonb), CAST(:snapshot AS jsonb), "
-                    ":idem, :gk, :wc, :qp) RETURNING id"
+                    ":idem, :gk, :wc, :qp, :eoid) RETURNING id"
                 ),
                 {"uid": uid, "sid": strategy_id, "kind": kind,
                  "params": json.dumps(params), "snapshot": json.dumps(input_snapshot, ensure_ascii=False),
-                 "idem": idem, "gk": guest_key, "wc": weight_class, "qp": quota_pool},
+                 "idem": idem, "gk": guest_key, "wc": weight_class, "qp": quota_pool,
+                 "eoid": single_run_order_id},
             ).scalar_one()
+            if single_run_order_id is not None:
+                conn.execute(text(
+                    "UPDATE membership_entitlements SET status='consumed',consumed_at=now(),"
+                    "consumed_job_id=:jid WHERE order_id=:oid AND status='active'"
+                ), {"jid": job_id, "oid": single_run_order_id})
         resp: dict[str, Any] = {"ok": True, "job_id": job_id, "strategy_id": strategy_id,
                                 "status": "queued", "weight_class": weight_class}
+        if single_run_order_id is not None:
+            resp["single_run"] = {"order_id": single_run_order_id, "remaining": 0}
         if basis_note:
             resp["warnings"] = [basis_note]
         if guest_key is not None:

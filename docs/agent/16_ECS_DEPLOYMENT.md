@@ -1,3 +1,5 @@
+> 2026-11-19 单次回测独立权益已部署：`single_full` 9.9元/订单1次，不改会员档，范围/周期或次数不足时兜底，不限股票数/周期，排除SU和周期次数；会员中心/9090真实计数。生产schema备份 `/tmp/qre-single-run-schema-pre-20261119.sql`，代码回滚 `/tmp/qre-deploy-20261119T015816Z.bak`、`/tmp/qre-deploy-20261119T020012Z.bak`。公开商品/页面及临时登录API通过，临时数据已清理；订单0、权益0、jobs275，无真实支付/回测。相关246项通过。未commit/push。
+
 > 2026-11-18 Git 校准：SSE `305f3a7`、会员支付 `18ae9ff`、游戏过滤 `fcf1e13`、后台原子写 `d68844b`、测试夹具 `2c0582d` 均已推送。以下历史条目“未 commit”为当时状态，当前以 Git 为准。
 
 **job374本地产物恢复（2026-11-18，DONE/未 commit）**：限速断点续传305文件，job374 completed/progress=100；20MiB截断标记保留，公网数值复核。未重跑交易、未改行情。游戏宇宙过滤改动仅重启WSL qre-game；daily_jobs不属于ECS SaaS运行路径。

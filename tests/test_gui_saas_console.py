@@ -700,7 +700,7 @@ def test_membership_ops_counts_orders_and_entitlements(client, app):
     view = _membership_ops_view(app.extensions['saas_engine'])
     assert view == {'orders': 1, 'fulfilled': 1, 'refunded': 0, 'active_entitlements': 1,
                     'pending': 0, 'expired': 0, 'closed': 0, 'reconciliation_issues': 0,
-                    'launch_subscriptions': 0}
+                    'launch_subscriptions': 0, 'single_run_active': 0, 'single_run_consumed': 0}
 
 
 def test_admin_reconciliation_recovers_paid_order_and_is_idempotent(client, app, monkeypatch):
@@ -785,12 +785,145 @@ def test_membership_launch_notification_is_idempotent_and_counted(client, app):
     assert _membership_ops_view(app.extensions['saas_engine'])['launch_subscriptions'] == 1
 
 
-def test_single_full_backtest_product_is_catalogued_but_not_purchasable(client, app):
+def _buy_single_run(client, app, uid):
+    app.config['SAAS_PAYMENT_SIMULATOR'] = True
+    headers = {'X-User-Id': str(uid)}
+    created = client.post('/api/saas/membership/orders', json={'sku': 'single_full'}, headers=headers)
+    assert created.status_code == 201, created.get_json()
+    order_id = created.get_json()['order']['id']
+    paid = client.post(f'/api/saas/membership/orders/{order_id}/simulate-pay', headers=headers)
+    assert paid.status_code == 200, paid.get_json()
+    return order_id
+
+
+def test_single_full_backtest_purchase_grants_independent_credit(client, app):
+    from sqlalchemy import text
     uid = _make_user(app, '13800050027')
     products = client.get('/api/saas/membership/products').get_json()['products']
     single = next(p for p in products if p['sku'] == 'single_full')
     assert single['price_cents'] == 990 and single['days'] == 0
-    response = client.post('/api/saas/membership/orders', json={'sku': 'single_full'},
-                           headers={'X-User-Id': str(uid)})
-    assert response.status_code == 403
-    assert '尚未开放' in response.get_json()['error']
+    assert single['available'] is True
+    order_id = _buy_single_run(client, app, uid)
+    with app.extensions['saas_engine'].connect() as conn:
+        user = conn.execute(text('SELECT tier,member_expire_at FROM users WHERE id=:uid'), {'uid': uid}).mappings().one()
+        entitlement = conn.execute(text(
+            "SELECT status,ends_at FROM membership_entitlements WHERE order_id=:oid"
+        ), {'oid': order_id}).mappings().one()
+    assert user['tier'] == 'member' and user['member_expire_at'] is None
+    assert entitlement['status'] == 'active' and entitlement['ends_at'] is None
+    membership = client.get('/api/saas/membership', headers={'X-User-Id': str(uid)}).get_json()['membership']
+    assert membership['single_run']['remaining'] == 1
+
+
+def test_single_run_bypasses_scope_and_cycle_once_without_su(client, app):
+    from sqlalchemy import text
+    from quant_research_engine.gui.saas import metering
+    uid = _make_user(app, '13800050028')
+    with app.extensions['saas_engine'].begin() as conn:
+        conn.execute(text(
+            "UPDATE tier_policies SET daily_full_limit=10,max_codes=10,max_days=3653 WHERE tier='member'"
+        ))
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
+    order_id = _buy_single_run(client, app, uid)
+    headers = {'X-User-Id': str(uid)}
+    payload = {
+        'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full', 'name': 'single-full',
+        'params': {'universe': {'group': 'market', 'key': 'all'},
+                   'start': '2005-01-01', 'end': '2025-12-31'},
+        'idempotency_key': 'single-run-only-once',
+    }
+    response = client.post('/api/saas/jobs', json=payload, headers=headers)
+    assert response.status_code == 200, response.get_json()
+    job_id = response.get_json()['job_id']
+    assert response.get_json()['single_run']['order_id'] == order_id
+    replay = client.post('/api/saas/jobs', json=payload, headers=headers)
+    assert replay.status_code == 200 and replay.get_json()['deduped'] is True
+    with app.extensions['saas_engine'].connect() as conn:
+        job = conn.execute(text(
+            'SELECT quota_pool,entitlement_order_id FROM jobs WHERE id=:jid'
+        ), {'jid': job_id}).mappings().one()
+        entitlement = conn.execute(text(
+            'SELECT status,consumed_job_id FROM membership_entitlements WHERE order_id=:oid'
+        ), {'oid': order_id}).mappings().one()
+        assert job['quota_pool'] == 'single' and job['entitlement_order_id'] == order_id
+        assert entitlement['status'] == 'consumed' and entitlement['consumed_job_id'] == job_id
+        metering.record_shadow_usage(
+            conn, {'id': job_id, 'user_id': uid, 'quota_pool': 'single',
+                   'params': payload['params']},
+            {'date_start': '2005-01-01', 'date_end': '2025-12-31', 'symbol_count': 5201},
+            payload['yaml'],
+        )
+        assert conn.execute(text('SELECT count(*) FROM backtest_usage WHERE job_id=:jid'), {'jid': job_id}).scalar_one() == 0
+    membership = client.get('/api/saas/membership', headers=headers).get_json()['membership']
+    assert membership['daily_full']['used'] == 0
+    assert membership['single_run']['remaining'] == 0
+    second = client.post('/api/saas/jobs', json={**payload, 'idempotency_key': 'no-credit-left'}, headers=headers)
+    assert second.status_code == 403
+    from quant_research_engine.gui.saas.app import _membership_ops_view
+    ops = _membership_ops_view(app.extensions['saas_engine'])
+    assert ops['single_run_active'] == 0 and ops['single_run_consumed'] == 1
+
+
+def test_single_run_is_used_when_normal_cycle_is_exhausted(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050031')
+    _buy_single_run(client, app, uid)
+    with app.extensions['saas_engine'].begin() as conn:
+        conn.execute(text(
+            "UPDATE tier_policies SET daily_full_limit=1,max_codes=0,max_days=0 WHERE tier='member'"
+        ))
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
+    headers = {'X-User-Id': str(uid)}
+    payload = {'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full',
+               'params': {'codes': ['000001.SZ'], 'start': '2025-01-01', 'end': '2025-12-31'}}
+    first = client.post('/api/saas/jobs', json={**payload, 'name': 'cycle-first'}, headers=headers)
+    assert first.status_code == 200 and 'single_run' not in first.get_json()
+    second = client.post('/api/saas/jobs', json={**payload, 'name': 'single-second'}, headers=headers)
+    assert second.status_code == 200 and second.get_json()['single_run']['remaining'] == 0
+    third = client.post('/api/saas/jobs', json={**payload, 'name': 'blocked-third'}, headers=headers)
+    assert third.status_code == 403
+    membership = client.get('/api/saas/membership', headers=headers).get_json()['membership']
+    assert membership['daily_full']['used'] == 1
+    assert membership['single_run'] == {'remaining': 0, 'consumed': 1}
+
+
+def test_single_run_can_cover_any_scope_but_normal_quota_has_priority(client, app):
+    uid = _make_user(app, '13800050029')
+    _buy_single_run(client, app, uid)
+    headers = {'X-User-Id': str(uid)}
+    response = client.post('/api/saas/jobs', json={
+        'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full', 'name': 'ordinary-small',
+        'params': {'codes': ['000001.SZ'], 'start': '2025-01-01', 'end': '2025-12-31'}}, headers=headers)
+    assert response.status_code == 200
+    assert 'single_run' not in response.get_json()
+    membership = client.get('/api/saas/membership', headers=headers).get_json()['membership']
+    assert membership['single_run']['remaining'] == 1
+
+
+def test_single_run_refund_preserves_membership_and_used_credit_is_not_refundable(client, app):
+    from sqlalchemy import text
+    uid = _make_user(app, '13800050030', tier='starter')
+    headers = {'X-User-Id': str(uid)}
+    unused_order = _buy_single_run(client, app, uid)
+    refunded = client.post(f'/api/saas/membership/orders/{unused_order}/simulate-refund', headers=headers)
+    assert refunded.status_code == 200
+    with app.extensions['saas_engine'].connect() as conn:
+        assert conn.execute(text('SELECT tier FROM users WHERE id=:uid'), {'uid': uid}).scalar_one() == 'starter'
+    used_order = _buy_single_run(client, app, uid)
+    # 将会员档临时设为一年范围，确保长区间只能由单次权益放行。
+    with app.extensions['saas_engine'].begin() as conn:
+        conn.execute(text("UPDATE tier_policies SET max_days=3653 WHERE tier='starter'"))
+    app.extensions.setdefault('tier_policy_cache', {}).clear()
+    used = client.post('/api/saas/jobs', json={
+        'yaml': "signal:\n  entry: 'true'\n", 'kind': 'full', 'name': 'paid-tier-scope',
+        'params': {'codes': ['000001.SZ'], 'start': '2005-01-01', 'end': '2025-12-31'}}, headers=headers)
+    assert used.status_code == 200, used.get_json()
+    assert used.get_json()['single_run']['order_id'] == used_order
+    with app.extensions['saas_engine'].connect() as conn:
+        assert conn.execute(text(
+            "SELECT status FROM membership_entitlements WHERE order_id=:oid"
+        ), {'oid': used_order}).scalar_one() == 'consumed'
+    consumed_refund = client.post(f'/api/saas/membership/orders/{used_order}/simulate-refund', headers=headers)
+    assert consumed_refund.status_code == 409
+    with app.extensions['saas_engine'].connect() as conn:
+        assert conn.execute(text('SELECT tier FROM users WHERE id=:uid'), {'uid': uid}).scalar_one() == 'starter'

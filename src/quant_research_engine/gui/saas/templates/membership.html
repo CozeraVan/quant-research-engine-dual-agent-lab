@@ -10,6 +10,7 @@
       <div class="metric-card"><div class="m-label">当前档位</div><div class="m-value" id="member-tier">—</div></div>
       <div class="metric-card"><div class="m-label">本周期已用</div><div class="m-value" id="member-used">—</div></div>
       <div class="metric-card"><div class="m-label">本周期剩余</div><div class="m-value" id="member-remaining">—</div></div>
+      <div class="metric-card"><div class="m-label">单次回测剩余</div><div class="m-value" id="member-single-run">—</div></div>
       <div class="metric-card"><div class="m-label">会员到期</div><div class="m-value" id="member-expire">—</div></div>
     </div>
   </section>
@@ -25,8 +26,9 @@
     <h2>单次全期全量回测</h2>
     <div class="metric-strip">
       <div class="metric-card"><div class="m-label">单次购买</div><div class="m-value">9.9元</div></div>
-      <div class="metric-card"><div class="m-label">回测范围</div><div class="m-value">全市场·全期</div></div>
-      <div class="metric-card"><div class="m-label">可用次数</div><div class="m-value">1次</div></div>
+      <div class="metric-card"><div class="m-label">回测范围</div><div class="m-value">不限股票数·不限周期</div></div>
+      <div class="metric-card"><div class="m-label">可用次数</div><div class="m-value">每单1次</div></div>
+      <div class="metric-card"><div class="m-label">SU评估</div><div class="m-value">不参与</div></div>
     </div>
   </section>
   <section class="card">
@@ -51,10 +53,11 @@ async function loadMembershipCenter(){
     const r=await apiFetch('/api/saas/membership',{redirectOn401:false});
     const d=await r.json();
     if(!r.ok||!d.ok) throw new Error('请先登录后查看当前权益');
-    const m=d.membership,q=m.daily_full||{};
+    const m=d.membership,q=m.daily_full||{},single=m.single_run||{};
     membershipText('member-tier',m.tier_label||m.tier);
     membershipText('member-used',String(q.used||0)+' 次');
     membershipText('member-remaining',q.unlimited?'不限':String(q.remaining??0)+' 次');
+    membershipText('member-single-run',String(single.remaining||0)+' 次');
     membershipText('member-expire',membershipDate(m.member_expire_at));
   } catch(e){membershipText('member-tier',e.message||'加载失败');}
 }

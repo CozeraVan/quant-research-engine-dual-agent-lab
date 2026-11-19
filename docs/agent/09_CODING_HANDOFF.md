@@ -1,5 +1,12 @@
 # Coding Handoff
 
+## 2026-11-19 单次回测独立权益
+
+- `payments.py`：`single_full` 990分available；单次履约只写`membership_entitlements`，ends_at NULL，不改users。新增核销列和余额读取；schema仅在列缺失时ALTER，避免生产非owner重复DDL。
+- `app.py`：正常范围/周期额度优先；需要兜底时在任务事务内SELECT FOR UPDATE，任务写`entitlement_order_id`/`quota_pool=single`后核销。提前幂等重放不重复扣；`_quota_user_row`排除single。
+- `metering.py`跳过single；退款区分active/consumed并保留原会员档。membership/console展示真实余额和核销计数。
+- TDD先4项红后绿，扩大相关246 passed、JS/静默49 passed/14 skipped。生产schema与代码已部署，无真实订单/回测。
+
 ## 2026-11-18 聚类与Alpha191模板
 
 - `ml_cluster.build_feature_matrix` 接受直传 `ts_code` 元数据并归一为symbol；新增真实路径回归，43项相关测试通过。fit输入用独立副本从strategy_performance注入上证指数收益，不改原CSV。

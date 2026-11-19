@@ -340,6 +340,8 @@
       metric('已关闭', Number(ops.closed || 0)) +
       metric('已退款', Number(ops.refunded || 0)) +
       metric('有效权益', Number(ops.active_entitlements || 0)) +
+      metric('单次回测可用', Number(ops.single_run_active || 0)) +
+      metric('单次回测已核销', Number(ops.single_run_consumed || 0)) +
       metric('对账异常', Number(ops.reconciliation_issues || 0)) +
       metric('上线通知登记', Number(ops.launch_subscriptions || 0));
   }

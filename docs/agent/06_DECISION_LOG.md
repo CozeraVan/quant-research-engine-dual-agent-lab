@@ -1,3 +1,10 @@
+### 2026-11-19: 单次回测采用按订单独立权益，不纳入SU（QRE-SINGLE-RUN）
+
+- Decision: `single_full`每单发放一次独立权益；原会员额度优先，范围/周期或次数不足时才核销，任务记录订单并排除SU和周期计数，不切换用户tier。
+- Rationale: 保留支付审计和幂等，避免错误会员档、SU换算套利及小额任务误扣；不按股票数/周期限制本次权益。
+- Verification: 支付/范围/次数/幂等/退款/展示相关246项通过；生产登录态API与公开商品页面通过，无真实订单或回测。
+- Owner: KIMI_CODE；用户明确指定9.9元、一次、不限股票数和周期、不参与SU。
+
 ### 2026-11-16: NL 明确期限与成交价由确定性执行合同承接（QRE-NL-EXECUTION）
 
 - Decision: 明确N日后卖出直接规范化为 holding=N；收盘价卖出写 execution.exit_price=close。StrategySpec/GUI/CLI读取execution，显式回测参数优先。
