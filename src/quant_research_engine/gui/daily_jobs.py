@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import subprocess
 import threading
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -72,6 +73,7 @@ PIPELINES: dict[str, dict[str, Any]] = {
 # 每条管线独立单任务锁
 _pipeline_lock = threading.Lock()
 _active_jobs: dict[str, str] = {}
+_MARKET_REFRESH_PIPELINES = frozenset({"quant-ts", "indicators", "panel-factors"})
 
 
 def _now_iso() -> str:
@@ -188,7 +190,12 @@ def start_script_job(
     def _run() -> None:
         run = runner or _default_runner
         try:
-            code = run(list(cmd), cwd, job_dir)
+            lock_context = nullcontext()
+            if lock_key in _MARKET_REFRESH_PIPELINES:
+                from quant_research_engine.scheduling import refresh_lock
+                lock_context = refresh_lock(exclusive=True)
+            with lock_context:
+                code = run(list(cmd), cwd, job_dir)
             record["status"] = "completed" if code == 0 else "failed"
             if code != 0:
                 record["error"] = f"脚本退出码 {code}（详见日志）"

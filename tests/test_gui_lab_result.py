@@ -1469,3 +1469,20 @@ def test_local_video_agent_short_symbol_code(lab_client):
     response = lab_client.get(f"/api/results/{RUN_ID}/symbols/000001")
     assert response.status_code == 200
     assert response.get_json()["summary"]["ts_code"] == "000001.SZ"
+
+
+def test_run_list_recovers_sse_excess_when_perf_file_has_null(tmp_path):
+    """新口径产物基准写盘为空时，列表与详情共用曲线回补结果。"""
+    from quant_research_engine.gui.lab_result import _excess_return_of, build_lab_chart_data
+
+    run_dir = _make_run(tmp_path)
+    record = json.loads((run_dir / "status.json").read_text())
+    perf_path = Path(record["artifacts"]["strategy_performance.json"])
+    perf = json.loads(perf_path.read_text())
+    perf["benchmark_code"] = "000001.SH"
+    perf["benchmark_return"] = None
+    perf["excess_return_vs_benchmark"] = None
+    perf_path.write_text(json.dumps(perf))
+    expected = build_lab_chart_data(record)["metrics"]["excess_return"]
+    assert expected is not None
+    assert _excess_return_of(record) == round(expected, 6)

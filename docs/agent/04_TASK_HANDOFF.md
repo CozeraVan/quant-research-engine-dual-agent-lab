@@ -1,5 +1,46 @@
 # Task Handoff
 
+## 2026-11-20 股票池三入口（DONE，待commit）
+
+- `/saas/stock-pool`改为自然语言/快速向导/高级YAML三tab；统一StrategySpec `data+signal.entry`，仅计算最新截面，不执行exit/交易。
+- 向导保留单SQL；NL/YAML经安全闸后读取400日引用字段面板，逐股表达式求值，shift不跨股票。NL纯筛选遇`nl_input_review`仅在本页面自动force重试，硬拒不放行。
+- YAML与单SQL真实库名单对账一致；相关388 passed/14 skipped。公网向导job383、YAML job384、NL job385均completed，2026-11-20均447/5572。
+- 回滚`/tmp/qre-deploy-20261120T124449Z.bak`、模板`/tmp/qre-deploy-20261120T125147Z.bak`；无回测，未commit/push。
+
+## 2026-11-20 最新截面股票池（DONE，待commit）
+
+- 新`/saas/stock-pool`：登录用户单条件筛选，左行情/因子，右字段或有限数值；最近行情日、空值不命中，不计算指标/交易，不占回测次数或历史。
+- 新轻量`stock_pool`队列，本机worker只读查询、ECS接收名单；严格表列/操作符白名单与私有幂等任务。首版不含多条件/保存池。
+- 真实库独立SQL对账及SaaS/worker/UI回归385 passed/14 skipped。公网job383示例EMA5>EMA200完成：2026-11-20候选5572、命中447，页面200。
+- ECS回滚`/tmp/qre-deploy-20261120T121628Z.bak`，本机worker active；无回测。未commit/push。
+
+## 2026-11-20 冒烟历史隐藏与产物清理（DONE，待commit）
+
+- 8081列表排除precheck/purpose=smoke；云端`/api/results`原本即仅full。终态后删除冒烟run/output、worker沙箱与云端job目录；策略YAML、sidecar、jobs/results摘要和正式任务保留。
+- 清理仅限明确冒烟标记与安全受管路径；worker上报unknown保留恢复文件。旧冒烟记录隐藏但不追溯删除；沙箱失效详情链接改纯状态文本。
+- 相关302 passed。ECS app+helper已部署，回滚`/tmp/qre-deploy-20261120T013452Z.bak`；本机worker/lab/gui active，8081历史321条全为正式任务，8080=200。未跑真实冒烟/全量，未commit/push。
+
+## 2026-11-20 8081四项新回测缺超额（DONE，待commit）
+
+- 根因：四个本地产物`strategy_performance.json`的新SSE键存在但值为null；8081列表只直读该值，而worker/详情页会按净值日期从上证指数曲线回补，云端结果本就有值。
+- `_excess_return_of`仅对`benchmark_code=000001.SH`且新键为null的产物复用`build_lab_chart_data`回补；旧口径不回退，不改历史文件。
+- TDD先红后绿，lab相关86 passed；8081重启后四条API超额为−22.7368%/−17.1950%/−24.6851%/−21.5400%，与云端一致。回滚 `/tmp/qre-lab-result-pre-null-fallback-20261120.py`。未commit/push。
+
+## 2026-11-19 全量回测与日更互斥（DONE，待commit）
+
+- 新增`scheduling.py`共享—排他文件锁：heavy从认领到执行/回传持共享锁；quant-ts/indicators/alpha191/panel-factors日更持排他锁。轻量槽和原内存预算不变。
+- 自动四管线由`deploy/scheduling/*.conf`包装原命令，日更中心手动quant-ts/indicators/panel-factors复用排他锁；不改上游项目代码。
+- 新锁/双向等待/执行期防插入及worker+日更回归98 passed。四个drop-in已安装，qre-saas-worker/qre-gui active、8080=200；实际锁探针共享阻断排他，排他等待28秒取得（双heavy空轮询释放间隙），未跑真实回测/日更。
+- 回滚 `/tmp/qre-scheduling-pre-20261119/`。未commit/push。
+
+## 2026-11-19 EMA60/100日四组全量（DONE）
+
+- 重复项复核：job373已不存在，无需再删；保留已恢复completed的job374及run `20261117T082420507871`。
+- 小样本375–378全部completed（3/2/1/0笔）后，串行全量379–382全部completed、归属用户6；T+1开盘入场、60/100交易日收盘退出，参数与云端状态复核通过。
+- job379 EMA5/200×60：71793笔、收益−12.2298%、超额−22.7368%、回撤−44.4798%，45.46分钟；job380 EMA5/200×100：57032笔、−6.6881%/−17.1950%/−48.2652%，48.95分钟。
+- job381 EMA20/200×60：52069笔、收益−14.0779%、超额−24.6851%、回撤−64.7482%，100.23分钟；job382 EMA20/200×100：44422笔、−10.9328%/−21.5400%/−46.1628%，116.80分钟。
+- 379/380实际数据截止11-17，381/382截止11-18（执行时最新数据差异）；结果 `.tmp/ema-entry-hold60-hold100-20261119/full_results.jsonl`，后台 `bash-brfu149k` exit0。
+
 ## 2026-11-19 9.9元单次回测独立权益（DONE，待人工验收/commit）
 
 - `single_full` 990分/单1次，履约写独立权益，不改tier或会员期限；原额度优先，范围/周期或周期次数不足时才原子核销，股票数和周期不限，因子限制不变。

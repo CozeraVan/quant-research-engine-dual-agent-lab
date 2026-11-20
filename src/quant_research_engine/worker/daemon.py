@@ -342,6 +342,8 @@ class WorkerDaemon:
         hb.start()
         final_status = "unknown"
         cloud_complete = False
+        payload = None
+        failure_run_id = None
         try:
             try:
                 if pass_work_base:
@@ -349,6 +351,7 @@ class WorkerDaemon:
                 else:
                     payload = run_fn(job, canceled)
             except Exception as exc:
+                failure_run_id = getattr(exc, "run_id", None)
                 if canceled.is_set():
                     # 用户取消且已上报 → canceled 终态；lease 丢失未上报 → unknown
                     final_status = "canceled" if cancel_state.get("reported") else "unknown"
@@ -373,6 +376,16 @@ class WorkerDaemon:
             # （上传失败/上传关闭/截断/取消/未知——本地可能是唯一完整副本）
             self._cleanup_work_base(job_id, work_base, final_status,
                                     cloud_complete=cloud_complete)
+            if job.get("kind") == "smoke" and final_status in {
+                    "completed", "failed", "canceled", "cancelled", "expired"}:
+                from quant_research_engine.gui.engine import RUNS_DIR
+                from quant_research_engine.smoke_cleanup import cleanup_smoke_run
+                summary = (payload or {}).get("summary") or {}
+                smoke_run_id = summary.get("run_id") or failure_run_id
+                if smoke_run_id:
+                    cleanup_smoke_run(str(smoke_run_id), runs_dir=RUNS_DIR)
+                if _is_own_sandbox(work_base, job_id):
+                    shutil.rmtree(work_base, ignore_errors=True)
 
     def _cleanup_work_base(self, job_id: int, work_base: Path | None, status: str,
                            *, cloud_complete: bool = False) -> None:
@@ -568,14 +581,30 @@ class WorkerDaemon:
                      f"{self.worker_budget_gb:.1f}GB），暂缓领取")
                 self._sleep(self.poll_seconds)
                 continue
+            # 日更排他锁存在时不认领新全量；认领后共享锁持有到执行和回传结束。
+            refresh_context = None
+            if kind == "heavy":
+                from quant_research_engine.scheduling import RefreshInProgress, refresh_lock
+                refresh_context = refresh_lock(exclusive=False, blocking=False)
+                try:
+                    refresh_context.__enter__()
+                except RefreshInProgress:
+                    self._ledger.release(slot_name)
+                    _log(f"[{slot_name}] 行情/因子日更进行中，暂缓领取全量任务")
+                    self._sleep(self.poll_seconds)
+                    continue
             try:
                 job = self.client.claim(wait_seconds=self.poll_seconds, classes=classes)
             except CloudError as exc:
+                if refresh_context is not None:
+                    refresh_context.__exit__(None, None, None)
                 self._ledger.release(slot_name)
                 _log(f"[{slot_name}] claim 失败：{exc}")
                 self._sleep(self.poll_seconds)
                 continue
             if not job:
+                if refresh_context is not None:
+                    refresh_context.__exit__(None, None, None)
                 self._ledger.release(slot_name)
                 continue
             # claim 成功：按任务真实档位定账（重槽领到轻任务时释放多预留）
@@ -589,6 +618,8 @@ class WorkerDaemon:
             try:
                 self._run_job(job, runner=_runner)
             finally:
+                if refresh_context is not None:
+                    refresh_context.__exit__(None, None, None)
                 self._slot_set(slot_name, kind, False, None)
                 self._ledger.release(slot_name)
         _log(f"[{slot_name}] 槽位退出")

@@ -1,3 +1,15 @@
+2026-11-20 股票池三入口已上线：自然语言/向导/YAML统一StrategySpec entry；NL/YAML按400日面板逐股求值，向导保留单SQL。纯筛选NL仅在本页对review自动force，硬拒不放行。相关388 passed/14 skipped；公网job383/384/385分别验证三入口，均2026-11-20命中447/5572。无回测，未commit/push。
+
+2026-11-20 最新截面股票池已上线：`/saas/stock-pool`支持单条件行情/因子比较字段或数值，本地worker轻量只读stock_pool任务，私有、不占回测额度/历史。真实库对账与相关385 passed/14 skipped；公网job383 EMA5>EMA200 completed，2026-11-20候选5572、命中447。ECS回滚`/tmp/qre-deploy-20261120T121628Z.bak`，未跑回测，未commit/push。
+
+2026-11-20 冒烟任务隐藏与清理已部署：8081排除smoke，终态清理本地run/output、worker沙箱和云端job目录；保留策略、sidecar和云端摘要，unknown不删，正式任务与越界路径拒绝。相关302 passed，ECS与本机服务active，8081历史321条均正式任务。未跑真实任务，回滚`/tmp/qre-deploy-20261120T013452Z.bak`，未commit/push。
+
+2026-11-20 8081四项新回测超额缺值已修：产物新SSE键为null，列表此前只直读，未复用详情页曲线回补；现仅对新SSE空值调`build_lab_chart_data`，旧口径不回退。相关86 passed，8081四条实际API与云端一致。无数据改写/回测，回滚`/tmp/qre-lab-result-pre-null-fallback-20261120.py`，未commit/push。
+
+2026-11-19 全量回测与日更互斥已实施：`scheduling.py`文件锁，heavy全生命周期共享、四个行情/因子日更排他，自动systemd与手动日更中心均覆盖，轻量槽不变。相关98 passed；四个drop-in已安装，worker/gui active，实际锁探针通过，排他等待28秒在双heavy空轮询间隙取得。未跑真实回测/日更，回滚`/tmp/qre-scheduling-pre-20261119/`，未commit/push。
+
+2026-11-19 EMA60/100日四组全量完成：job373不存在，保留job374。smoke375–378全过后，379 EMA5/200×60收益−12.2298%/超额−22.7368%/71793笔，380 EMA5/200×100 −6.6881%/−17.1950%/57032笔；381 EMA20/200×60 −14.0779%/−24.6851%/52069笔，382 EMA20/200×100 −10.9328%/−21.5400%/44422笔，均completed。耗时45.46/48.95/100.23/116.80分钟，归属用户6，后台`bash-brfu149k` exit0；结果`.tmp/ema-entry-hold60-hold100-20261119/full_results.jsonl`。
+
 2026-11-19 9.9元单次回测独立权益已部署待验收：`single_full`开放订单，支付履约不改会员档，只发一条独立权益；正常额度优先，仅范围/周期超限或周期次数耗尽时使用，每单仅1次，不限股票数/周期，因子限制仍按原档。任务记录订单来源并标`quota_pool=single`，排除周期次数和SU；幂等、退款边界、会员中心和9090计数均覆盖。相关246 passed，JS/静默49 passed/14 skipped；生产schema备份后幂等迁移，公开商品9.9元/available=true、页面与临时登录API通过，临时用户/会话已清理，生产订单/权益均0、jobs仍275，无真实交易/回测。未commit/push。
 
 2026-11-18 批准的四项主线完成：①MACD单日修复：备份+影子表后仅更新000001.SZ/2026-11-05的12字段，测试2 passed，见CR。②历史工作树审查：缠伦/懒加载/SSE测试等219项通过，未删实验文件、未混入提交。③策略聚类：修复metadata `ts_code`直传KeyError，43项通过；用job374现有产物构建独立SSE规范化副本并生成fit+DBSCAN，165只显著股票、4簇、54噪声；meta_tier为空、7只99%池、类别富集q=0.6089不显著，行业未知限制解释性，不宣传策略有效。④Alpha191模板：新增生成器+CLI，60项相关测试通过，真实生成alpha042低秩YAML，未跑回测。

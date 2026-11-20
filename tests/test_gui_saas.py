@@ -1850,3 +1850,70 @@ def test_member_quota_uses_natural_month_not_daily_count(client, app):
     assert response.status_code == 200
     quota = response.get_json()['membership']['daily_full']
     assert quota['used'] == 0 and quota['limit'] == 10 and quota['remaining'] == 10
+
+
+def test_smoke_meta_completion_deletes_cloud_upload_directory(client, app, tmp_path):
+    app.config['SAAS_UPLOAD_DIR'] = str(tmp_path)
+    job_id = _create_job(client, kind='smoke').get_json()['job_id']
+    claimed = client.post('/api/worker/jobs/claim', json={'worker_id': 'w1', 'wait_seconds': 0},
+                          headers=WORKER_HEADERS)
+    assert claimed.get_json()['job']['id'] == job_id
+    job_dir = tmp_path / f'job_{job_id}'
+    job_dir.mkdir()
+    (job_dir / 'temporary.csv').write_text('x')
+    response = client.post(f'/api/worker/jobs/{job_id}/result/meta', json={
+        'worker_id': 'w1', 'summary': {}, 'chart_data': {}, 'files': [],
+    }, headers=WORKER_HEADERS)
+    assert response.status_code == 200 and response.get_json()['status'] == 'completed'
+    assert not job_dir.exists()
+
+
+def test_stock_pool_submission_is_private_and_not_backtest_history(client):
+    payload = {'condition': {
+        'left': 'factors.stock_daily_overlap_typical_price.ema_5',
+        'operator': '>',
+        'right': 'factors.stock_daily_overlap_typical_price.ema_200',
+    }, 'idempotency_key': 'pool-ema-1'}
+    anonymous = client.post('/api/saas/stock-pools', json=payload)
+    assert anonymous.status_code == 401
+    created = client.post('/api/saas/stock-pools', json=payload, headers={'X-User-Id': '1'})
+    assert created.status_code == 200, created.get_json()
+    job_id = created.get_json()['job_id']
+    replay = client.post('/api/saas/stock-pools', json=payload, headers={'X-User-Id': '1'})
+    assert replay.get_json()['job_id'] == job_id and replay.get_json()['deduped'] is True
+    detail = client.get(f'/api/saas/jobs/{job_id}', headers={'X-User-Id': '1'}).get_json()['job']
+    assert detail['kind'] == 'stock_pool'
+    assert client.get(f'/api/saas/jobs/{job_id}', headers={'X-User-Id': '2'}).status_code == 404
+    history = client.get('/api/results', headers={'X-User-Id': '1'}).get_json()
+    assert history['total'] == 0
+
+
+def test_stock_pool_accepts_safe_strategy_yaml_and_rejects_invalid(client):
+    yaml_text = """experiment:
+  name: ema_pool
+  market_profile: ashare_daily_default
+  frequency: daily
+data:
+  market_fields: [close]
+  factor_fields:
+    ema_5: factors.stock_daily_overlap_typical_price.ema_5
+    ema_200: factors.stock_daily_overlap_typical_price.ema_200
+signal:
+  entry: ema_5 > ema_200
+holding:
+  max_holding_days: 10
+risk:
+  stop_loss_pct: null
+  take_profit_pct: null
+  trailing_stop_pct: null
+evaluation:
+  forward_return_horizons: [1, 3, 5]
+"""
+    created = client.post('/api/saas/stock-pools', json={
+        'strategy_yaml': yaml_text, 'idempotency_key': 'pool-yaml-1',
+    }, headers={'X-User-Id': '1'})
+    assert created.status_code == 200, created.get_json()
+    invalid = client.post('/api/saas/stock-pools', json={
+        'strategy_yaml': 'signal:\n  entry: close.__class__\n',
+    }, headers={'X-User-Id': '1'})
+    assert invalid.status_code == 400

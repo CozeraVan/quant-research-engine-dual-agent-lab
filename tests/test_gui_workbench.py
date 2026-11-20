@@ -365,16 +365,15 @@ def test_api_run_precheck_records_full_params(app_client, monkeypatch):
     assert full["stop_loss_pct"] == 0.08
     assert full["profile_overrides"] == {"commission_rate": 0.0002}
 
-    # wait for the background thread; run record on disk carries precheck flags
+    # wait for the background thread; terminal precheck run directory is removed
     from quant_research_engine.gui.engine import get_run
 
     for _ in range(100):
         disk = get_run(record["run_id"])
-        if disk and disk["status"] != "running":
+        if disk is None:
             break
         time.sleep(0.05)
-    assert disk["status"] == "completed"
-    assert disk["precheck"] is True
+    assert disk is None
 
 
 def test_api_run_passes_overrides_to_module(app_client, monkeypatch):

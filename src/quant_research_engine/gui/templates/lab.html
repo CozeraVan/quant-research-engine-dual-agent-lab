@@ -1532,7 +1532,7 @@
             var st = s.smoke.status;
             var cls = st === "completed" ? "ok" : (st === "failed" ? "err" : "opt");
             var label = st === "completed" ? "验证通过" : (st === "failed" ? "验证失败" : "验证中");
-            smoke = '验证: <a href="/lab/runs/' + s.smoke.run_id + '" class="' + cls + '">' + label + '</a>';
+            smoke = '验证: <span class="' + cls + '">' + label + '</span>';
             if (st === "completed" && s.smoke.metrics) {
               var m = s.smoke.metrics;
               var parts = [];

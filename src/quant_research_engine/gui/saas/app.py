@@ -57,7 +57,7 @@ from quant_research_engine.gui.saas.symbol_norm import (
 from quant_research_engine.security.yaml_guard import check_factor_limits
 
 DEFAULT_LEASE_MINUTES = 15
-JOB_KINDS = ("smoke", "full")
+JOB_KINDS = ("smoke", "full", "stock_pool")
 
 GUI_DIR = Path(__file__).resolve().parent.parent
 SAAS_TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
@@ -354,7 +354,7 @@ JOB_STATUSES = ("queued", "leased", "running", "uploading",
                 "completed", "failed", "expired", "canceled")
 TERMINAL_STATUSES = ("completed", "failed", "expired", "canceled")
 HEARTBEAT_INTERVAL_SECONDS = 60
-HARD_TIMEOUT = {"smoke": "10 minutes", "full": "6 hours"}  # 17 协议 §5，可调
+HARD_TIMEOUT = {"smoke": "10 minutes", "full": "6 hours", "stock_pool": "10 minutes"}  # 17 协议 §5，可调
 UPLOAD_HARD_TIMEOUT = "30 minutes"
 ERROR_CLASSES = ("strategy_compile_error", "data_missing",
                  "engine_error", "system_error", "canceled",
@@ -912,7 +912,7 @@ def worker_config_mismatch(limits: dict[str, Any] | None,
 
 def classify_job_weight(kind: str, params: dict[str, Any]) -> str:
     """任务轻重分类：smoke/小范围显式标的 → light；板块/全市场/多标的 → heavy。"""
-    if kind == "smoke":
+    if kind in {"smoke", "stock_pool"}:
         return "light"
     if not isinstance(params, dict):
         return "heavy"
@@ -2025,6 +2025,60 @@ def create_saas_app() -> Flask:
         except Exception as exc:
             return jsonify({"ok": False, "error": f"股票池不可用（{exc}）"}), 503
         return jsonify({"ok": False, "error": "股票池为空"}), 503
+
+    @app.get("/saas/stock-pool")
+    def saas_stock_pool_page() -> Any:
+        return render_template("stock_pool.html")
+
+    @app.post("/api/saas/stock-pools")
+    def api_stock_pool_create() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        data = request.get_json(silent=True) or {}
+        yaml_text = str(data.get("strategy_yaml") or "").strip()
+        if yaml_text:
+            import yaml
+            from quant_research_engine.security.yaml_guard import validate_strategy_yaml
+            verdict = validate_strategy_yaml(yaml_text)
+            if not verdict.get("ok"):
+                return jsonify({"ok": False, "error": "；".join(verdict.get("issues") or ["YAML不合法"])}), 400
+            parsed = yaml.safe_load(yaml_text) or {}
+            name = "股票池 " + str((parsed.get("experiment") or {}).get("name") or "YAML")
+            params = {"strategy_yaml": yaml_text}
+            stored_yaml = yaml_text
+        else:
+            from quant_research_engine.stock_pool import normalize_condition
+            try:
+                condition = normalize_condition(data.get("condition"))
+            except ValueError as exc:
+                return jsonify({"ok": False, "error": str(exc)}), 400
+            name = f"股票池 {condition['left']} {condition['operator']} {condition['right']}"
+            params = {"condition": condition}
+            stored_yaml = "experiment:\n  name: stock_pool\n"
+        idem = str(data.get("idempotency_key") or "").strip() or None
+        _ensure_weight_class_column(engine)
+        _ensure_quota_pool_column(engine)
+        with engine.begin() as conn:
+            if idem:
+                existing = conn.execute(text(
+                    "SELECT id FROM jobs WHERE user_id=:uid AND idempotency_key=:k"
+                ), {"uid": uid, "k": idem}).first()
+                if existing is not None:
+                    return jsonify({"ok": True, "job_id": existing.id, "deduped": True})
+            conn.execute(text("INSERT INTO users (id,phone) VALUES (:id,:phone) ON CONFLICT (id) DO NOTHING"),
+                         {"id": uid, "phone": f"pending_{uid}"})
+            strategy_id = conn.execute(text(
+                "INSERT INTO strategies (user_id,name,yaml,entry_mode) "
+                "VALUES (:uid,:name,:yaml,'yaml') RETURNING id"
+            ), {"uid": uid, "name": name, "yaml": stored_yaml}).scalar_one()
+            job_id = conn.execute(text(
+                "INSERT INTO jobs (user_id,strategy_id,kind,params,idempotency_key,weight_class,quota_pool) "
+                "VALUES (:uid,:sid,'stock_pool',CAST(:params AS jsonb),:idem,'light','small') RETURNING id"
+            ), {"uid": uid, "sid": strategy_id,
+                "params": json.dumps(params, ensure_ascii=False), "idem": idem}).scalar_one()
+        return jsonify({"ok": True, "job_id": job_id, "status": "queued"})
 
     # --- 我的策略库（QRE-SAAS-D3）：登录会员保存/复用/管理策略 YAML ---
     # 提交回测时按 (user_id, name) upsert 复用；删除仅允许无回测引用的策略。
@@ -3964,6 +4018,10 @@ def create_saas_app() -> Flask:
                          "progress_message='结果已回传' WHERE id=:id"),
                     {"id": job_id},
                 )
+                if job["kind"] == "smoke":
+                    from quant_research_engine.smoke_cleanup import cleanup_smoke_upload
+                    upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
+                    cleanup_smoke_upload(upload_root, job_id, kind="smoke")
                 return jsonify({"ok": True, "status": "completed"})
             conn.execute(
                 text("UPDATE jobs SET status='uploading', upload_token=:tok, "
@@ -4041,6 +4099,9 @@ def create_saas_app() -> Flask:
                         (dst_dir / f"{code}.json.gz").write_bytes(src.read_bytes())
                 except Exception:
                     pass
+            if job["kind"] == "smoke":
+                from quant_research_engine.smoke_cleanup import cleanup_smoke_upload
+                cleanup_smoke_upload(upload_root, job_id, kind="smoke")
         return jsonify({"ok": True, "status": "completed", "uploaded": uploaded})
 
     @app.post("/api/worker/jobs/<int:job_id>/fail")
@@ -4072,6 +4133,10 @@ def create_saas_app() -> Flask:
                          "error_message=:em, finished_at=now(), lease_expires_at=NULL WHERE id=:id"),
                     {"em": error_message, "id": job_id},
                 )
+                if job["kind"] == "smoke":
+                    from quant_research_engine.smoke_cleanup import cleanup_smoke_upload
+                    upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
+                    cleanup_smoke_upload(upload_root, job_id, kind="smoke")
                 return jsonify({"ok": True, "job_id": job_id, "status": "canceled"})
             if not retryable or job["attempts"] >= job["max_attempts"]:
                 conn.execute(
@@ -4080,6 +4145,10 @@ def create_saas_app() -> Flask:
                     {"ec": error_class, "em": error_message, "id": job_id},
                 )
                 final_status = "failed"
+                if job["kind"] == "smoke":
+                    from quant_research_engine.smoke_cleanup import cleanup_smoke_upload
+                    upload_root = Path(_cfg(app, "SAAS_UPLOAD_DIR", "outputs/saas_uploads") or "outputs/saas_uploads")
+                    cleanup_smoke_upload(upload_root, job_id, kind="smoke")
             else:
                 conn.execute(
                     text("UPDATE jobs SET status='queued', error_class=:ec, error_message=:em, "

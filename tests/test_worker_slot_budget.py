@@ -125,6 +125,19 @@ def _wait_claims(client, count, timeout=5.0):
 
 
 class TestHeavyBudgetGate:
+    def test_refresh_is_blocked_throughout_heavy_execution(self, env, monkeypatch, tmp_path):
+        from quant_research_engine.scheduling import RefreshInProgress, refresh_lock
+        monkeypatch.setenv("QRE_SCHEDULING_LOCK_PATH", str(tmp_path / "schedule.lock"))
+        gate = env["gates"].setdefault(7, _Gate())
+        client = _FakeClient(jobs=[dict(FULL_MARKET_JOB)])
+        daemon = _daemon(env, client)
+        _start_slot(env, daemon, "heavy-1", "any")
+        assert gate.entered.wait(5)
+        with pytest.raises(RefreshInProgress):
+            with refresh_lock(exclusive=True, blocking=False):
+                pass
+        gate.release.set()
+
     def test_second_unknown_fullmarket_heavy_blocked(self, env):
         gate = env["gates"].setdefault(7, _Gate())
         client = _FakeClient(jobs=[dict(FULL_MARKET_JOB)])

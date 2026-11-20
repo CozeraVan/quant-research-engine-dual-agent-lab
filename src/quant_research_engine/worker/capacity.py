@@ -151,7 +151,7 @@ def _codes_of(params: dict[str, Any]) -> list[str]:
 def job_tier(job: dict[str, Any]) -> str:
     """任务轻重档位（与服务端 classify_job_weight 同口径的 worker 侧镜像）：
     smoke/≤5 显式标的 → light；板块/全市场/多标的 → heavy。"""
-    if job.get("kind") == "smoke":
+    if job.get("kind") in {"smoke", "stock_pool"}:
         return "light"
     params = _job_params(job)
     universe = params.get("universe")

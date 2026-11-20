@@ -356,3 +356,45 @@ class TestDaemonProgressHeartbeat:
         assert upload_progress[-1] == 99
         assert 100 not in upload_progress
         assert any("回传" in (h["message"] or "") for h in client.heartbeats)
+
+
+class TestSmokeCleanup:
+    def _persistent_run(self, tmp_path, monkeypatch):
+        from quant_research_engine.gui import engine
+        runs = tmp_path / "runs"
+        run_dir = runs / "smoke-run"
+        run_dir.mkdir(parents=True)
+        (run_dir / "status.json").write_text(json.dumps({
+            "run_id": "smoke-run", "status": "completed", "precheck": True,
+        }))
+        monkeypatch.setattr(engine, "RUNS_DIR", runs)
+        return run_dir
+
+    def test_completed_smoke_deletes_persistent_run_and_sandbox(self, temp_root, tmp_path, monkeypatch):
+        monkeypatch.setattr(worker_daemon, "_upload_files_enabled", lambda: False)
+        run_dir = self._persistent_run(tmp_path, monkeypatch)
+        job = {"id": 42, "kind": "smoke", "params": {}}
+
+        def runner(job, _ev=None, work_base=None):
+            (Path(work_base) / "x").write_text("x")
+            return {"summary": {"run_id": "smoke-run"}, "chart_data": {}, "files": []}
+
+        _daemon(_FakeClient())._run_job(job, runner=runner)
+        assert not run_dir.exists()
+        assert list(temp_root.iterdir()) == []
+
+    def test_unknown_smoke_upload_keeps_local_recovery_files(self, temp_root, tmp_path, monkeypatch):
+        monkeypatch.setattr(worker_daemon, "_upload_files_enabled", lambda: False)
+        run_dir = self._persistent_run(tmp_path, monkeypatch)
+        client = _FakeClient(meta={"error": "gateway"}, fail_exc=CloudError("连不上", None))
+        # meta 非 2xx 会触发 fail；让 fail 也失败，形成 unknown。
+        client.report_result = lambda job_id, payload: (_ for _ in ()).throw(CloudError("HTTP 500", 500))
+        job = {"id": 42, "kind": "smoke", "params": {}}
+
+        def runner(job, _ev=None, work_base=None):
+            return {"summary": {"run_id": "smoke-run"}, "chart_data": {}, "files": []}
+
+        daemon = _daemon(client)
+        daemon._run_job(job, runner=runner)
+        assert run_dir.exists()
+        assert len(list(temp_root.iterdir())) == 1

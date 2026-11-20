@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}最新股票池 · A股回测台{% endblock %}
+{% block description %}用自然语言、快速向导或YAML，按最近交易日行情和预计算因子筛选A股股票池。{% endblock %}
+{% block body %}
+<div class="wrap">
+  <div class="page-head"><h1>最新股票池</h1><p>按最近交易日的行情与因子值筛选，不生成交易信号。</p></div>
+  <section class="card">
+    <div class="tabs">
+      <button class="tab active" type="button" data-sp-entry="nl">自然语言</button>
+      <button class="tab" type="button" data-sp-entry="wizard">快速向导</button>
+      <button class="tab" type="button" data-sp-entry="yaml">高级 YAML</button>
+    </div>
+    <div data-sp-panel="nl">
+      <label for="sp-nl-input">描述筛选条件</label>
+      <textarea id="sp-nl-input" rows="5">EMA5大于EMA200</textarea>
+      <button class="btn btn-ghost" id="sp-nl-compile" type="button">编译并检查 YAML</button>
+    </div>
+    <div data-sp-panel="wizard" class="hidden">
+      <div class="row">
+        <div><label for="sp-left">左侧字段</label><select id="sp-left"></select></div>
+        <div><label for="sp-operator">比较</label><select id="sp-operator"><option value=">">&gt;</option><option value=">=">&gt;=</option><option value="<">&lt;</option><option value="<=">&lt;=</option><option value="=">=</option><option value="!=">!=</option></select></div>
+        <div><label for="sp-right-type">右侧类型</label><select id="sp-right-type"><option value="field">字段</option><option value="number">数值</option></select></div>
+        <div id="sp-right-field-box"><label for="sp-right">右侧字段</label><select id="sp-right"></select></div>
+        <div id="sp-right-number-box" class="hidden"><label for="sp-right-number">右侧数值</label><input id="sp-right-number" type="number" step="any" value="0"></div>
+      </div>
+    </div>
+    <div data-sp-panel="yaml" class="hidden">
+      <label for="sp-yaml">策略 YAML（仅使用 data 与 signal.entry）</label>
+      <textarea id="sp-yaml" class="code" rows="22">experiment:
+  name: ema_pool
+  market_profile: ashare_daily_default
+  frequency: daily
+data:
+  market_fields: [open, high, low, close, pre_close, vol, amount]
+  factor_fields:
+    ema_5: factors.stock_daily_overlap_typical_price.ema_5
+    ema_200: factors.stock_daily_overlap_typical_price.ema_200
+signal:
+  entry: ema_5 > ema_200
+  exit: null
+holding:
+  max_holding_days: 10
+risk:
+  stop_loss_pct: null
+  take_profit_pct: null
+  trailing_stop_pct: null
+evaluation:
+  forward_return_horizons: [1, 3, 5, 10, 20]
+universe:
+  exclude_st: true
+  exclude_suspended: true
+  exclude_risk_warning: true
+  min_listing_days: 120</textarea>
+    </div>
+    <button class="btn btn-primary" id="sp-submit" type="button">生成股票池</button>
+    <span id="sp-status" role="status"></span>
+  </section>
+  <section class="card hidden" id="sp-result-card">
+    <h2>筛选结果</h2>
+    <div class="metric-strip">
+      <div class="metric-card"><div class="m-label">交易日</div><div class="m-value" id="sp-date">—</div></div>
+      <div class="metric-card"><div class="m-label">候选股票</div><div class="m-value" id="sp-total">—</div></div>
+      <div class="metric-card"><div class="m-label">命中股票</div><div class="m-value" id="sp-matched">—</div></div>
+    </div>
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>代码</th><th>名称</th><th class="num">收盘价</th><th class="num">左侧值</th><th class="num">右侧值</th></tr></thead><tbody id="sp-rows"></tbody></table></div>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  const left=document.getElementById('sp-left'),right=document.getElementById('sp-right'),yaml=document.getElementById('sp-yaml');
+  const status=document.getElementById('sp-status'),button=document.getElementById('sp-submit'),nl=document.getElementById('sp-nl-input');
+  const EMA5='factors.stock_daily_overlap_typical_price.ema_5',EMA200='factors.stock_daily_overlap_typical_price.ema_200';
+  let mode='nl',compiledYaml='',compiledSource='';
+  function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function num(v){return v==null?'—':Number(v).toFixed(4);}
+  document.querySelectorAll('[data-sp-entry]').forEach(function(tab){tab.addEventListener('click',function(){
+    mode=tab.dataset.spEntry;
+    document.querySelectorAll('[data-sp-entry]').forEach(t=>t.classList.toggle('active',t===tab));
+    document.querySelectorAll('[data-sp-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.spPanel!==mode));
+  });});
+  async function loadFields(){
+    const r=await apiFetch('/api/saas/factors',{redirectOn401:false}),d=await r.json();
+    if(!r.ok||!d.ok) throw new Error(d.error||'因子目录加载失败');
+    for(const select of [left,right]) select.innerHTML=(d.groups||[]).map(g=>'<optgroup label="'+esc(g.label)+'">'+(g.items||[]).map(i=>'<option value="'+esc(i.canonical)+'">'+esc(i.zh||i.label)+' · '+esc(i.column)+'</option>').join('')+'</optgroup>').join('');
+    left.value=EMA5;right.value=EMA200;
+  }
+  document.getElementById('sp-right-type').addEventListener('change',function(){
+    const field=this.value==='field';
+    document.getElementById('sp-right-field-box').classList.toggle('hidden',!field);
+    document.getElementById('sp-right-number-box').classList.toggle('hidden',field);
+  });
+  async function compileNl(){
+    const description=nl.value.trim();
+    if(!description) throw new Error('请填写筛选条件');
+    if(compiledYaml&&compiledSource===description) return compiledYaml;
+    status.textContent='正在编译策略';
+    let r=await apiFetch('/api/saas/nl/compile',{method:'POST',json:{description}}),d=await r.json();
+    if(r.status===422&&d.code==='nl_input_review'){
+      r=await apiFetch('/api/saas/nl/compile',{method:'POST',json:{description,force:true}});d=await r.json();
+    }
+    if(!r.ok||!d.ok) throw new Error(d.error||'自然语言编译失败');
+    compiledYaml=d.yaml;compiledSource=description;yaml.value=d.yaml;status.textContent='编译成功';return d.yaml;
+  }
+  document.getElementById('sp-nl-compile').addEventListener('click',()=>compileNl().catch(e=>{status.textContent=e.message;}));
+  function render(summary){
+    document.getElementById('sp-result-card').classList.remove('hidden');
+    document.getElementById('sp-date').textContent=summary.trade_date||'—';
+    document.getElementById('sp-total').textContent=String(summary.total_count??0);
+    document.getElementById('sp-matched').textContent=String(summary.matched_count??0);
+    document.getElementById('sp-rows').innerHTML=(summary.stocks||[]).map(s=>'<tr><td>'+esc(s.ts_code)+'</td><td>'+esc(s.name||'—')+'</td><td class="num">'+num(s.close)+'</td><td class="num">'+num(s.left_value)+'</td><td class="num">'+num(s.right_value)+'</td></tr>').join('');
+  }
+  async function poll(jobId){
+    for(;;){
+      await new Promise(resolve=>setTimeout(resolve,1500));
+      const r=await apiFetch('/api/saas/jobs/'+jobId,{redirectOn401:false}),d=await r.json();
+      if(!r.ok||!d.ok) throw new Error(d.error||'任务查询失败');
+      const job=d.job;
+      if(job.status==='completed'){render((job.result&&job.result.summary)||{});status.textContent='筛选完成';return;}
+      if(['failed','expired','canceled','cancelled'].includes(job.status)) throw new Error(job.error_message||'筛选失败');
+      status.textContent='正在筛选（'+job.status+'）';
+    }
+  }
+  button.addEventListener('click',async function(){
+    button.disabled=true;status.textContent='正在提交';
+    try{
+      let payload={idempotency_key:crypto.randomUUID()};
+      if(mode==='wizard'){
+        const numeric=document.getElementById('sp-right-type').value==='number';
+        payload.condition={left:left.value,operator:document.getElementById('sp-operator').value,right:numeric?Number(document.getElementById('sp-right-number').value):right.value};
+      }else payload.strategy_yaml=mode==='nl'?await compileNl():yaml.value;
+      const r=await apiFetch('/api/saas/stock-pools',{method:'POST',json:payload}),d=await r.json();
+      if(!r.ok||!d.ok) throw new Error(d.error||'提交失败');
+      await poll(d.job_id);
+    }catch(e){status.textContent=e.message||'筛选失败';}
+    finally{button.disabled=false;}
+  });
+  loadFields().catch(e=>{status.textContent=e.message;});
+})();
+</script>
+{% endblock %}

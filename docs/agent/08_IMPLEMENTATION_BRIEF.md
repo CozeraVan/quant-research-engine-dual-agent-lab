@@ -1,5 +1,38 @@
 # Implementation Brief
 
+## 2026-11-20 股票池三入口
+
+1. 页面改为NL/向导/YAML三tab；NL复用现有编译器，最终统一StrategySpec entry语义。
+2. worker新增YAML最新截面路径：安全闸→引用字段面板→逐股表达式求值→最新日命中；简单向导保留单SQL。
+3. API按模式校验condition或YAML，结果不伪造左右值；不占回测历史/次数。
+4. TDD覆盖YAML对账、shift/AND、安全拒绝和页面；部署实测向导+YAML，不跑回测。
+
+## 2026-11-20 最新截面股票池
+
+1. 新纯服务模块校验单条件并只读最新行情/因子截面，严格标识符与操作符白名单，空值不命中。
+2. 新增轻量stock_pool队列类型，worker绕过回测YAML直接查询并回传名单；不占回测次数/SU/回测历史。
+3. SaaS新增登录提交接口与异步页面，复用因子目录、任务归属和轮询；首版单条件、因子对因子/数值。
+4. TDD真实库对账+API/worker/UI回归，部署ECS与本机worker；只跑SELECT验收，不跑回测。
+
+## 2026-11-20 冒烟历史隐藏与安全清理
+
+1. 本地列表排除precheck/purpose=smoke；云端结果列表本已只含full，任务列表同步排除。
+2. 新增受限清理助手，仅终态冒烟可删受管run/output；保留策略、sidecar和云端摘要。worker仅在上报终态后清理，unknown保留。
+3. 云端meta无文件、files完成、failed/canceled后删除对应job上传目录；本地sidecar收尾后清理并去掉失效详情链接。
+4. 临时目录TDD，部署ECS app与本机worker/lab，不触发真实回测。
+
+## 2026-11-20 8081列表SSE空值回补
+
+1. 保持既有`strategy_performance.json`直读快路径；仅新SSE键存在但null时复用`build_lab_chart_data`。
+2. 旧产物/旧口径不回退，不改历史文件；测试锁定列表与详情数值一致，重启8081核对job379–382对应run。
+
+## 2026-11-19 全量回测与日更互斥
+
+1. 新增标准库`fcntl`文件锁：heavy回测共享、行情/因子日更排他，覆盖认领到回传完整生命周期。
+2. heavy槽遇日更只等待、不claim；日更遇在途全量阻塞等待。轻量槽、内存预算与回测语义不变。
+3. 日更中心手动quant-ts/indicators/panel-factors复用排他锁；四个systemd自动服务以drop-in的`flock`包装原命令。
+4. 先红后绿验证双向互斥与恢复，部署后用锁探针验证，不跑真实回测/日更。
+
 ## 2026-11-19 单次回测独立权益
 
 1. 复用 `membership_entitlements` 按订单发放单次权益，补充核销时间与任务关联；单次履约不修改用户 tier/会员期限。

@@ -1,3 +1,27 @@
+### 2026-11-20: 股票池三入口统一StrategySpec entry（QRE-STOCK-POOL-THREE-ENTRIES）
+
+- Decision: NL、向导、YAML与回测三入口一致；最终仅对最新截面求signal.entry。简单条件单SQL，通用YAML按400日面板逐股安全求值。
+- Rationale: 复用回测编译/安全合同，避免三套选股语义；只读预计算因子，不执行交易。
+- Verification: YAML与SQL名单对账，388项通过/14 skipped；公网三入口job383/384/385均447/5572。
+
+### 2026-11-20: 最新股票池采用本地worker轻量只读任务（QRE-LATEST-STOCK-POOL）
+
+- Decision: 首版单条件行情/因子比较字段或数值，以最近行情日非空截面返回名单；新stock_pool轻量队列，不占回测额度/历史，ECS不直连行情库。
+- Rationale: 复用既有鉴权、异步任务、因子目录和结果回传，避免ECS同步大库或同步长请求；严格标识符白名单替代任意表达式执行。
+- Verification: 真实库独立SQL对账，相关385项通过/14 skipped；公网job383完成，候选5572、命中447。
+
+### 2026-11-20: 冒烟任务作为内部验证，不进入历史并终态清理（QRE-SMOKE-EPHEMERAL）
+
+- Decision: smoke从用户回测历史隐藏；终态后删除受管run/output、worker沙箱和云端上传目录，保留策略源、sidecar与云端摘要。worker上报unknown时保留恢复文件。
+- Rationale: 冒烟是正式任务前置门禁，不是独立研究成果；减少记录噪声与磁盘占用，同时保留晋级和排障所需最小状态。
+- Verification: 临时目录覆盖正式/运行中/越界保护与双向清理，相关302项通过；ECS及本机部署成功，无真实任务。
+
+### 2026-11-19: 全量回测与行情/因子日更采用共享—排他文件锁（QRE-SCHEDULING-LOCK）
+
+- Decision: heavy任务从认领到回传持共享锁，quant-ts/indicators/alpha191/panel-factors日更持排他锁；自动systemd和手动日更中心同源，轻量任务不变。
+- Rationale: 实测重叠令全量45–49分钟增至100–117分钟，且有更新中快照风险；文件锁可在不改上游项目的前提下双向等待。
+- Verification: 相关98项通过，四个drop-in和本机服务生效，共享阻断排他与排他等待取得均实测通过；未跑真实计算。
+
 ### 2026-11-19: 单次回测采用按订单独立权益，不纳入SU（QRE-SINGLE-RUN）
 
 - Decision: `single_full`每单发放一次独立权益；原会员额度优先，范围/周期或次数不足时才核销，任务记录订单并排除SU和周期计数，不切换用户tier。

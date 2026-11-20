@@ -501,6 +501,12 @@ def _execute_and_finalize(
         except Exception:
             pass
 
+    # 冒烟结果已写入 sidecar/内存记录；最后删除临时 run 与产物，保留策略源文件。
+    if record.get("precheck") or record.get("purpose") == "smoke":
+        from quant_research_engine.smoke_cleanup import cleanup_smoke_run
+
+        cleanup_smoke_run(str(record["run_id"]), runs_dir=RUNS_DIR)
+
 
 def _run_via_module(
     *,

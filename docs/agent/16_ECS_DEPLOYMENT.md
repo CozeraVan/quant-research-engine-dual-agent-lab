@@ -1,3 +1,9 @@
+> 2026-11-20 股票池三入口：NL/向导/YAML统一StrategySpec entry，通用400日逐股求值；公网job383/384/385三入口均447/5572，388项通过/14 skipped。回滚`/tmp/qre-deploy-20261120T124449Z.bak`与`/tmp/qre-deploy-20261120T125147Z.bak`，无回测，未commit/push。
+
+> 2026-11-20 最新截面股票池：`/saas/stock-pool`及stock_pool轻量worker任务上线，单条件字段/数值比较，私有、不占回测历史。公网job383 EMA5>EMA200 completed，2026-11-20候选5572、命中447；相关385项通过/14 skipped。ECS回滚`/tmp/qre-deploy-20261120T121628Z.bak`，无回测，未commit/push。
+
+> 2026-11-20 冒烟隐藏与清理：云端在meta无文件、files齐、失败/取消终态删除smoke job目录，jobs/results摘要保留；新增`smoke_cleanup.py`。ECS回滚`/tmp/qre-deploy-20261120T013452Z.bak`，qre-saas active；本机worker/lab/gui active，302项通过，无真实任务。未commit/push。
+
 > 2026-11-19 单次回测独立权益已部署：`single_full` 9.9元/订单1次，不改会员档，范围/周期或次数不足时兜底，不限股票数/周期，排除SU和周期次数；会员中心/9090真实计数。生产schema备份 `/tmp/qre-single-run-schema-pre-20261119.sql`，代码回滚 `/tmp/qre-deploy-20261119T015816Z.bak`、`/tmp/qre-deploy-20261119T020012Z.bak`。公开商品/页面及临时登录API通过，临时数据已清理；订单0、权益0、jobs275，无真实支付/回测。相关246项通过。未commit/push。
 
 > 2026-11-18 Git 校准：SSE `305f3a7`、会员支付 `18ae9ff`、游戏过滤 `fcf1e13`、后台原子写 `d68844b`、测试夹具 `2c0582d` 均已推送。以下历史条目“未 commit”为当时状态，当前以 Git 为准。

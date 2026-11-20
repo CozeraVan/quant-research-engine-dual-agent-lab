@@ -1,5 +1,34 @@
 # Review Report
 
+## 2026-11-20 股票池三入口自审
+
+- Review Status：PASS，无Required Fixes。三入口最终entry语义一致，exit/holding不进入筛选；shift按股票分组无跨标的未来泄漏，最新日无回填。
+- NL force只覆盖可确认review且限股票池前端，规则硬拒仍拒绝；YAML安全闸在API与worker双侧执行。表达式结果不伪造左右值。
+- 真实库对账与相关388项通过/14 skipped；公网三入口job383/384/385均447/5572，无回测。未commit/push。
+
+## 2026-11-20 最新股票池自审
+
+- Review Status：PASS，无Required Fixes。只读预计算列，不计算指标、不回填旧值、不生成交易；最近日期与空值口径明确，名单私有且不进入回测历史。
+- 动态SQL仅引用严格标识符与操作符枚举，数值参数化；ECS无直行情连接。首版单条件限制与需求一致，未扩多条件/自动保存。
+- 真实库对账和相关385项通过/14 skipped；公网job383真实完成447只，页面/服务active，无回测。未commit/push。
+
+## 2026-11-20 冒烟隐藏与清理自审
+
+- Review Status：PASS，无Required Fixes。隐藏不影响任务轮询/管理，删除不触碰策略源、sidecar或云端结果摘要；正式任务和路径越界均拒绝。
+- worker未知终态保留恢复文件，覆盖原全量保守清理；云端只在接收终态删文件。旧记录仅隐藏不追溯物理删除，避免历史误删。
+- 相关302 passed；ECS与本机服务验证通过，未跑真实回测。未commit/push。
+
+## 2026-11-20 8081列表SSE空值回补自审
+
+- Review Status：PASS，无Required Fixes。根因是列表与详情在基准写盘null时读取路径分叉，不是四组交易或云端结果缺值。
+- 修复仅作用于显式新SSE产物，旧口径保持空；无需改历史数据。TDD红灯None→绿值，相关86 passed，8081四条实测与云端一致。未commit/push。
+
+## 2026-11-19 回测与日更互斥自审
+
+- Review Status：PASS，无Required Fixes。双向互斥及heavy执行期间防日更插入均有回归；锁覆盖claim→run→upload，异常/空轮询/终态释放，进程死亡由内核释放。
+- 仅heavy与四个行情/因子管线参与，light和既有内存预算不变；日更彼此也串行，避免多管线相互争抢。空heavy长轮询会让排他锁等待一个轮询周期量级，实测28秒可取得，不是死锁。
+- 相关98 passed，生产本机unit/服务/锁探针验证通过；未运行真实日更或回测，未commit/push。
+
 ## 2026-11-19 单次回测独立权益自审
 
 - Review Status：PASS（本轮范围），无Required Fixes。每个订单仅一条权益，行锁+任务同事务核销，幂等优先；正常会员任务不误扣，只有原闸拒绝才兜底。SU与会员周期用量均排除single。

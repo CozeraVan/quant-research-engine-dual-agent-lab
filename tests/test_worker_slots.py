@@ -87,6 +87,27 @@ class _FakeClient:
 
 
 class TestSlotScheduling:
+    def test_heavy_slot_waits_for_daily_refresh(self, tmp_path, monkeypatch):
+        from quant_research_engine.scheduling import refresh_lock
+        lock_path = tmp_path / "schedule.lock"
+        monkeypatch.setenv("QRE_SCHEDULING_LOCK_PATH", str(lock_path))
+        client = _FakeClient({"any": []})
+        daemon = WorkerDaemon(client, poll_seconds=0.02,
+                              sleep=lambda s: time.sleep(min(s, 0.02)))
+        with refresh_lock(lock_path, exclusive=True):
+            thread = threading.Thread(target=daemon._slot_loop,
+                                      args=("heavy-1", "any", 0.0, lambda: 99999.0), daemon=True)
+            thread.start()
+            time.sleep(0.15)
+            assert client.claim_calls == []
+        deadline = time.monotonic() + 3
+        while not client.claim_calls and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert client.claim_calls
+        daemon.stop()
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+
     def test_light_slot_claims_light_only_and_memory_gate(self):
         client = _FakeClient({"light": [], "any": []})
         daemon = WorkerDaemon(client, poll_seconds=0.05, sleep=lambda s: None)

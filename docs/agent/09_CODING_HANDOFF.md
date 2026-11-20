@@ -1,5 +1,38 @@
 # Coding Handoff
 
+## 2026-11-20 股票池三入口
+
+- `screen_latest_strategy_pool`：validate_strategy_yaml→引用行情/因子400日面板→按ts_code分组evaluate_expression_signal→latest命中；返回left/right=None不造值。
+- `execute_stock_pool_job`按params.strategy_yaml/condition分路；POST接口支持完整YAML并保存原YAML，向导条件保持原快路径。
+- `stock_pool.html`三tab，NL复用`/nl/compile`，编译结果写YAML编辑器；仅`nl_input_review`自动force，其他错误原样失败。
+- 388项通过/14 skipped；公网job383/384/385三入口均447只，名单与单SQL一致。
+
+## 2026-11-20 最新股票池
+
+- `stock_pool.py`：规范化三字段标识符，只许public.stock_daily/factors.*；六操作符、有限数值；最近行情日JOIN左右因子，返回代码/名称/收盘/左右值。
+- worker `execute_job`在YAML校验前分发stock_pool，server/capacity归light；专用POST `/api/saas/stock-pools`建私有幂等任务，不进`/api/results`。
+- 新`stock_pool.html`从现有因子目录建双侧下拉，支持数值和异步轮询；base导航加入口。
+- 真实库EMA5/200独立count一致；相关385 passed/14 skipped，公网job383=447/5572。
+
+## 2026-11-20 冒烟历史与清理
+
+- 新`smoke_cleanup.py`：终态+precheck/purpose验证、run_id/输出路径限制；`cleanup_smoke_upload`只删固定job目录且kind=smoke。
+- `engine._execute_and_finalize`在sidecar/risk收尾后删本地冒烟；`build_lab_runs_list`隐藏历史遗留；lab沙箱状态不再链接已删run。
+- worker runner异常携run_id，daemon仅在云端终态后清持久run和自有沙箱，unknown保留；ECS meta无文件/files齐/失败/取消均清上传目录。
+- 相关302 passed，云端与本机部署通过；未跑真实任务。
+
+## 2026-11-20 8081列表SSE空值回补
+
+- `lab_result._excess_return_of`：数值快路径不变；`benchmark_code=000001.SH`且`excess_return_vs_benchmark`键为null时，取`build_lab_chart_data(record).metrics.excess_return`。
+- 避免把历史旧口径换算成新口径，不改JSON。新增真实run+真实指数DB回归，lab相关86 passed；四条新run实际API均非null且与云端summary一致。
+
+## 2026-11-19 回测与日更互斥
+
+- `scheduling.py`：`fcntl.flock`，env `QRE_SCHEDULING_LOCK_PATH`可覆盖，非阻塞失败抛`RefreshInProgress`，进程退出自动释放。
+- `worker/daemon.py` heavy槽在内存/预算闸后、claim前获取共享锁，空轮询/异常释放，执行回传finally释放；light槽不走锁。
+- `gui/daily_jobs.py`三个行情/因子手动管线阻塞排他；`deploy/scheduling/`四个drop-in以`/usr/bin/flock /tmp/qre-market-refresh.lock`包装官方命令。
+- 相关98 passed；本机四个unit ExecStart均确认flock，worker/gui active，锁探针通过，无真实计算。
+
 ## 2026-11-19 单次回测独立权益
 
 - `payments.py`：`single_full` 990分available；单次履约只写`membership_entitlements`，ends_at NULL，不改users。新增核销列和余额读取；schema仅在列缺失时ALTER，避免生产非owner重复DDL。

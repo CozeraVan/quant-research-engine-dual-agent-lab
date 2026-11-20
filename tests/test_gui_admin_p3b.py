@@ -189,6 +189,19 @@ def test_daily_job_success_command_construction(jobs_env):
     assert cwd == PIPELINES["quant-ts"]["cwd"]
 
 
+def test_daily_job_waits_for_running_backtest(jobs_env, monkeypatch):
+    from quant_research_engine.scheduling import refresh_lock
+    lock_path = jobs_env / "schedule.lock"
+    monkeypatch.setenv("QRE_SCHEDULING_LOCK_PATH", str(lock_path))
+    calls = []
+    with refresh_lock(lock_path, exclusive=False):
+        record = start_daily_job("quant-ts", runner=lambda cmd, cwd, job_dir: calls.append(1) or 0)
+        time.sleep(0.15)
+        assert calls == []
+    final = _wait(record["job_id"], {"completed", "failed"})
+    assert final["status"] == "completed" and calls == [1]
+
+
 def test_daily_job_failure_marks_failed(jobs_env):
     record = start_daily_job("indicators", runner=lambda cmd, cwd, job_dir: 3)
     final = _wait(record["job_id"], {"failed"})

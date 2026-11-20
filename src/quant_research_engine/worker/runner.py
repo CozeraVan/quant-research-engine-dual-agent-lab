@@ -271,6 +271,9 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None,
     """
     if job.get("kind") == "symbol_detail":
         return _execute_symbol_detail(job)
+    if job.get("kind") == "stock_pool":
+        from quant_research_engine.stock_pool import execute_stock_pool_job
+        return execute_stock_pool_job(job)
     strategy = job.get("strategy") or {}
     yaml_text = str(strategy.get("yaml") or "").strip()
     if not yaml_text:
@@ -353,7 +356,9 @@ def execute_job(job: dict[str, Any], *, work_base: str | Path | None = None,
     # （清理由既有逻辑决定，不引入新清理行为）。
     _persist_artifacts(record, output_dir)
     if record.get("status") != "completed":
-        raise RuntimeError(f"回测失败：{record.get('error') or '未知错误'}")
+        error = RuntimeError(f"回测失败：{record.get('error') or '未知错误'}")
+        error.run_id = record.get("run_id")  # type: ignore[attr-defined]
+        raise error
 
     # FRM 风险报告回传：engine 收尾钩子把 risk_report.json 写在 run 目录根部，
     # 不在 artifacts map 里 → 从不上传 → 云端 FRM 模块恒隐藏。此处登记进

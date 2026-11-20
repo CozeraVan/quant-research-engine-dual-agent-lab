@@ -1550,7 +1550,14 @@ def _excess_return_of(record: dict[str, Any]) -> float | None:
     if not isinstance(perf, dict):
         return None
     excess = perf.get("excess_return_vs_benchmark")
-    return round(excess, 6) if isinstance(excess, (int, float)) else None
+    if isinstance(excess, (int, float)):
+        return round(excess, 6)
+    # 新口径写盘可能因基准连接瞬断留下 null；复用详情页的曲线回补，旧口径不回退。
+    if perf.get("benchmark_code") == "000001.SH" and "excess_return_vs_benchmark" in perf:
+        metrics = build_lab_chart_data(record).get("metrics") or {}
+        recovered = metrics.get("excess_return")
+        return round(recovered, 6) if isinstance(recovered, (int, float)) else None
+    return None
 
 
 def _reap_zombie_run(record: dict[str, Any]) -> dict[str, Any]:
@@ -1649,6 +1656,8 @@ def build_lab_runs_list() -> list[dict[str, Any]]:
 
     items: list[dict[str, Any]] = []
     for record in list_runs():
+        if record.get("precheck") or record.get("purpose") == "smoke":
+            continue
         record = _reap_zombie_run(record)
         run_id = str(record.get("run_id") or "")
         codes = record.get("codes") or []
