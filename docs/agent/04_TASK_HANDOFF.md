@@ -1,5 +1,12 @@
 # Task Handoff
 
+## 2026-11-21 股票池结果指标与页面体验（DONE，待验收/commit）
+
+- 三入口与最新截面语义不变；`summary.indicators`+逐股`indicator_values`统一向导/NL/YAML指标合同，中文名/精度来自注册表，保留旧left/right兼容字段。
+- 页面改三入口卡、对齐向导、动态真实指标列、代码/名称搜索、条件概览和空态；支持键盘tab切换，375px表内滚动且第三入口卡不占孤行。
+- 相关253 passed/14 skipped，最终模板/守卫63 passed/14 skipped；公网向导实测447/5572，表头为指数移动均线(5)/(200)，搜索447→1，桌面/手机无页面横溢。证据`.tmp/stock-pool-ui-20261121/`。
+- ECS回滚`/tmp/qre-deploy-20261121T053849Z.bak`；无回测，未commit/push。
+
 ## 2026-11-20 股票池三入口（DONE，待commit）
 
 - `/saas/stock-pool`改为自然语言/快速向导/高级YAML三tab；统一StrategySpec `data+signal.entry`，仅计算最新截面，不执行exit/交易。

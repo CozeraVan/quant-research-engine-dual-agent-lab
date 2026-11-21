@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-21 股票池指标结果与UI自审
+
+- Review Status：PASS，无Required Fixes。指标值只来自最新已存储行情/因子行及注册表，不重算、不回填、不改变entry布尔语义；同canonical多别名只展示一列。
+- 旧left/right保留，旧结果可由前端兼容显示；非有限数统一为null。动态表头所有文本转义，股票搜索仅本地过滤，权限/配额/任务类型未变。
+- 三入口键盘/ARIA、375px表内滚动与reduced-motion已覆盖；253项相关及63项最终测试通过/14 skipped，公网真实指标列和搜索通过，无回测。未commit/push。
+
 ## 2026-11-20 股票池三入口自审
 
 - Review Status：PASS，无Required Fixes。三入口最终entry语义一致，exit/holding不进入筛选；shift按股票分组无跨标的未来泄漏，最新日无回填。

@@ -2,29 +2,42 @@
 {% block title %}最新股票池 · A股回测台{% endblock %}
 {% block description %}用自然语言、快速向导或YAML，按最近交易日行情和预计算因子筛选A股股票池。{% endblock %}
 {% block body %}
+<style>
+.sp-panel{scroll-margin-top:76px}.sp-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.sp-field{min-width:0}.sp-field label{display:block;margin-bottom:8px}.sp-field input,.sp-field select{width:100%}.sp-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:20px}.sp-status{color:var(--ink);font-size:16px}.sp-status:empty{display:none}.sp-result-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.sp-expression{font-family:var(--mono);color:var(--ink);overflow-wrap:anywhere;margin-top:14px}.sp-table-tools{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:20px 0 12px}.sp-search-box{width:min(360px,100%)}.sp-search-box label{display:block;margin-bottom:8px}.sp-search-box input{width:100%}.sp-visible-count{font-size:16px;color:var(--ink);white-space:nowrap}.sp-table-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:10px}.sp-table-wrap .tbl{margin:0;min-width:720px}.sp-table-wrap thead{position:sticky;top:0;z-index:2;background:var(--panel)}.sp-table-wrap th{white-space:nowrap}.sp-table-wrap td.num,.sp-table-wrap th.num{font-variant-numeric:tabular-nums}.sp-empty{text-align:center;padding:32px!important;color:var(--ink)}
+@media(max-width:768px){.entry-grid .entry-card:last-child{grid-column:1/-1}.sp-form{grid-template-columns:1fr}.sp-actions .btn{width:100%}.sp-table-tools{align-items:stretch;flex-direction:column}.sp-search-box{width:100%}.sp-table-wrap{max-height:58vh}.sp-result-head{align-items:flex-start}}
+</style>
 <div class="wrap">
   <div class="page-head"><h1>最新股票池</h1><p>按最近交易日的行情与因子值筛选，不生成交易信号。</p></div>
-  <section class="card">
-    <div class="tabs">
-      <button class="tab active" type="button" data-sp-entry="nl">自然语言</button>
-      <button class="tab" type="button" data-sp-entry="wizard">快速向导</button>
-      <button class="tab" type="button" data-sp-entry="yaml">高级 YAML</button>
-    </div>
-    <div data-sp-panel="nl">
+  <div class="entry-grid" role="tablist" aria-label="股票池筛选方式">
+    <button class="entry-card selected" type="button" role="tab" aria-selected="true" aria-controls="sp-panel-nl" data-sp-entry="nl">
+      <span class="entry-check" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">① 人人可用</span><h3>自然语言</h3><p>直接描述想筛选的行情或技术指标条件。</p><span class="entry-fit">适合：<b>快速形成筛选条件</b></span>
+    </button>
+    <button class="entry-card" type="button" role="tab" aria-selected="false" aria-controls="sp-panel-wizard" data-sp-entry="wizard">
+      <span class="entry-check" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">② 从因子库挑条件</span><h3>快速向导</h3><p>选择左右字段与比较关系，精确构造单个条件。</p><span class="entry-fit">适合：<b>明确指标与阈值</b></span>
+    </button>
+    <button class="entry-card" type="button" role="tab" aria-selected="false" aria-controls="sp-panel-yaml" data-sp-entry="yaml">
+      <span class="entry-check" aria-hidden="true"><svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6.5L4.8 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+      <span class="entry-tag">③ 直接编辑</span><h3>高级 YAML</h3><p>复用策略字段与入场表达式，支持组合条件。</p><span class="entry-fit">适合：<b>需要完整表达式</b></span>
+    </button>
+  </div>
+  <section class="card sp-panel" aria-label="筛选条件">
+    <div id="sp-panel-nl" role="tabpanel" data-sp-panel="nl">
       <label for="sp-nl-input">描述筛选条件</label>
       <textarea id="sp-nl-input" rows="5">EMA5大于EMA200</textarea>
-      <button class="btn btn-ghost" id="sp-nl-compile" type="button">编译并检查 YAML</button>
+      <div class="sp-actions"><button class="btn btn-ghost" id="sp-nl-compile" type="button">编译并检查 YAML</button></div>
     </div>
-    <div data-sp-panel="wizard" class="hidden">
-      <div class="row">
-        <div><label for="sp-left">左侧字段</label><select id="sp-left"></select></div>
-        <div><label for="sp-operator">比较</label><select id="sp-operator"><option value=">">&gt;</option><option value=">=">&gt;=</option><option value="<">&lt;</option><option value="<=">&lt;=</option><option value="=">=</option><option value="!=">!=</option></select></div>
-        <div><label for="sp-right-type">右侧类型</label><select id="sp-right-type"><option value="field">字段</option><option value="number">数值</option></select></div>
-        <div id="sp-right-field-box"><label for="sp-right">右侧字段</label><select id="sp-right"></select></div>
-        <div id="sp-right-number-box" class="hidden"><label for="sp-right-number">右侧数值</label><input id="sp-right-number" type="number" step="any" value="0"></div>
+    <div id="sp-panel-wizard" role="tabpanel" data-sp-panel="wizard" class="hidden">
+      <div class="sp-form">
+        <div class="sp-field"><label for="sp-left">左侧字段</label><select id="sp-left"></select></div>
+        <div class="sp-field"><label for="sp-operator">比较关系</label><select id="sp-operator"><option value=">">&gt;</option><option value=">=">&gt;=</option><option value="<">&lt;</option><option value="<=">&lt;=</option><option value="=">=</option><option value="!=">!=</option></select></div>
+        <div class="sp-field"><label for="sp-right-type">右侧类型</label><select id="sp-right-type"><option value="field">字段</option><option value="number">数值</option></select></div>
+        <div class="sp-field" id="sp-right-field-box"><label for="sp-right">右侧字段</label><select id="sp-right"></select></div>
+        <div class="sp-field hidden" id="sp-right-number-box"><label for="sp-right-number">右侧数值</label><input id="sp-right-number" type="number" step="any" value="0"></div>
       </div>
     </div>
-    <div data-sp-panel="yaml" class="hidden">
+    <div id="sp-panel-yaml" role="tabpanel" data-sp-panel="yaml" class="hidden">
       <label for="sp-yaml">策略 YAML（仅使用 data 与 signal.entry）</label>
       <textarea id="sp-yaml" class="code" rows="22">experiment:
   name: ema_pool
@@ -52,17 +65,21 @@ universe:
   exclude_risk_warning: true
   min_listing_days: 120</textarea>
     </div>
-    <button class="btn btn-primary" id="sp-submit" type="button">生成股票池</button>
-    <span id="sp-status" role="status"></span>
+    <div class="sp-actions"><button class="btn btn-primary" id="sp-submit" type="button">生成股票池</button><span id="sp-status" class="sp-status" role="status" aria-live="polite"></span></div>
   </section>
-  <section class="card hidden" id="sp-result-card">
-    <h2>筛选结果</h2>
+  <section class="card hidden" id="sp-result-card" aria-labelledby="sp-result-title">
+    <div class="sp-result-head"><h2 id="sp-result-title">筛选结果</h2><button type="button" class="tip-trigger" data-tip="指标列由本次筛选实际引用的字段生成，数值均为结果交易日当天的已存储值；缺失值显示为—。" aria-label="筛选结果指标口径">?</button></div>
+    <div class="sp-expression" id="sp-condition"></div>
     <div class="metric-strip">
       <div class="metric-card"><div class="m-label">交易日</div><div class="m-value" id="sp-date">—</div></div>
       <div class="metric-card"><div class="m-label">候选股票</div><div class="m-value" id="sp-total">—</div></div>
       <div class="metric-card"><div class="m-label">命中股票</div><div class="m-value" id="sp-matched">—</div></div>
     </div>
-    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>代码</th><th>名称</th><th class="num">收盘价</th><th class="num">左侧值</th><th class="num">右侧值</th></tr></thead><tbody id="sp-rows"></tbody></table></div>
+    <div class="sp-table-tools">
+      <div class="sp-search-box"><label for="sp-search">搜索代码或名称</label><input id="sp-search" type="search" autocomplete="off" placeholder="输入代码或名称"></div>
+      <div class="sp-visible-count" id="sp-visible-count" role="status"></div>
+    </div>
+    <div class="sp-table-wrap"><table class="tbl"><thead><tr id="sp-indicator-head"><th>代码</th><th>名称</th><th class="num">收盘价</th></tr></thead><tbody id="sp-rows"></tbody></table></div>
   </section>
 </div>
 {% endblock %}
@@ -72,14 +89,16 @@ universe:
   const left=document.getElementById('sp-left'),right=document.getElementById('sp-right'),yaml=document.getElementById('sp-yaml');
   const status=document.getElementById('sp-status'),button=document.getElementById('sp-submit'),nl=document.getElementById('sp-nl-input');
   const EMA5='factors.stock_daily_overlap_typical_price.ema_5',EMA200='factors.stock_daily_overlap_typical_price.ema_200';
-  let mode='nl',compiledYaml='',compiledSource='';
+  let mode='nl',compiledYaml='',compiledSource='',resultStocks=[],resultIndicators=[];
   function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-  function num(v){return v==null?'—':Number(v).toFixed(4);}
-  document.querySelectorAll('[data-sp-entry]').forEach(function(tab){tab.addEventListener('click',function(){
+  function num(v,precision){if(v==null||!Number.isFinite(Number(v)))return '—';const digits=Number.isInteger(precision)?Math.max(0,Math.min(8,precision)):4;return Number(v).toLocaleString('zh-CN',{maximumFractionDigits:digits});}
+  const tabs=Array.from(document.querySelectorAll('[data-sp-entry]'));
+  function selectTab(tab){
     mode=tab.dataset.spEntry;
-    document.querySelectorAll('[data-sp-entry]').forEach(t=>t.classList.toggle('active',t===tab));
+    tabs.forEach(t=>{const active=t===tab;t.classList.toggle('selected',active);t.setAttribute('aria-selected',String(active));t.tabIndex=active?0:-1;});
     document.querySelectorAll('[data-sp-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.spPanel!==mode));
-  });});
+  }
+  tabs.forEach((tab,index)=>{tab.tabIndex=index===0?0:-1;tab.addEventListener('click',()=>selectTab(tab));tab.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();const step=event.key==='ArrowRight'?1:-1;const next=tabs[(index+step+tabs.length)%tabs.length];selectTab(next);next.focus();});});
   async function loadFields(){
     const r=await apiFetch('/api/saas/factors',{redirectOn401:false}),d=await r.json();
     if(!r.ok||!d.ok) throw new Error(d.error||'因子目录加载失败');
@@ -104,13 +123,32 @@ universe:
     compiledYaml=d.yaml;compiledSource=description;yaml.value=d.yaml;status.textContent='编译成功';return d.yaml;
   }
   document.getElementById('sp-nl-compile').addEventListener('click',()=>compileNl().catch(e=>{status.textContent=e.message;}));
+  function conditionText(condition){
+    if(!condition)return '';
+    if(condition.expression)return condition.expression;
+    return [condition.left,condition.operator,condition.right].filter(v=>v!==undefined).join(' ');
+  }
+  function renderRows(){
+    const query=document.getElementById('sp-search').value.trim().toLowerCase();
+    const stocks=resultStocks.filter(s=>!query||String(s.ts_code).toLowerCase().includes(query)||String(s.name||'').toLowerCase().includes(query));
+    document.getElementById('sp-visible-count').textContent='显示 '+stocks.length+' / '+resultStocks.length+' 只';
+    document.getElementById('sp-rows').innerHTML=stocks.length?stocks.map(s=>'<tr><td>'+esc(s.ts_code)+'</td><td>'+esc(s.name||'—')+'</td><td class="num">'+num(s.close,4)+'</td>'+resultIndicators.map(i=>'<td class="num">'+num((s.indicator_values||{})[i.key],i.precision)+'</td>').join('')+'</tr>').join(''):'<tr><td class="sp-empty" colspan="'+(3+resultIndicators.length)+'">没有符合当前搜索条件的股票</td></tr>';
+  }
   function render(summary){
     document.getElementById('sp-result-card').classList.remove('hidden');
     document.getElementById('sp-date').textContent=summary.trade_date||'—';
-    document.getElementById('sp-total').textContent=String(summary.total_count??0);
-    document.getElementById('sp-matched').textContent=String(summary.matched_count??0);
-    document.getElementById('sp-rows').innerHTML=(summary.stocks||[]).map(s=>'<tr><td>'+esc(s.ts_code)+'</td><td>'+esc(s.name||'—')+'</td><td class="num">'+num(s.close)+'</td><td class="num">'+num(s.left_value)+'</td><td class="num">'+num(s.right_value)+'</td></tr>').join('');
+    document.getElementById('sp-total').textContent=Number(summary.total_count??0).toLocaleString('zh-CN');
+    document.getElementById('sp-matched').textContent=Number(summary.matched_count??0).toLocaleString('zh-CN');
+    document.getElementById('sp-condition').textContent=conditionText(summary.condition);
+    resultStocks=summary.stocks||[];resultIndicators=summary.indicators||[];
+    if(!resultIndicators.length&&resultStocks.some(s=>s.left_value!=null)) resultIndicators=[{key:'left_value',label:'左侧值',precision:4},{key:'right_value',label:'右侧值',precision:4}];
+    resultStocks=resultStocks.map(s=>{if(s.indicator_values)return s;const values={};for(const i of resultIndicators)values[i.key]=s[i.key];return Object.assign({},s,{indicator_values:values});});
+    document.getElementById('sp-indicator-head').innerHTML='<th>代码</th><th>名称</th><th class="num">收盘价</th>'+resultIndicators.map(i=>'<th class="num" title="'+esc(i.canonical||'')+'">'+esc(i.label||i.column||i.key)+'</th>').join('');
+    document.getElementById('sp-search').value='';renderRows();
+    const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.getElementById('sp-result-card').scrollIntoView({behavior:reduced?'auto':'smooth',block:'start'});
   }
+  document.getElementById('sp-search').addEventListener('input',renderRows);
   async function poll(jobId){
     for(;;){
       await new Promise(resolve=>setTimeout(resolve,1500));

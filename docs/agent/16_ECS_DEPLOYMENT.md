@@ -1,5 +1,7 @@
 > 2026-11-20 股票池三入口：NL/向导/YAML统一StrategySpec entry，通用400日逐股求值；公网job383/384/385三入口均447/5572，388项通过/14 skipped。回滚`/tmp/qre-deploy-20261120T124449Z.bak`与`/tmp/qre-deploy-20261120T125147Z.bak`，无回测，未commit/push。
 
+> 2026-11-21 股票池指标与UI：三入口卡、动态真实指标列和搜索上线；相关253项/最终63项通过，公网向导447只与375px验收通过。最终回滚`/tmp/qre-deploy-20261121T053849Z.bak`，qre-saas active，无回测，未commit/push。
+
 > 2026-11-20 最新截面股票池：`/saas/stock-pool`及stock_pool轻量worker任务上线，单条件字段/数值比较，私有、不占回测历史。公网job383 EMA5>EMA200 completed，2026-11-20候选5572、命中447；相关385项通过/14 skipped。ECS回滚`/tmp/qre-deploy-20261120T121628Z.bak`，无回测，未commit/push。
 
 > 2026-11-20 冒烟隐藏与清理：云端在meta无文件、files齐、失败/取消终态删除smoke job目录，jobs/results摘要保留；新增`smoke_cleanup.py`。ECS回滚`/tmp/qre-deploy-20261120T013452Z.bak`，qre-saas active；本机worker/lab/gui active，302项通过，无真实任务。未commit/push。

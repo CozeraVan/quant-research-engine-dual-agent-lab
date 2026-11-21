@@ -62,9 +62,36 @@ def _value_sql(canonical: str, alias: str) -> str:
     return f'{alias}."{column}"'
 
 
+def _indicator(canonical: str) -> dict[str, Any]:
+    """结果列的展示合同；只读注册表，不计算或补写指标。"""
+    from quant_research_engine.gui.factor_registry import load_registry
+
+    schema, table, column = _field(canonical, "指标字段")
+    info = load_registry().display(f"{schema}.{table}", column) or {}
+    display = info.get("display") or {}
+    return {
+        "key": canonical,
+        "canonical": canonical,
+        "label": info.get("zh") or column,
+        "column": column,
+        "price_basis": info.get("price_basis_zh"),
+        "precision": display.get("precision", 4),
+    }
+
+
+def _number(value: Any) -> float | None:
+    if value is None:
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
+
+
 def screen_latest_stock_pool(raw_condition: dict[str, Any], engine) -> dict[str, Any]:
     condition = normalize_condition(raw_condition)
     left, operator, right = condition["left"], condition["operator"], condition["right"]
+    indicators = [_indicator(left)]
+    if isinstance(right, str) and right != left:
+        indicators.append(_indicator(right))
     joins = ""
     if not left.startswith("public.stock_daily."):
         joins += _factor_join(left, "l")
@@ -81,7 +108,7 @@ def screen_latest_stock_pool(raw_condition: dict[str, Any], engine) -> dict[str,
         latest = conn.execute(text("SELECT max(trade_date) FROM public.stock_daily")).scalar_one()
         if latest is None:
             return {"trade_date": None, "total_count": 0, "matched_count": 0,
-                    "condition": condition, "stocks": []}
+                    "condition": condition, "indicators": indicators, "stocks": []}
         params["latest"] = latest
         total = int(conn.execute(text(
             "SELECT count(*) FROM public.stock_daily WHERE trade_date=:latest"
@@ -93,14 +120,19 @@ def screen_latest_stock_pool(raw_condition: dict[str, Any], engine) -> dict[str,
             + joins + " WHERE m.trade_date=:latest AND " + left_sql
             + " " + operator + " " + right_sql + " ORDER BY m.ts_code"
         ), params).mappings().all()
-    stocks = [{
-        "ts_code": row["ts_code"], "name": row["name"],
-        "close": float(row["close"]) if row["close"] is not None else None,
-        "left_value": float(row["left_value"]) if row["left_value"] is not None else None,
-        "right_value": float(row["right_value"]) if row["right_value"] is not None else None,
-    } for row in rows]
+    stocks = []
+    for row in rows:
+        left_value, right_value = _number(row["left_value"]), _number(row["right_value"])
+        values = {left: left_value}
+        if isinstance(right, str):
+            values[right] = right_value
+        stocks.append({
+            "ts_code": row["ts_code"], "name": row["name"], "close": _number(row["close"]),
+            "left_value": left_value, "right_value": right_value,
+            "indicator_values": values,
+        })
     return {"trade_date": str(latest), "total_count": total, "matched_count": len(stocks),
-            "condition": condition, "stocks": stocks}
+            "condition": condition, "indicators": indicators, "stocks": stocks}
 
 
 def screen_latest_strategy_pool(yaml_text: str, engine, *, lookback_days: int = 400) -> dict[str, Any]:
@@ -122,14 +154,32 @@ def screen_latest_strategy_pool(yaml_text: str, engine, *, lookback_days: int = 
         raise ValueError("策略缺少signal.entry")
     ast.parse(expression, mode="eval")
     used = referenced_fields(expression)
-    market_columns = sorted((set(data.get("market_fields") or []) | {"close"}) & used | {"close"})
+    declared_market = set(data.get("market_fields") or [])
+    market_columns = sorted((declared_market | {"close"}) & used | {"close"})
     for column in market_columns:
         _field(f"public.stock_daily.{column}", "行情字段")
+    value_sources: list[tuple[str, str]] = []
+    for column in sorted(declared_market & used - {"close"}):
+        value_sources.append((f"public.stock_daily.{column}", column))
+    by_table: dict[str, list[tuple[str, str]]] = {}
+    for alias, target in (data.get("factor_fields") or {}).items():
+        if alias not in used:
+            continue
+        canonical = ".".join(_field(target, "因子字段"))
+        value_sources.append((canonical, str(alias)))
+        schema, table, column = _field(target, "因子字段")
+        by_table.setdefault(f'"{schema}"."{table}"', []).append((str(alias), column))
+    # 同一 canonical 可能有多个别名，只展示一列，取值使用首个别名。
+    source_by_canonical: dict[str, tuple[str, str]] = {}
+    for canonical, alias in value_sources:
+        source_by_canonical.setdefault(canonical, (canonical, alias))
+    unique_sources = list(source_by_canonical.values())
+    indicators = [_indicator(canonical) for canonical, _ in unique_sources]
     with engine.connect() as conn:
         latest = conn.execute(text("SELECT max(trade_date) FROM public.stock_daily")).scalar_one()
         if latest is None:
             return {"trade_date": None, "total_count": 0, "matched_count": 0,
-                    "condition": {"expression": expression}, "stocks": []}
+                    "condition": {"expression": expression}, "indicators": indicators, "stocks": []}
         total = int(conn.execute(text(
             "SELECT count(*) FROM public.stock_daily WHERE trade_date=:latest"
         ), {"latest": latest}).scalar_one())
@@ -140,12 +190,6 @@ def screen_latest_strategy_pool(yaml_text: str, engine, *, lookback_days: int = 
         f"SELECT ts_code,trade_date,{column_sql} FROM public.stock_daily "
         "WHERE trade_date BETWEEN :start AND :latest"
     ), engine, params={"start": start, "latest": latest})
-    by_table: dict[str, list[tuple[str, str]]] = {}
-    for alias, target in (data.get("factor_fields") or {}).items():
-        if alias not in used:
-            continue
-        schema, table, column = _field(target, "因子字段")
-        by_table.setdefault(f'"{schema}"."{table}"', []).append((str(alias), column))
     for table_sql, columns in by_table.items():
         select = ",".join(f'"{column}" AS "{alias}"' for alias, column in columns)
         factor = pd.read_sql(text(
@@ -162,13 +206,18 @@ def screen_latest_strategy_pool(yaml_text: str, engine, *, lookback_days: int = 
         latest_mask = group["trade_date"].dt.date == latest
         if not bool((mask & latest_mask).any()):
             continue
-        close = group.loc[latest_mask, "close"].iloc[-1]
-        stocks.append({"ts_code": str(ts_code), "name": names.get(ts_code),
-                       "close": float(close) if pd.notna(close) else None,
-                       "left_value": None, "right_value": None})
+        latest_row = group.loc[latest_mask].iloc[-1]
+        stocks.append({
+            "ts_code": str(ts_code), "name": names.get(ts_code),
+            "close": _number(latest_row["close"]),
+            "left_value": None, "right_value": None,
+            "indicator_values": {
+                canonical: _number(latest_row[alias]) for canonical, alias in unique_sources
+            },
+        })
     return {"trade_date": str(latest), "total_count": total, "matched_count": len(stocks),
             "condition": {"expression": expression}, "lookback_days": int(lookback_days),
-            "stocks": stocks}
+            "indicators": indicators, "stocks": stocks}
 
 
 def execute_stock_pool_job(job: dict[str, Any]) -> dict[str, Any]:

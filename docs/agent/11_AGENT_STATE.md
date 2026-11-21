@@ -19,6 +19,11 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-21 股票池结果指标与UI（DONE，待验收/commit）
+
+- 三入口卡/向导向导布局/动态指标列/搜索已上线；向导和NL/YAML均返回`indicators+indicator_values`，中文名与精度取注册表，只读最新值，不重算指标。
+- 相关253项与最终63项通过/14 skipped；公网EMA5>EMA200=447/5572，指数移动均线(5)/(200)真实列、搜索与375px无横溢通过。证据`.tmp/stock-pool-ui-20261121/`，回滚`/tmp/qre-deploy-20261121T053849Z.bak`。无回测，未commit/push。
+
 ### 2026-11-20 股票池三入口（DONE）
 
 - 自然语言/向导/YAML统一entry最新截面；YAML/NL逐股400日表达式，向导单SQL。388项通过/14 skipped；公网job383/384/385均447/5572。未跑回测，未commit/push。

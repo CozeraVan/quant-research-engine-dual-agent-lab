@@ -1,3 +1,5 @@
+2026-11-21 股票池UI与指标结果已上线：三入口卡和向导布局优化，结果按实际引用字段显示中文指标名与最新值，支持代码/名称搜索；向导/NL/YAML统一`indicators+indicator_values`，不计算新指标。相关253 passed/14 skipped、最终63 passed/14 skipped；公网447/5572与搜索/375px验收通过，无回测，未commit/push。
+
 2026-11-20 股票池三入口已上线：自然语言/向导/YAML统一StrategySpec entry；NL/YAML按400日面板逐股求值，向导保留单SQL。纯筛选NL仅在本页对review自动force，硬拒不放行。相关388 passed/14 skipped；公网job383/384/385分别验证三入口，均2026-11-20命中447/5572。无回测，未commit/push。
 
 2026-11-20 最新截面股票池已上线：`/saas/stock-pool`支持单条件行情/因子比较字段或数值，本地worker轻量只读stock_pool任务，私有、不占回测额度/历史。真实库对账与相关385 passed/14 skipped；公网job383 EMA5>EMA200 completed，2026-11-20候选5572、命中447。ECS回滚`/tmp/qre-deploy-20261120T121628Z.bak`，未跑回测，未commit/push。

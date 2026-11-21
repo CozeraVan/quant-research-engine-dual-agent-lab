@@ -105,3 +105,34 @@ def test_stock_pool_page_has_backtest_style_three_entries():
     for marker in ('data-sp-entry="nl"', 'data-sp-entry="wizard"', 'data-sp-entry="yaml"',
                    'sp-nl-input', 'sp-yaml', '/api/saas/nl/compile'):
         assert marker in html
+
+
+def test_latest_pool_exposes_named_indicator_values():
+    engine = create_engine("postgresql+psycopg:///tushare_data")
+    result = screen_latest_stock_pool({"left": EMA5, "operator": ">", "right": EMA200}, engine)
+    assert [item["canonical"] for item in result["indicators"]] == [EMA5, EMA200]
+    assert all(item["label"] for item in result["indicators"])
+    first = result["stocks"][0]
+    assert first["indicator_values"][EMA5] == first["left_value"]
+    assert first["indicator_values"][EMA200] == first["right_value"]
+
+
+def test_latest_yaml_pool_exposes_actual_latest_indicator_values():
+    from quant_research_engine.stock_pool import screen_latest_strategy_pool
+    engine = create_engine("postgresql+psycopg:///tushare_data")
+    result = screen_latest_strategy_pool(EMA_STRATEGY_YAML, engine)
+    assert [item["canonical"] for item in result["indicators"]] == [EMA5, EMA200]
+    first = result["stocks"][0]
+    values = first["indicator_values"]
+    assert values[EMA5] is not None and values[EMA200] is not None
+    assert values[EMA5] > values[EMA200]
+
+
+def test_stock_pool_results_use_dynamic_named_columns_and_search():
+    from quant_research_engine.gui.saas import create_saas_app
+    html = create_saas_app().test_client().get('/saas/stock-pool').get_data(as_text=True)
+    for marker in ('entry-grid', 'sp-search', 'sp-indicator-head', 'summary.indicators',
+                   'indicator_values', 'role="tab"', 'aria-selected'):
+        assert marker in html
+    assert '<th class="num">左侧值</th>' not in html
+    assert '<th class="num">右侧值</th>' not in html

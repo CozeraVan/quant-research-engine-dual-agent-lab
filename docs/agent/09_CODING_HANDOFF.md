@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-21 股票池指标结果与UI
+
+- `stock_pool.py`新增`_indicator/_number`；结果带`indicators`元数据和`indicator_values`，YAML按最新行读取实际引用字段，同canonical去重，旧left/right字段保留。
+- `stock_pool.html`改entry-card三入口、tab键盘/ARIA、两列向导、动态表头、搜索与状态；无新增灰色小字、无新色相，移动表格仅容器内滚动并尊重reduced-motion。
+- 真实库向导与YAML指标测试通过；相关253项、最终63项通过/14 skipped。公网浏览器验收与截图在`.tmp/stock-pool-ui-20261121/`；ECS已部署，未commit/push。
+
 ## 2026-11-20 股票池三入口
 
 - `screen_latest_strategy_pool`：validate_strategy_yaml→引用行情/因子400日面板→按ts_code分组evaluate_expression_signal→latest命中；返回left/right=None不造值。
