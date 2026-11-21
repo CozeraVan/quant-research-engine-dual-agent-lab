@@ -1,5 +1,9 @@
 > 2026-11-20 股票池三入口：NL/向导/YAML统一StrategySpec entry，通用400日逐股求值；公网job383/384/385三入口均447/5572，388项通过/14 skipped。回滚`/tmp/qre-deploy-20261120T124449Z.bak`与`/tmp/qre-deploy-20261120T125147Z.bak`，无回测，未commit/push。
 
+> 2026-11-21 现阶段拓扑定稿：网站保留现有ECS；主力PC为唯一主库/日更/Worker A，闲置8700+32G为Worker B和结果冷存储/备份。暂不购RDS/worker ECS/OSS；双worker部署尚未实施，详见32号§0A。
+
+> 2026-11-21 保存股票池与持续快照：两表schema和CRUD/序列授权已apply；保存/CSV/回测回填/快照/删除modal已上线，172项通过。生产pool1全链447只验收后清理为0。回滚`/tmp/qre-deploy-20261121T124106Z.bak`，schema备份`/tmp/qre-saved-pool-schema-pre-20261121.sql`。无真实回测，未commit/push。
+
 > 2026-11-21 股票池指标与UI：三入口卡、动态真实指标列和搜索上线；相关253项/最终63项通过，公网向导447只与375px验收通过。最终回滚`/tmp/qre-deploy-20261121T053849Z.bak`，qre-saas active，无回测，未commit/push。
 
 > 2026-11-20 最新截面股票池：`/saas/stock-pool`及stock_pool轻量worker任务上线，单条件字段/数值比较，私有、不占回测历史。公网job383 EMA5>EMA200 completed，2026-11-20候选5572、命中447；相关385项通过/14 skipped。ECS回滚`/tmp/qre-deploy-20261120T121628Z.bak`，无回测，未commit/push。

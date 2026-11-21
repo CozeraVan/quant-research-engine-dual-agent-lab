@@ -75,6 +75,52 @@ BEGIN
     END IF;
 END $$;
 
+-- 2026-11-21 命名保存股票池：只存可重算定义（condition 或 strategy_yaml），
+-- 不落行情/因子明细，不进入回测历史、不占回测次数。快照按交易日唯一。
+CREATE TABLE IF NOT EXISTS saved_stock_pools (
+    id              BIGSERIAL PRIMARY KEY,
+    user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    definition_kind TEXT NOT NULL,
+    definition      JSONB NOT NULL,
+    definition_hash TEXT NOT NULL,
+    strategy_id     BIGINT REFERENCES strategies(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_saved_pools_user
+    ON saved_stock_pools (user_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS saved_stock_pool_snapshots (
+    id              BIGSERIAL PRIMARY KEY,
+    pool_id         BIGINT NOT NULL REFERENCES saved_stock_pools(id) ON DELETE CASCADE,
+    trade_date      DATE NOT NULL,
+    definition_hash TEXT NOT NULL,
+    total_count     INT NOT NULL,
+    matched_count   INT NOT NULL,
+    indicators      JSONB NOT NULL DEFAULT '[]'::jsonb,
+    stocks          JSONB NOT NULL DEFAULT '[]'::jsonb,
+    added           JSONB NOT NULL DEFAULT '[]'::jsonb,
+    removed         JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (pool_id, trade_date)
+);
+CREATE INDEX IF NOT EXISTS idx_saved_pool_snapshots_pool
+    ON saved_stock_pool_snapshots (pool_id, trade_date DESC);
+
+-- postgres 建表时应用角色不是 owner：表 CRUD 与 BIGSERIAL 序列均须显式授权。
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aguhuice') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON saved_stock_pools TO aguhuice;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON saved_stock_pool_snapshots TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE saved_stock_pools_id_seq TO aguhuice;
+        GRANT USAGE, SELECT ON SEQUENCE saved_stock_pool_snapshots_id_seq TO aguhuice;
+    END IF;
+END $$;
+
 -- 回测任务：状态机 queued → leased → running → done / failed
 -- lease 过期（Worker 宕机）自动回队重试，见 worker_jobs 视图
 CREATE TABLE IF NOT EXISTS jobs (

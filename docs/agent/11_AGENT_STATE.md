@@ -19,6 +19,23 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-21 现阶段双家庭 Worker 架构（用户定稿）
+
+- 网站ECS+主力PC唯一主库/日更/Worker A+闲置8700+32G Worker B/机械盘冷存储备份；普通全局2、高换手1，闲置worker 20–24G。结果先传ECS再增量同步，LAN只读，不开家庭入站。
+- 暂不购RDS/worker ECS/OSS，云方案仅后续备选。详见06/32；**目前是架构定稿，不是双worker部署完成**。
+
+### 2026-11-21 保存股票池与持续快照（DONE，已部署待验收/commit）
+
+- 命名保存、CSV、回测codes回填、同日幂等快照、新增/移出及worker-token refresh-all完成；未接自动日更调度。
+- 主代理补新表/序列权限、已有schema跳过DDL和删除modal；172 passed/14 skipped。生产pool1全链447只验收后删除为0，375px无横溢。证据`.tmp/stock-pool-ui-20261121/saved-pool-acceptance.json`，回滚`/tmp/qre-deploy-20261121T124106Z.bak`。未commit/push。
+
+### 2026-11-21 保存股票池与持续快照（DONE，待主代理复核/部署）
+
+- 命名保存池存可重算 condition/strategy_yaml + definition_hash；快照仅在 worker 真实 summary 回传时按 `(pool_id,trade_date)` upsert，同日重算不重复，记录候选/命中/新增/移出。
+- 刷新只建私有 `stock_pool` light 任务，活跃去重，不入回测历史、不占回测次数/SU；CSV 含实际指标列且防公式注入；`/saas/new?pool=<id>` 只回填最新真实快照代码，提交仍走原权限与会员闸。
+- 日更后刷新仅提供 worker token 保护的显式接口 `refresh-all`，未接自动调度；应用与 `deploy/saas/cloud_schema.sql` 均有两表 DDL，部署前需先 apply。
+- 相关116 passed、模板JS 30 passed/14 skipped、静默20 passed、unslop 3 passed；未跑真实回测、未部署 ECS、未 commit/push。主代理复核重点：schema 先于代码、large pool 快照体积、refresh-all 调用方。
+
 ### 2026-11-21 股票池结果指标与UI（DONE，待验收/commit）
 
 - 三入口卡/向导向导布局/动态指标列/搜索已上线；向导和NL/YAML均返回`indicators+indicator_values`，中文名与精度取注册表，只读最新值，不重算指标。

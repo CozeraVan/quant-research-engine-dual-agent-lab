@@ -1,5 +1,21 @@
 # Coding Handoff
 
+## 2026-11-21 保存股票池主代理复核
+
+- `cloud_schema.sql`补两表CRUD及两序列USAGE/SELECT；`_ensure_saved_stock_pool_tables`先查information_schema，已有两表时仅一次查询，不再要求owner建索引。
+- 删除股票池改`sp-delete-modal`，支持取消、确认、遮罩/Esc关闭和焦点返回；新增两项防回归。相关172 passed/14 skipped。
+- 生产保存池全链验收通过，证据`.tmp/stock-pool-ui-20261121/saved-pool-acceptance.json`；最终回滚`/tmp/qre-deploy-20261121T124106Z.bak`。
+
+## 2026-11-21 保存股票池与持续快照
+
+- `stock_pool.py`：新增 `pool_definition_hash`、`build_pool_snapshot`（真实结果→快照，首快照不造新增/移出，后续按 ts_code 差集）、`saved_pool_csv`（代码/名称/收盘价/指标列，`= + - @`/制表/回车前置单引号）。
+- `app.py`：`_ensure_saved_stock_pool_tables` 懒建两表；`_saved_pool_definition` 只收归一化 condition 或通过 `validate_strategy_yaml` 的完整 YAML；`_persist_saved_pool_snapshot` 校验 pool 归属与 definition_hash 后 upsert；result/meta 与旧单包回传均只从真实 summary 落快照。
+- API：`/api/saas/saved-stock-pools` CRUD、`/<id>/refresh`、`/<id>/export.csv`、`/api/saas/internal/saved-stock-pools/refresh-all`。刷新只建 `stock_pool` light/small 任务并复用/创建私有 strategy 行；活跃任务去重，不占回测次数/SU/历史。
+- `stock_pool.html`：新增保存名称与按钮、已保存池列表、刷新/导出/用于回测/历史/删除；历史表展示交易日、候选、命中、命中变化、新增、移出（名单可展开）。Quiet Chrome，无灰色小字，375px 表格容器内滚动。
+- `new.html`：`?pool=<id>` 读取最新真实快照并回填“指定股票代码”；未改提交链路，权限/会员闸仍由 `/api/jobs` 执行。
+- `deploy/saas/cloud_schema.sql`：补两表与索引；ECS 部署前需先 apply schema（应用亦有懒自愈）。
+- 边界：未把刷新接入任何自动调度；日更后需显式调用 refresh-all。未部署 ECS、未跑真实回测、未 commit/push。
+
 ## 2026-11-21 股票池指标结果与UI
 
 - `stock_pool.py`新增`_indicator/_number`；结果带`indicators`元数据和`indicator_values`，YAML按最新行读取实际引用字段，同canonical去重，旧left/right字段保留。

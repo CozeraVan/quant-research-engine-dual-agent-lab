@@ -1,5 +1,14 @@
 # Implementation Brief
 
+## 2026-11-21 保存股票池、CSV、回测范围与持续快照
+
+1. 新增私有 `saved_stock_pools`：按登录用户 + 名称唯一保存，definition 必须是可重算的原始归一化 condition 或完整 strategy_yaml，另存 definition_hash；禁止只存名单。保存池本身不建回测历史、不占回测次数/SU，只复用轻量 `stock_pool` 队列。
+2. 新增 `saved_stock_pool_snapshots`：每次真实计算落 `trade_date/total/matched/stocks/indicators/added/removed`；`(pool_id,trade_date,definition_hash)` 唯一并 upsert，同日重算幂等，不产生重复快照。只有 worker 回传的真实 summary 可写快照。
+3. API：保存池 CRUD（列表/详情/删除）、手动刷新、CSV 导出、日更后内部触发。所有读改按 user_id 归属，他人资源一律 404；刷新只建 `stock_pool` 私有 light 任务。CSV 含代码/名称/收盘价/实际指标列，并防护公式注入。
+4. 回测接入：保存池页面提供“用于回测”跳转 `/saas/new?pool=<id>`，new.html 取最新真实快照的代码回填“指定股票代码”；提交仍走现有 `/api/jobs`，没有绕开 codes 规范化、股票数上限、全量权限或会员闸。
+5. 持续更新：手动刷新接口 + worker token 保护的全量触发接口；不新建平行调度，不伪称已自动日更。日更管线需在数据更新后显式调用该接口，边界写入 09/11。
+6. UI 遵守 Quiet Chrome，不新增灰色小字备注，解释用 `tip-trigger`/`data-tip`；375px 无页面横溢，动态文本全部转义。TDD 先红后绿，只跑单元/集成与轻量 SELECT，不运行真实回测。
+
 ## 2026-11-21 股票池结果指标与页面体验
 
 1. 保持三入口、最新交易日截面与只读预计算字段语义；结果新增 `indicators` 元数据及每只股票对应值，沿用注册表中文名，不重新计算指标。

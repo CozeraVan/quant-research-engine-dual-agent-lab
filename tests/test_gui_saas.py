@@ -1917,3 +1917,172 @@ evaluation:
         'strategy_yaml': 'signal:\n  entry: close.__class__\n',
     }, headers={'X-User-Id': '1'})
     assert invalid.status_code == 400
+
+
+def _condition_payload(name='保存池'):
+    return {
+        'name': name,
+        'condition': {
+            'left': 'factors.stock_daily_overlap_typical_price.ema_5',
+            'operator': '>',
+            'right': 'factors.stock_daily_overlap_typical_price.ema_200',
+        },
+    }
+
+
+def _pool_summary(trade_date='2026-11-21', rows=None, total=5200):
+    rows = rows or [
+        {'ts_code': '000001.SZ', 'name': '平安银行', 'close': 12.5,
+         'indicator_values': {'factors.stock_daily_overlap_typical_price.ema_5': 12.7,
+                              'factors.stock_daily_overlap_typical_price.ema_200': 12.1}},
+        {'ts_code': '600000.SH', 'name': '浦发银行', 'close': 10.0,
+         'indicator_values': {'factors.stock_daily_overlap_typical_price.ema_5': 10.2,
+                              'factors.stock_daily_overlap_typical_price.ema_200': 9.9}},
+    ]
+    return {
+        'kind': 'stock_pool', 'trade_date': trade_date, 'total_count': total,
+        'matched_count': len(rows), 'condition': {'expression': 'ema_5 > ema_200'},
+        'indicators': [
+            {'key': 'factors.stock_daily_overlap_typical_price.ema_5',
+             'label': '指数移动均线(5)', 'precision': 4},
+            {'key': 'factors.stock_daily_overlap_typical_price.ema_200',
+             'label': '指数移动均线(200)', 'precision': 4},
+        ],
+        'stocks': rows,
+    }
+
+
+def _complete_pool_job(client, job_id, summary):
+    claimed = client.post('/api/worker/jobs/claim', json={'worker_id': 'w1', 'wait_seconds': 0},
+                          headers=WORKER_HEADERS)
+    assert claimed.status_code == 200, claimed.get_json()
+    assert claimed.get_json()['job']['id'] == job_id
+    response = client.post(f'/api/worker/jobs/{job_id}/result/meta', json={
+        'worker_id': 'w1', 'summary': summary, 'chart_data': {}, 'files': [],
+    }, headers=WORKER_HEADERS)
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()['status'] == 'completed'
+
+
+def test_saved_stock_pool_crud_is_private_and_name_is_idempotent(client):
+    created = client.post('/api/saas/saved-stock-pools', json=_condition_payload(),
+                          headers={'X-User-Id': '1'})
+    assert created.status_code == 200, created.get_json()
+    pool_id = created.get_json()['pool_id']
+    assert created.get_json()['created'] is True
+    replay = client.post('/api/saas/saved-stock-pools', json=_condition_payload(),
+                         headers={'X-User-Id': '1'})
+    assert replay.get_json()['pool_id'] == pool_id and replay.get_json()['created'] is False
+    listed = client.get('/api/saas/saved-stock-pools', headers={'X-User-Id': '1'}).get_json()
+    assert listed['ok'] and listed['pools'][0]['id'] == pool_id
+    assert listed['pools'][0]['definition_kind'] == 'condition'
+    assert client.get('/api/saas/saved-stock-pools', headers={'X-User-Id': '2'}).get_json()['pools'] == []
+    assert client.get(f'/api/saas/saved-stock-pools/{pool_id}', headers={'X-User-Id': '2'}).status_code == 404
+    assert client.delete(f'/api/saas/saved-stock-pools/{pool_id}', headers={'X-User-Id': '2'}).status_code == 404
+    deleted = client.delete(f'/api/saas/saved-stock-pools/{pool_id}', headers={'X-User-Id': '1'})
+    assert deleted.status_code == 200
+    assert client.get(f'/api/saas/saved-stock-pools/{pool_id}', headers={'X-User-Id': '1'}).status_code == 404
+
+
+def test_saved_stock_pool_requires_login_and_valid_definition(client):
+    assert client.post('/api/saas/saved-stock-pools', json=_condition_payload()).status_code == 401
+    bad = client.post('/api/saas/saved-stock-pools', json={
+        'name': 'bad', 'condition': {'left': 'reference.stock_basic.name', 'operator': '>', 'right': 1},
+    }, headers={'X-User-Id': '1'})
+    assert bad.status_code == 400
+    no_name = client.post('/api/saas/saved-stock-pools', json={
+        'name': '  ', 'condition': _condition_payload()['condition'],
+    }, headers={'X-User-Id': '1'})
+    assert no_name.status_code == 400
+
+
+def test_saved_stock_pool_refresh_is_light_private_and_deduped(client):
+    pool_id = client.post('/api/saas/saved-stock-pools', json=_condition_payload(),
+                          headers={'X-User-Id': '1'}).get_json()['pool_id']
+    first = client.post(f'/api/saas/saved-stock-pools/{pool_id}/refresh',
+                        headers={'X-User-Id': '1'})
+    assert first.status_code == 200, first.get_json()
+    job_id = first.get_json()['job_id']
+    again = client.post(f'/api/saas/saved-stock-pools/{pool_id}/refresh',
+                        headers={'X-User-Id': '1'})
+    assert again.get_json() == {'ok': True, 'job_id': job_id, 'deduped': True}
+    job = client.get(f'/api/saas/jobs/{job_id}', headers={'X-User-Id': '1'}).get_json()['job']
+    assert job['kind'] == 'stock_pool' and job['weight_class'] == 'light'
+    assert job['params']['saved_pool_id'] == pool_id
+    assert 'definition_hash' in job['params']
+    assert client.post(f'/api/saas/saved-stock-pools/{pool_id}/refresh',
+                       headers={'X-User-Id': '2'}).status_code == 404
+    history = client.get('/api/results', headers={'X-User-Id': '1'}).get_json()
+    assert history['total'] == 0
+
+
+def test_saved_stock_pool_snapshots_are_real_idempotent_and_diffed(client):
+    pool_id = client.post('/api/saas/saved-stock-pools', json=_condition_payload(),
+                          headers={'X-User-Id': '1'}).get_json()['pool_id']
+    first_job = client.post(f'/api/saas/saved-stock-pools/{pool_id}/refresh',
+                            headers={'X-User-Id': '1'}).get_json()['job_id']
+    _complete_pool_job(client, first_job, _pool_summary())
+    detail = client.get(f'/api/saas/saved-stock-pools/{pool_id}',
+                        headers={'X-User-Id': '1'}).get_json()['pool']
+    assert detail['latest']['matched_count'] == 2
+    assert detail['latest']['added'] == [] and detail['latest']['removed'] == []
+    assert len(detail['history']) == 1
+
+    # 同日重算：更新同一快照，不产生第二条
+    second_job = client.post(f'/api/saas/saved-stock-pools/{pool_id}/refresh',
+                             headers={'X-User-Id': '1'}).get_json()['job_id']
+    same_day = _pool_summary(rows=[_pool_summary()['stocks'][0]])
+    _complete_pool_job(client, second_job, same_day)
+    detail = client.get(f'/api/saas/saved-stock-pools/{pool_id}',
+                        headers={'X-User-Id': '1'}).get_json()['pool']
+    assert len(detail['history']) == 1
+    assert detail['latest']['matched_count'] == 1
+
+    # 新交易日：相对上一快照计算新增/移出
+    third_job = client.post(f'/api/saas/saved-stock-pools/{pool_id}/refresh',
+                            headers={'X-User-Id': '1'}).get_json()['job_id']
+    next_day = _pool_summary(trade_date='2026-11-22', rows=[_pool_summary()['stocks'][1]])
+    _complete_pool_job(client, third_job, next_day)
+    detail = client.get(f'/api/saas/saved-stock-pools/{pool_id}',
+                        headers={'X-User-Id': '1'}).get_json()['pool']
+    assert [h['trade_date'] for h in detail['history']] == ['2026-11-22', '2026-11-21']
+    assert detail['latest']['added'] == [{'ts_code': '600000.SH', 'name': '浦发银行'}]
+    assert detail['latest']['removed'] == [{'ts_code': '000001.SZ', 'name': '平安银行'}]
+
+
+def test_saved_stock_pool_csv_export_is_private_and_guarded(client):
+    pool_id = client.post('/api/saas/saved-stock-pools', json=_condition_payload(),
+                          headers={'X-User-Id': '1'}).get_json()['pool_id']
+    job_id = client.post(f'/api/saas/saved-stock-pools/{pool_id}/refresh',
+                         headers={'X-User-Id': '1'}).get_json()['job_id']
+    summary = _pool_summary(rows=[{
+        'ts_code': '000001.SZ', 'name': '=cmd|calc', 'close': 12.5,
+        'indicator_values': {
+            'factors.stock_daily_overlap_typical_price.ema_5': 12.7,
+            'factors.stock_daily_overlap_typical_price.ema_200': 12.1,
+        },
+    }])
+    _complete_pool_job(client, job_id, summary)
+    response = client.get(f'/api/saas/saved-stock-pools/{pool_id}/export.csv',
+                          headers={'X-User-Id': '1'})
+    assert response.status_code == 200
+    assert response.headers['Content-Type'].startswith('text/csv')
+    text = response.get_data(as_text=True)
+    assert '股票代码,股票名称,收盘价,指数移动均线(5),指数移动均线(200)' in text
+    assert "'=cmd|calc" in text and '000001.SZ' in text
+    assert client.get(f'/api/saas/saved-stock-pools/{pool_id}/export.csv',
+                      headers={'X-User-Id': '2'}).status_code == 404
+
+
+def test_saved_stock_pool_refresh_all_requires_worker_token(client, app):
+    pool_id = client.post('/api/saas/saved-stock-pools', json=_condition_payload(),
+                          headers={'X-User-Id': '1'}).get_json()['pool_id']
+    assert client.post('/api/saas/internal/saved-stock-pools/refresh-all',
+                       json={}).status_code == 401
+    triggered = client.post('/api/saas/internal/saved-stock-pools/refresh-all',
+                            json={'limit': 10}, headers=WORKER_HEADERS)
+    assert triggered.status_code == 200, triggered.get_json()
+    assert triggered.get_json()['enqueued'] == 1
+    job_id = triggered.get_json()['jobs'][0]['job_id']
+    job = client.get(f'/api/saas/jobs/{job_id}', headers={'X-User-Id': '1'}).get_json()['job']
+    assert job['kind'] == 'stock_pool' and job['params']['saved_pool_id'] == pool_id

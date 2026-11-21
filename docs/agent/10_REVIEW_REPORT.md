@@ -1,5 +1,21 @@
 # Review Report
 
+## 2026-11-21 保存股票池主代理复核
+
+- Review Status：PASS，无Required Fixes。子代理基础上补三处生产缺陷：应用角色表/序列授权、已有schema重复DDL、原生confirm替换为可访问modal。
+- 172 passed/14 skipped；生产保存→刷新真实快照→CSV→回测回填→删除全链通过，临时池清理为0，375px无横溢。refresh-all仍未接自动日更，文档不冒称自动调度；大池长期快照体积为后续运维项。
+- 证据`.tmp/stock-pool-ui-20261121/saved-pool-acceptance.json`；已部署，未commit/push。
+
+## 2026-11-21 保存股票池与持续快照自审
+
+- Review Status：PASS（本轮范围），无 Required Fixes。定义必须是可重算 condition/strategy_yaml；快照仅由 worker 真实 summary 写入，`(pool_id,trade_date)` 唯一，同日重算更新同条；definition_hash 变化后旧定义快照不参与当前历史。
+- 归属：列表/详情/删除/刷新/CSV 全部带 `user_id` 条件，他人资源 404；快照写入再次校验 pool 归属与 hash。刷新只建私有 `stock_pool` 任务，不进入回测历史，不占回测次数/SU。
+- 回测接入：`?pool=` 只回填最新快照代码；提交仍走 `/api/jobs` 的 `normalize_ts_codes`、游客 10 只、会员 `max_codes`、全量/板块权限与会员闸，没有绕过路径。
+- CSV：含实际指标列，文本公式前缀防护；输出仅本人。页面动态文本统一 `esc`，无新增灰色小字，375px 由表格容器滚动。
+- 实际运行：`pytest tests/test_stock_pool.py -q` 19 passed；`pytest tests/test_gui_saas.py tests/test_stock_pool.py -q` 116 passed；`test_template_inline_js_syntax.py` 30 passed/14 skipped；`test_no_silent_failure_patterns.py` 20 passed；`test_unslop_ui.py` 3 passed。
+- 未解决/边界：未接入自动日更调度，refresh-all 需日更管线显式调用；added/removed 在写入时相对当时上一交易日快照计算，若之后补写更早交易日不会回溯重算已有行；全市场命中时每日快照会保存完整名单+指标，需关注长期体积/保留策略。
+- 未部署 ECS、未跑真实回测/全量 SELECT、未 commit/push。主代理需先在 ECS apply `deploy/saas/cloud_schema.sql` 再部署代码，并复核 stock_pool worker 回传快照与大股票池快照体积。
+
 ## 2026-11-21 股票池指标结果与UI自审
 
 - Review Status：PASS，无Required Fixes。指标值只来自最新已存储行情/因子行及注册表，不重算、不回填、不改变entry布尔语义；同canonical多别名只展示一列。

@@ -35,7 +35,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, g, jsonify, render_template, request, session
+from flask import Flask, Response, g, jsonify, render_template, request, session
 from jinja2 import ChoiceLoader, FileSystemLoader
 from sqlalchemy import bindparam, create_engine, text
 from sqlalchemy.engine import Engine
@@ -740,6 +740,123 @@ def _ensure_strategy_asset_columns(engine: Engine) -> None:
             "WHERE entry_mode IS NULL"
         ))
     _STRATEGY_ASSET_ENSURED.add(key)
+
+
+# 2026-11-21：命名保存股票池 + 按交易日真实快照（懒自愈，重复执行幂等）。
+_SAVED_STOCK_POOL_TABLES_ENSURED: set[int] = set()
+
+
+def _ensure_saved_stock_pool_tables(engine: Engine) -> None:
+    key = id(engine)
+    if key in _SAVED_STOCK_POOL_TABLES_ENSURED:
+        return
+    with engine.begin() as conn:
+        existing = {
+            r[0] for r in conn.execute(text(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema='public' AND table_name IN "
+                "('saved_stock_pools','saved_stock_pool_snapshots')"
+            ))
+        }
+        # 生产由 postgres 先 apply schema；应用角色只有 CRUD，不能对已有表重复建索引。
+        if "saved_stock_pools" not in existing:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS saved_stock_pools ("
+                " id BIGSERIAL PRIMARY KEY,"
+                " user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,"
+                " name TEXT NOT NULL,"
+                " definition_kind TEXT NOT NULL,"
+                " definition JSONB NOT NULL,"
+                " definition_hash TEXT NOT NULL,"
+                " strategy_id BIGINT REFERENCES strategies(id),"
+                " created_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
+                " updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
+                " UNIQUE (user_id, name))"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_saved_pools_user "
+                "ON saved_stock_pools (user_id, updated_at DESC)"
+            ))
+        if "saved_stock_pool_snapshots" not in existing:
+            conn.execute(text(
+                "CREATE TABLE IF NOT EXISTS saved_stock_pool_snapshots ("
+                " id BIGSERIAL PRIMARY KEY,"
+                " pool_id BIGINT NOT NULL REFERENCES saved_stock_pools(id) ON DELETE CASCADE,"
+                " trade_date DATE NOT NULL,"
+                " definition_hash TEXT NOT NULL,"
+                " total_count INT NOT NULL,"
+                " matched_count INT NOT NULL,"
+                " indicators JSONB NOT NULL DEFAULT '[]'::jsonb,"
+                " stocks JSONB NOT NULL DEFAULT '[]'::jsonb,"
+                " added JSONB NOT NULL DEFAULT '[]'::jsonb,"
+                " removed JSONB NOT NULL DEFAULT '[]'::jsonb,"
+                " created_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
+                " updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),"
+                " UNIQUE (pool_id, trade_date))"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS idx_saved_pool_snapshots_pool "
+                "ON saved_stock_pool_snapshots (pool_id, trade_date DESC)"
+            ))
+    _SAVED_STOCK_POOL_TABLES_ENSURED.add(key)
+
+
+def _saved_pool_definition(data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """保存池只接受可重算定义：原始 condition 或完整 strategy_yaml。"""
+    from quant_research_engine.stock_pool import normalize_condition
+
+    yaml_text = str(data.get("strategy_yaml") or "").strip()
+    if yaml_text:
+        import yaml
+        from quant_research_engine.security.yaml_guard import validate_strategy_yaml
+
+        verdict = validate_strategy_yaml(yaml_text)
+        if not verdict.get("ok"):
+            raise ValueError("；".join(verdict.get("issues") or ["策略YAML不合法"]))
+        yaml.safe_load(yaml_text)
+        return "strategy_yaml", {"strategy_yaml": yaml_text}
+    if data.get("condition") is not None:
+        return "condition", {"condition": normalize_condition(data.get("condition"))}
+    raise ValueError("缺少 condition 或 strategy_yaml")
+
+
+def _persist_saved_pool_snapshot(conn: Any, pool_id: int, user_id: int,
+                                 definition_hash: str, summary: dict[str, Any]) -> bool:
+    """worker 真实回传 → 按 (pool,trade_date) upsert；定义已变则不写旧定义结果。"""
+    from quant_research_engine.stock_pool import build_pool_snapshot
+
+    if summary.get("kind") != "stock_pool" or not summary.get("trade_date"):
+        return False
+    pool = conn.execute(text(
+        "SELECT definition_hash FROM saved_stock_pools WHERE id=:id AND user_id=:uid"
+    ), {"id": pool_id, "uid": user_id}).mappings().first()
+    if pool is None or pool["definition_hash"] != definition_hash:
+        return False
+    previous = conn.execute(text(
+        "SELECT stocks FROM saved_stock_pool_snapshots "
+        "WHERE pool_id=:id AND definition_hash=:h AND trade_date < :d "
+        "ORDER BY trade_date DESC LIMIT 1"
+    ), {"id": pool_id, "h": definition_hash, "d": summary["trade_date"]}).mappings().first()
+    snapshot = build_pool_snapshot(summary, dict(previous) if previous else None)
+    conn.execute(text(
+        "INSERT INTO saved_stock_pool_snapshots "
+        "(pool_id,trade_date,definition_hash,total_count,matched_count,indicators,stocks,added,removed) "
+        "VALUES (:pid,:d,:h,:total,:matched,CAST(:indicators AS jsonb),"
+        "CAST(:stocks AS jsonb),CAST(:added AS jsonb),CAST(:removed AS jsonb)) "
+        "ON CONFLICT (pool_id,trade_date) DO UPDATE SET "
+        "definition_hash=EXCLUDED.definition_hash,total_count=EXCLUDED.total_count,"
+        "matched_count=EXCLUDED.matched_count,indicators=EXCLUDED.indicators,"
+        "stocks=EXCLUDED.stocks,added=EXCLUDED.added,removed=EXCLUDED.removed,"
+        "updated_at=now()"
+    ), {
+        "pid": pool_id, "d": snapshot["trade_date"], "h": definition_hash,
+        "total": snapshot["total_count"], "matched": snapshot["matched_count"],
+        "indicators": json.dumps(snapshot["indicators"], ensure_ascii=False),
+        "stocks": json.dumps(snapshot["stocks"], ensure_ascii=False),
+        "added": json.dumps(snapshot["added"], ensure_ascii=False),
+        "removed": json.dumps(snapshot["removed"], ensure_ascii=False),
+    })
+    return True
 
 
 # CR-2026-10-04 模块二：策略信号监控——strategy_watches / signal_events /
@@ -2079,6 +2196,224 @@ def create_saas_app() -> Flask:
             ), {"uid": uid, "sid": strategy_id,
                 "params": json.dumps(params, ensure_ascii=False), "idem": idem}).scalar_one()
         return jsonify({"ok": True, "job_id": job_id, "status": "queued"})
+
+    # --- 命名保存股票池：可重算定义 + 真实交易日快照（2026-11-21） ---
+    def _enqueue_saved_pool_refresh(engine: Engine, pool_id: int,
+                                    user_id: int) -> tuple[int, bool] | None:
+        """只建私有 light stock_pool 任务；活跃任务去重，不占回测次数/历史。"""
+        _ensure_saved_stock_pool_tables(engine)
+        _ensure_weight_class_column(engine)
+        _ensure_quota_pool_column(engine)
+        _ensure_strategy_asset_columns(engine)
+        with engine.begin() as conn:
+            pool = conn.execute(text(
+                "SELECT * FROM saved_stock_pools WHERE id=:id AND user_id=:uid FOR UPDATE"
+            ), {"id": pool_id, "uid": user_id}).mappings().first()
+            if pool is None:
+                return None
+            active = conn.execute(text(
+                "SELECT id FROM jobs WHERE user_id=:uid AND kind='stock_pool' "
+                "AND status IN ('queued','leased','running','uploading') "
+                "AND params->>'saved_pool_id'=:pid ORDER BY id DESC LIMIT 1"
+            ), {"uid": user_id, "pid": str(pool_id)}).scalar_one_or_none()
+            if active is not None:
+                return int(active), True
+            strategy_id = pool["strategy_id"]
+            if strategy_id is None:
+                definition = pool["definition"] or {}
+                yaml_text = str(definition.get("strategy_yaml")
+                                or "experiment:\n  name: saved_stock_pool\n")
+                strategy_id = conn.execute(text(
+                    "INSERT INTO strategies (user_id,name,yaml,entry_mode,in_library) "
+                    "VALUES (:uid,:name,:yaml,'yaml',false) RETURNING id"
+                ), {"uid": user_id, "name": f"股票池：{pool['name']}",
+                    "yaml": yaml_text}).scalar_one()
+                conn.execute(text(
+                    "UPDATE saved_stock_pools SET strategy_id=:sid WHERE id=:id"
+                ), {"sid": strategy_id, "id": pool_id})
+            params = dict(pool["definition"] or {})
+            params.update({"saved_pool_id": pool_id,
+                           "definition_hash": pool["definition_hash"]})
+            job_id = conn.execute(text(
+                "INSERT INTO jobs (user_id,strategy_id,kind,params,weight_class,quota_pool) "
+                "VALUES (:uid,:sid,'stock_pool',CAST(:params AS jsonb),'light','small') "
+                "RETURNING id"
+            ), {"uid": user_id, "sid": strategy_id,
+                "params": json.dumps(params, ensure_ascii=False)}).scalar_one()
+        return int(job_id), False
+
+    @app.get("/api/saas/saved-stock-pools")
+    def api_saved_stock_pools_list() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_saved_stock_pool_tables(engine)
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT p.id,p.name,p.definition_kind,p.definition,p.definition_hash,"
+                "p.created_at,p.updated_at,"
+                "(SELECT jsonb_build_object("
+                " 'trade_date',s.trade_date::text,'total_count',s.total_count,"
+                " 'matched_count',s.matched_count,'created_at',s.created_at) "
+                " FROM saved_stock_pool_snapshots s "
+                " WHERE s.pool_id=p.id AND s.definition_hash=p.definition_hash "
+                " ORDER BY s.trade_date DESC LIMIT 1) AS latest "
+                "FROM saved_stock_pools p WHERE p.user_id=:uid "
+                "ORDER BY p.updated_at DESC,p.id DESC"
+            ), {"uid": uid}).mappings().all()
+        return jsonify({"ok": True, "pools": _jsonable([dict(r) for r in rows])})
+
+    @app.post("/api/saas/saved-stock-pools")
+    def api_saved_stock_pool_create() -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        data = request.get_json(silent=True) or {}
+        name = str(data.get("name") or "").strip()
+        if not name or len(name) > 80:
+            return jsonify({"ok": False, "error": "股票池名称须为 1~80 字"}), 400
+        try:
+            kind, definition = _saved_pool_definition(data)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        from quant_research_engine.stock_pool import pool_definition_hash
+
+        definition_hash = pool_definition_hash(kind, definition)
+        _ensure_saved_stock_pool_tables(engine)
+        with engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO users (id,phone) VALUES (:id,:phone) "
+                "ON CONFLICT (id) DO NOTHING"
+            ), {"id": uid, "phone": f"pending_{uid}"})
+            row = conn.execute(text(
+                "INSERT INTO saved_stock_pools "
+                "(user_id,name,definition_kind,definition,definition_hash) "
+                "VALUES (:uid,:name,:kind,CAST(:definition AS jsonb),:hash) "
+                "ON CONFLICT (user_id,name) DO UPDATE SET "
+                "definition_kind=EXCLUDED.definition_kind,definition=EXCLUDED.definition,"
+                "definition_hash=EXCLUDED.definition_hash,updated_at=now() "
+                "RETURNING id,(xmax <> 0) AS existed"
+            ), {"uid": uid, "name": name, "kind": kind,
+                "definition": json.dumps(definition, ensure_ascii=False),
+                "hash": definition_hash}).mappings().one()
+        return jsonify({"ok": True, "pool_id": int(row["id"]),
+                        "created": not bool(row["existed"])})
+
+    @app.get("/api/saas/saved-stock-pools/<int:pool_id>")
+    def api_saved_stock_pool_detail(pool_id: int) -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_saved_stock_pool_tables(engine)
+        with engine.connect() as conn:
+            pool = conn.execute(text(
+                "SELECT * FROM saved_stock_pools WHERE id=:id AND user_id=:uid"
+            ), {"id": pool_id, "uid": uid}).mappings().first()
+            if pool is None:
+                return jsonify({"ok": False, "error": "股票池不存在"}), 404
+            history = conn.execute(text(
+                "SELECT trade_date::text AS trade_date,total_count,matched_count,"
+                "indicators,added,removed,created_at,updated_at "
+                "FROM saved_stock_pool_snapshots "
+                "WHERE pool_id=:id AND definition_hash=:h "
+                "ORDER BY trade_date DESC LIMIT 60"
+            ), {"id": pool_id, "h": pool["definition_hash"]}).mappings().all()
+            latest = conn.execute(text(
+                "SELECT trade_date::text AS trade_date,total_count,matched_count,"
+                "indicators,stocks,added,removed,created_at,updated_at "
+                "FROM saved_stock_pool_snapshots "
+                "WHERE pool_id=:id AND definition_hash=:h "
+                "ORDER BY trade_date DESC LIMIT 1"
+            ), {"id": pool_id, "h": pool["definition_hash"]}).mappings().first()
+        item = dict(pool)
+        item["latest"] = dict(latest) if latest else None
+        item["history"] = [dict(r) for r in history]
+        return jsonify({"ok": True, "pool": _jsonable(item)})
+
+    @app.delete("/api/saas/saved-stock-pools/<int:pool_id>")
+    def api_saved_stock_pool_delete(pool_id: int) -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_saved_stock_pool_tables(engine)
+        with engine.begin() as conn:
+            deleted = conn.execute(text(
+                "DELETE FROM saved_stock_pools WHERE id=:id AND user_id=:uid RETURNING id"
+            ), {"id": pool_id, "uid": uid}).scalar_one_or_none()
+        if deleted is None:
+            return jsonify({"ok": False, "error": "股票池不存在"}), 404
+        return jsonify({"ok": True, "deleted": int(deleted)})
+
+    @app.post("/api/saas/saved-stock-pools/<int:pool_id>/refresh")
+    def api_saved_stock_pool_refresh(pool_id: int) -> Any:
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        result = _enqueue_saved_pool_refresh(engine, pool_id, uid)
+        if result is None:
+            return jsonify({"ok": False, "error": "股票池不存在"}), 404
+        job_id, deduped = result
+        return jsonify({"ok": True, "job_id": job_id, "deduped": deduped})
+
+    @app.get("/api/saas/saved-stock-pools/<int:pool_id>/export.csv")
+    def api_saved_stock_pool_export(pool_id: int) -> Any:
+        from quant_research_engine.stock_pool import saved_pool_csv
+
+        engine = _get_engine(app)
+        uid = _current_user_id(app, engine)
+        if uid is None:
+            return jsonify({"ok": False, "error": "未登录"}), 401
+        _ensure_saved_stock_pool_tables(engine)
+        with engine.connect() as conn:
+            pool = conn.execute(text(
+                "SELECT definition_hash FROM saved_stock_pools "
+                "WHERE id=:id AND user_id=:uid"
+            ), {"id": pool_id, "uid": uid}).mappings().first()
+            if pool is None:
+                return jsonify({"ok": False, "error": "股票池不存在"}), 404
+            latest = conn.execute(text(
+                "SELECT indicators,stocks FROM saved_stock_pool_snapshots "
+                "WHERE pool_id=:id AND definition_hash=:h "
+                "ORDER BY trade_date DESC LIMIT 1"
+            ), {"id": pool_id, "h": pool["definition_hash"]}).mappings().first()
+        if latest is None:
+            return jsonify({"ok": False, "error": "股票池尚无真实快照"}), 404
+        text_csv = saved_pool_csv(dict(latest))
+        return Response(
+            text_csv, mimetype="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="stock_pool_{pool_id}.csv"'},
+        )
+
+    @app.post("/api/saas/internal/saved-stock-pools/refresh-all")
+    def api_saved_stock_pools_refresh_all() -> Any:
+        """日更后触发接口：显式调用，不新建调度；按 worker token 保护。"""
+        denied = _check_worker_auth(app)
+        if denied is not None:
+            return denied
+        engine = _get_engine(app)
+        _ensure_saved_stock_pool_tables(engine)
+        data = request.get_json(silent=True) or {}
+        try:
+            limit = max(1, min(500, int(data.get("limit") or 100)))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "limit 须为整数"}), 400
+        with engine.connect() as conn:
+            rows = conn.execute(text(
+                "SELECT id,user_id FROM saved_stock_pools ORDER BY id LIMIT :limit"
+            ), {"limit": limit}).mappings().all()
+        jobs: list[dict[str, Any]] = []
+        for row in rows:
+            result = _enqueue_saved_pool_refresh(engine, int(row["id"]), int(row["user_id"]))
+            if result is not None:
+                job_id, deduped = result
+                jobs.append({"pool_id": int(row["id"]), "job_id": job_id,
+                             "deduped": deduped})
+        return jsonify({"ok": True, "enqueued": len(jobs), "jobs": jobs})
 
     # --- 我的策略库（QRE-SAAS-D3）：登录会员保存/复用/管理策略 YAML ---
     # 提交回测时按 (user_id, name) upsert 复用；删除仅允许无回测引用的策略。
@@ -4008,6 +4343,14 @@ def create_saas_app() -> Flask:
                 },
             )
             metering.record_shadow_usage(conn, job, summary, job["strategy_yaml"] if "strategy_yaml" in job else "")
+            job_params = job.get("params") or {}
+            if (job["kind"] == "stock_pool" and isinstance(job_params, dict)
+                    and job_params.get("saved_pool_id") and job["user_id"] is not None):
+                # 快照只由真实 worker summary 写入；定义脏/已变则 helper 返回 False。
+                _persist_saved_pool_snapshot(
+                    conn, int(job_params["saved_pool_id"]), int(job["user_id"]),
+                    str(job_params.get("definition_hash") or ""), summary,
+                )
             if not files:
                 # P0-9 Required Fix（2026-11-03，job 212 实测）：终态进度由服务端在
                 # 置 completed 的同一事务落定——completed 后 heartbeat 会被拒
@@ -4208,6 +4551,14 @@ def create_saas_app() -> Flask:
                         "contract": json.dumps(contract),
                     },
                 )
+                job_params = job.get("params") or {}
+                if (job["kind"] == "stock_pool" and isinstance(job_params, dict)
+                        and job_params.get("saved_pool_id") and job["user_id"] is not None):
+                    _persist_saved_pool_snapshot(
+                        conn, int(job_params["saved_pool_id"]), int(job["user_id"]),
+                        str(job_params.get("definition_hash") or ""),
+                        data.get("summary") or {},
+                    )
                 conn.execute(
                     text("UPDATE jobs SET status='completed', finished_at=now(), "
                          "error_message=NULL, error_class=NULL, lease_expires_at=NULL, "

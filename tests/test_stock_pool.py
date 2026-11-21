@@ -136,3 +136,119 @@ def test_stock_pool_results_use_dynamic_named_columns_and_search():
         assert marker in html
     assert '<th class="num">左侧值</th>' not in html
     assert '<th class="num">右侧值</th>' not in html
+
+
+def test_pool_definition_hash_is_stable_and_changes_with_definition():
+    from quant_research_engine.stock_pool import pool_definition_hash
+
+    condition = {"left": EMA5, "operator": ">", "right": EMA200}
+    first = pool_definition_hash("condition", {"condition": condition})
+    assert first == pool_definition_hash("condition", {"condition": dict(condition)})
+    changed = pool_definition_hash("condition", {"condition": {**condition, "operator": "<"}})
+    assert changed != first
+
+
+def test_build_pool_snapshot_computes_added_and_removed():
+    from quant_research_engine.stock_pool import build_pool_snapshot
+
+    previous = {"stocks": [
+        {"ts_code": "000001.SZ", "name": "平安银行"},
+        {"ts_code": "600000.SH", "name": "浦发银行"},
+    ]}
+    result = {
+        "trade_date": "2026-11-21", "total_count": 5200, "matched_count": 2,
+        "indicators": [{"key": EMA5, "label": "指数移动均线(5)", "precision": 4}],
+        "stocks": [
+            {"ts_code": "600000.SH", "name": "浦发银行", "close": 10.0,
+             "indicator_values": {EMA5: 10.1}},
+            {"ts_code": "300750.SZ", "name": "宁德时代", "close": 200.0,
+             "indicator_values": {EMA5: 201.0}},
+        ],
+    }
+    snapshot = build_pool_snapshot(result, previous)
+    assert snapshot["trade_date"] == "2026-11-21"
+    assert snapshot["total_count"] == 5200 and snapshot["matched_count"] == 2
+    assert snapshot["added"] == [{"ts_code": "300750.SZ", "name": "宁德时代"}]
+    assert snapshot["removed"] == [{"ts_code": "000001.SZ", "name": "平安银行"}]
+    assert [s["ts_code"] for s in snapshot["stocks"]] == ["600000.SH", "300750.SZ"]
+
+
+def test_build_pool_snapshot_without_previous_has_no_diff():
+    from quant_research_engine.stock_pool import build_pool_snapshot
+
+    snapshot = build_pool_snapshot({
+        "trade_date": "2026-11-21", "total_count": 1, "matched_count": 1,
+        "indicators": [], "stocks": [{"ts_code": "000001.SZ", "name": "平安银行"}],
+    }, None)
+    assert snapshot["added"] == [] and snapshot["removed"] == []
+
+
+def test_saved_pool_csv_includes_indicator_columns_and_guards_formula_injection():
+    from quant_research_engine.stock_pool import saved_pool_csv
+
+    text = saved_pool_csv({
+        "indicators": [{"key": EMA5, "label": "指数移动均线(5)", "precision": 4}],
+        "stocks": [{
+            "ts_code": "000001.SZ", "name": "=SUM(A1)", "close": 12.5,
+            "indicator_values": {EMA5: 12.75},
+        }],
+    })
+    lines = text.lstrip("\ufeff").splitlines()
+    assert lines[0] == "股票代码,股票名称,收盘价,指数移动均线(5)"
+    assert "'=SUM(A1)" in lines[1]
+    assert "000001.SZ" in lines[1] and "12.5" in lines[1] and "12.75" in lines[1]
+
+
+def test_stock_pool_page_exposes_saved_pool_controls_and_history():
+    from quant_research_engine.gui.saas import create_saas_app
+
+    html = create_saas_app().test_client().get('/saas/stock-pool').get_data(as_text=True)
+    for marker in ('已保存股票池', 'sp-save-name', 'sp-save-pool',
+                   '/api/saas/saved-stock-pools', '用于回测', '导出CSV',
+                   'sp-saved-history', '新增', '移出'):
+        assert marker in html
+
+
+def test_new_strategy_page_supports_saved_pool_scope_prefill():
+    from quant_research_engine.gui.saas import create_saas_app
+
+    html = create_saas_app().test_client().get('/saas/new').get_data(as_text=True)
+    assert 'saved-stock-pools' in html
+    assert 'pool' in html and 'param-codes' in html
+
+
+def test_saved_pool_delete_uses_accessible_modal_not_native_confirm():
+    from quant_research_engine.gui.saas import create_saas_app
+
+    html = create_saas_app().test_client().get('/saas/stock-pool').get_data(as_text=True)
+    for marker in ('sp-delete-modal', 'sp-delete-confirm', 'sp-delete-cancel', 'aria-modal="true"'):
+        assert marker in html
+    assert 'if(!confirm(' not in html
+
+
+def test_saved_pool_schema_grants_app_role_and_sequences():
+    from pathlib import Path
+
+    schema = (Path(__file__).parents[1] / 'deploy/saas/cloud_schema.sql').read_text()
+    assert 'GRANT SELECT, INSERT, UPDATE, DELETE ON saved_stock_pools TO aguhuice' in schema
+    assert 'GRANT SELECT, INSERT, UPDATE, DELETE ON saved_stock_pool_snapshots TO aguhuice' in schema
+    assert 'GRANT USAGE, SELECT ON SEQUENCE saved_stock_pools_id_seq TO aguhuice' in schema
+    assert 'GRANT USAGE, SELECT ON SEQUENCE saved_stock_pool_snapshots_id_seq TO aguhuice' in schema
+
+
+def test_saved_pool_ensure_skips_ddl_when_schema_already_applied():
+    from contextlib import contextmanager
+    from quant_research_engine.gui.saas import app as app_module
+
+    calls = []
+    class Connection:
+        def execute(self, statement):
+            calls.append(str(statement))
+            return [('saved_stock_pools',), ('saved_stock_pool_snapshots',)]
+    class Engine:
+        @contextmanager
+        def begin(self):
+            yield Connection()
+    app_module._SAVED_STOCK_POOL_TABLES_ENSURED.clear()
+    app_module._ensure_saved_stock_pool_tables(Engine())
+    assert len(calls) == 1 and 'information_schema.tables' in calls[0]

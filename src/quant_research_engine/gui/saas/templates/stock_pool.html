@@ -3,8 +3,8 @@
 {% block description %}用自然语言、快速向导或YAML，按最近交易日行情和预计算因子筛选A股股票池。{% endblock %}
 {% block body %}
 <style>
-.sp-panel{scroll-margin-top:76px}.sp-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.sp-field{min-width:0}.sp-field label{display:block;margin-bottom:8px}.sp-field input,.sp-field select{width:100%}.sp-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:20px}.sp-status{color:var(--ink);font-size:16px}.sp-status:empty{display:none}.sp-result-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.sp-expression{font-family:var(--mono);color:var(--ink);overflow-wrap:anywhere;margin-top:14px}.sp-table-tools{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:20px 0 12px}.sp-search-box{width:min(360px,100%)}.sp-search-box label{display:block;margin-bottom:8px}.sp-search-box input{width:100%}.sp-visible-count{font-size:16px;color:var(--ink);white-space:nowrap}.sp-table-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:10px}.sp-table-wrap .tbl{margin:0;min-width:720px}.sp-table-wrap thead{position:sticky;top:0;z-index:2;background:var(--panel)}.sp-table-wrap th{white-space:nowrap}.sp-table-wrap td.num,.sp-table-wrap th.num{font-variant-numeric:tabular-nums}.sp-empty{text-align:center;padding:32px!important;color:var(--ink)}
-@media(max-width:768px){.entry-grid .entry-card:last-child{grid-column:1/-1}.sp-form{grid-template-columns:1fr}.sp-actions .btn{width:100%}.sp-table-tools{align-items:stretch;flex-direction:column}.sp-search-box{width:100%}.sp-table-wrap{max-height:58vh}.sp-result-head{align-items:flex-start}}
+.sp-panel{scroll-margin-top:76px}.sp-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.sp-field{min-width:0}.sp-field label{display:block;margin-bottom:8px}.sp-field input,.sp-field select{width:100%}.sp-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:20px}.sp-status{color:var(--ink);font-size:16px}.sp-status:empty{display:none}.sp-result-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.sp-expression{font-family:var(--mono);color:var(--ink);overflow-wrap:anywhere;margin-top:14px}.sp-table-tools{display:flex;align-items:end;justify-content:space-between;gap:16px;margin:20px 0 12px}.sp-search-box{width:min(360px,100%)}.sp-search-box label{display:block;margin-bottom:8px}.sp-search-box input{width:100%}.sp-visible-count{font-size:16px;color:var(--ink);white-space:nowrap}.sp-table-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:10px}.sp-table-wrap .tbl{margin:0;min-width:720px}.sp-table-wrap thead{position:sticky;top:0;z-index:2;background:var(--panel)}.sp-table-wrap th{white-space:nowrap}.sp-table-wrap td.num,.sp-table-wrap th.num{font-variant-numeric:tabular-nums}.sp-empty{text-align:center;padding:32px!important;color:var(--ink)}.sp-save-row{display:flex;align-items:end;gap:14px;flex-wrap:wrap;margin-top:16px}.sp-save-row .sp-field{flex:1;min-width:240px}.sp-saved-list{display:grid;gap:12px;margin-top:16px}.sp-saved-item{border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--panel)}.sp-saved-head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start}.sp-saved-name{font-weight:700;font-size:16px;color:var(--ink);overflow-wrap:anywhere}.sp-saved-def{font-family:var(--mono);color:var(--ink);overflow-wrap:anywhere;margin-top:6px}.sp-saved-metrics{display:flex;gap:16px;flex-wrap:wrap;font-size:16px;color:var(--ink)}.sp-saved-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.sp-saved-history{margin-top:12px;border-top:1px solid var(--line);padding-top:12px;overflow:auto}.sp-saved-history .tbl{min-width:640px}.sp-diff summary{cursor:pointer;color:var(--ink)}.sp-diff-list{max-height:180px;overflow:auto;margin:8px 0 0;padding-left:18px}
+@media(max-width:768px){.entry-grid .entry-card:last-child{grid-column:1/-1}.sp-form{grid-template-columns:1fr}.sp-actions .btn{width:100%}.sp-table-tools{align-items:stretch;flex-direction:column}.sp-search-box{width:100%}.sp-table-wrap{max-height:58vh}.sp-result-head{align-items:flex-start}.sp-save-row .btn{width:100%}.sp-saved-actions .btn{flex:1 1 auto}}
 </style>
 <div class="wrap">
   <div class="page-head"><h1>最新股票池</h1><p>按最近交易日的行情与因子值筛选，不生成交易信号。</p></div>
@@ -81,6 +81,25 @@ universe:
     </div>
     <div class="sp-table-wrap"><table class="tbl"><thead><tr id="sp-indicator-head"><th>代码</th><th>名称</th><th class="num">收盘价</th></tr></thead><tbody id="sp-rows"></tbody></table></div>
   </section>
+  <section class="card" aria-labelledby="sp-saved-title">
+    <div class="sp-result-head"><h2 id="sp-saved-title">已保存股票池</h2><button type="button" class="tip-trigger" data-tip="保存的是可重算的筛选定义，不是一次性名单；刷新按最新交易日重新计算。快照按交易日唯一，同日重算覆盖同一条，不重复堆积。" aria-label="已保存股票池口径">?</button></div>
+    <div class="sp-save-row">
+      <div class="sp-field"><label for="sp-save-name">保存名称</label><input id="sp-save-name" maxlength="80" autocomplete="off" placeholder="例如 EMA5 上穿 EMA200"></div>
+      <button class="btn btn-primary" id="sp-save-pool" type="button" disabled>保存当前筛选</button>
+    </div>
+    <div id="sp-saved-status" class="sp-status" role="status" aria-live="polite"></div>
+    <div id="sp-saved-list" class="sp-saved-list"></div>
+  </section>
+</div>
+<div class="modal-mask" id="sp-delete-modal" role="dialog" aria-modal="true" aria-labelledby="sp-delete-title">
+  <div class="modal">
+    <h3 id="sp-delete-title">删除股票池</h3>
+    <p>删除后，该股票池及全部历史快照都无法恢复。</p>
+    <div class="sp-actions">
+      <button class="btn btn-ghost" id="sp-delete-cancel" type="button">取消</button>
+      <button class="btn btn-danger" id="sp-delete-confirm" type="button">确认删除</button>
+    </div>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}
@@ -89,7 +108,8 @@ universe:
   const left=document.getElementById('sp-left'),right=document.getElementById('sp-right'),yaml=document.getElementById('sp-yaml');
   const status=document.getElementById('sp-status'),button=document.getElementById('sp-submit'),nl=document.getElementById('sp-nl-input');
   const EMA5='factors.stock_daily_overlap_typical_price.ema_5',EMA200='factors.stock_daily_overlap_typical_price.ema_200';
-  let mode='nl',compiledYaml='',compiledSource='',resultStocks=[],resultIndicators=[];
+  let mode='nl',compiledYaml='',compiledSource='',resultStocks=[],resultIndicators=[],lastSavePayload=null;
+  const saveName=document.getElementById('sp-save-name'),saveButton=document.getElementById('sp-save-pool'),savedStatus=document.getElementById('sp-saved-status'),savedList=document.getElementById('sp-saved-list');
   function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
   function num(v,precision){if(v==null||!Number.isFinite(Number(v)))return '—';const digits=Number.isInteger(precision)?Math.max(0,Math.min(8,precision)):4;return Number(v).toLocaleString('zh-CN',{maximumFractionDigits:digits});}
   const tabs=Array.from(document.querySelectorAll('[data-sp-entry]'));
@@ -143,6 +163,7 @@ universe:
     resultStocks=summary.stocks||[];resultIndicators=summary.indicators||[];
     if(!resultIndicators.length&&resultStocks.some(s=>s.left_value!=null)) resultIndicators=[{key:'left_value',label:'左侧值',precision:4},{key:'right_value',label:'右侧值',precision:4}];
     resultStocks=resultStocks.map(s=>{if(s.indicator_values)return s;const values={};for(const i of resultIndicators)values[i.key]=s[i.key];return Object.assign({},s,{indicator_values:values});});
+    saveButton.disabled=!lastSavePayload;
     document.getElementById('sp-indicator-head').innerHTML='<th>代码</th><th>名称</th><th class="num">收盘价</th>'+resultIndicators.map(i=>'<th class="num" title="'+esc(i.canonical||'')+'">'+esc(i.label||i.column||i.key)+'</th>').join('');
     document.getElementById('sp-search').value='';renderRows();
     const reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -167,14 +188,114 @@ universe:
       if(mode==='wizard'){
         const numeric=document.getElementById('sp-right-type').value==='number';
         payload.condition={left:left.value,operator:document.getElementById('sp-operator').value,right:numeric?Number(document.getElementById('sp-right-number').value):right.value};
-      }else payload.strategy_yaml=mode==='nl'?await compileNl():yaml.value;
+        lastSavePayload={condition:payload.condition};
+      }else{
+        const definitionYaml=mode==='nl'?await compileNl():yaml.value;
+        payload.strategy_yaml=definitionYaml;
+        lastSavePayload={strategy_yaml:definitionYaml};
+      }
       const r=await apiFetch('/api/saas/stock-pools',{method:'POST',json:payload}),d=await r.json();
       if(!r.ok||!d.ok) throw new Error(d.error||'提交失败');
       await poll(d.job_id);
     }catch(e){status.textContent=e.message||'筛选失败';}
     finally{button.disabled=false;}
   });
+  function definitionText(definition){
+    if(!definition)return '';
+    if(definition.condition){const c=definition.condition;return [c.left,c.operator,c.right].filter(v=>v!==undefined).join(' ');}
+    if(definition.strategy_yaml)return 'YAML 策略筛选';
+    return '';
+  }
+  function metric(v){return Number(v??0).toLocaleString('zh-CN');}
+  function diffCell(items){
+    if(!items||!items.length)return '—';
+    return items.length+' 只<details class="sp-diff"><summary>查看名单</summary><ul class="sp-diff-list">'+items.map(i=>'<li>'+esc(i.ts_code)+' '+esc(i.name||'')+'</li>').join('')+'</ul></details>';
+  }
+  function renderSavedPools(pools){
+    if(!pools.length){savedList.innerHTML='<div class="sp-empty">还没有保存的股票池</div>';return;}
+    savedList.innerHTML=pools.map(p=>{
+      const l=p.latest;
+      return '<article class="sp-saved-item">'
+        +'<div class="sp-saved-head"><div><div class="sp-saved-name">'+esc(p.name)+'</div><div class="sp-saved-def">'+esc(definitionText(p.definition))+'</div></div>'
+        +'<div class="sp-saved-metrics">'+(l?'<span>交易日 '+esc(l.trade_date)+'</span><span>命中 '+metric(l.matched_count)+' / '+metric(l.total_count)+'</span>':'<span>尚无真实快照</span>')+'</div></div>'
+        +'<div class="sp-saved-actions">'
+        +'<button class="btn btn-ghost btn-sm" type="button" data-pool-action="refresh" data-pool-id="'+p.id+'">刷新</button>'
+        +(l?'<a class="btn btn-ghost btn-sm" href="/api/saas/saved-stock-pools/'+p.id+'/export.csv">导出CSV</a>':'')
+        +(l?'<a class="btn btn-ghost btn-sm" href="/saas/new?pool='+p.id+'">用于回测</a>':'')
+        +'<button class="btn btn-ghost btn-sm" type="button" data-pool-action="history" data-pool-id="'+p.id+'" aria-expanded="false">历史快照</button>'
+        +'<button class="btn btn-ghost btn-sm" type="button" data-pool-action="delete" data-pool-id="'+p.id+'">删除</button>'
+        +'</div><div class="sp-saved-history hidden" id="sp-saved-history-'+p.id+'"></div></article>';
+    }).join('');
+  }
+  async function loadSavedPools(){
+    const r=await apiFetch('/api/saas/saved-stock-pools',{redirectOn401:false});
+    if(r.status===401){savedList.innerHTML='';savedStatus.textContent='登录后可保存并持续更新股票池';return;}
+    const d=await r.json();
+    if(!r.ok||!d.ok) throw new Error(d.error||'已保存股票池加载失败');
+    savedStatus.textContent='';renderSavedPools(d.pools||[]);
+  }
+  async function toggleHistory(id,button){
+    const box=document.getElementById('sp-saved-history-'+id);
+    if(!box.classList.contains('hidden')){box.classList.add('hidden');button.setAttribute('aria-expanded','false');return;}
+    const r=await apiFetch('/api/saas/saved-stock-pools/'+id,{redirectOn401:false}),d=await r.json();
+    if(!r.ok||!d.ok) throw new Error(d.error||'历史快照加载失败');
+    const rows=(d.pool&&d.pool.history)||[];
+    box.innerHTML='<table class="tbl"><thead><tr><th>交易日</th><th class="num">候选</th><th class="num">命中</th><th class="num">命中变化</th><th>新增</th><th>移出</th></tr></thead><tbody>'
+      +rows.map((h,i)=>{const prev=rows[i+1];const delta=prev?Number(h.matched_count)-Number(prev.matched_count):null;return '<tr><td>'+esc(h.trade_date)+'</td><td class="num">'+metric(h.total_count)+'</td><td class="num">'+metric(h.matched_count)+'</td><td class="num">'+(delta==null?'—':(delta>0?'+':'')+delta)+'</td><td>'+diffCell(h.added)+'</td><td>'+diffCell(h.removed)+'</td></tr>';}).join('')
+      +'</tbody></table>';
+    box.classList.remove('hidden');button.setAttribute('aria-expanded','true');
+  }
+  saveButton.addEventListener('click',async function(){
+    const name=saveName.value.trim();
+    if(!name){savedStatus.textContent='请填写保存名称';saveName.focus();return;}
+    if(!lastSavePayload){savedStatus.textContent='请先生成股票池';return;}
+    saveButton.disabled=true;savedStatus.textContent='正在保存';
+    try{
+      const r=await apiFetch('/api/saas/saved-stock-pools',{method:'POST',json:Object.assign({name},lastSavePayload)}),d=await r.json();
+      if(!r.ok||!d.ok) throw new Error(d.error||'保存失败');
+      saveName.value='';savedStatus.textContent=d.created?'已保存':'已更新同名股票池';
+      await loadSavedPools();
+    }catch(e){savedStatus.textContent=e.message||'保存失败';}
+    finally{saveButton.disabled=false;}
+  });
+  const deleteModal=document.getElementById('sp-delete-modal'),deleteConfirm=document.getElementById('sp-delete-confirm');
+  let deletePoolId=null,deleteTrigger=null;
+  function closeDeleteModal(){deleteModal.classList.remove('show');deletePoolId=null;if(deleteTrigger)deleteTrigger.focus();}
+  document.getElementById('sp-delete-cancel').addEventListener('click',closeDeleteModal);
+  deleteModal.addEventListener('click',event=>{if(event.target===deleteModal)closeDeleteModal();});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&deleteModal.classList.contains('show'))closeDeleteModal();});
+  savedList.addEventListener('click',async function(event){
+    const btn=event.target.closest('[data-pool-action]');if(!btn)return;
+    const id=Number(btn.dataset.poolId),action=btn.dataset.poolAction;
+    if(action==='delete'){
+      deletePoolId=id;deleteTrigger=btn;deleteModal.classList.add('show');deleteConfirm.focus();return;
+    }
+    btn.disabled=true;
+    try{
+      if(action==='refresh'){
+        savedStatus.textContent='正在刷新';
+        const r=await apiFetch('/api/saas/saved-stock-pools/'+id+'/refresh',{method:'POST',json:{}}),d=await r.json();
+        if(!r.ok||!d.ok) throw new Error(d.error||'刷新失败');
+        if(d.deduped) savedStatus.textContent='已有刷新任务在进行';
+        await poll(d.job_id);await loadSavedPools();savedStatus.textContent='刷新完成';
+      }else if(action==='history'){
+        await toggleHistory(id,btn);
+      }
+    }catch(e){savedStatus.textContent=e.message||'操作失败';}
+    finally{btn.disabled=false;}
+  });
+  deleteConfirm.addEventListener('click',async function(){
+    if(deletePoolId==null)return;
+    deleteConfirm.disabled=true;
+    try{
+      const r=await apiFetch('/api/saas/saved-stock-pools/'+deletePoolId,{method:'DELETE'}),d=await r.json();
+      if(!r.ok||!d.ok) throw new Error(d.error||'删除失败');
+      closeDeleteModal();await loadSavedPools();savedStatus.textContent='已删除';
+    }catch(e){savedStatus.textContent=e.message||'删除失败';}
+    finally{deleteConfirm.disabled=false;}
+  });
   loadFields().catch(e=>{status.textContent=e.message;});
+  loadSavedPools().catch(e=>{savedStatus.textContent=e.message;});
 })();
 </script>
 {% endblock %}

@@ -1222,8 +1222,25 @@ function selectEntryCard(mode){
   const card = document.querySelector('#entryGrid .entry-card[data-entry="' + mode + '"]');
   if (card && !card.classList.contains('selected')) card.click();
 }
+async function loadPoolFromQuery(q){
+  const pid = q.get('pool');
+  if (!pid || isGuest()) return;
+  try {
+    const resp = await apiFetch('/api/saas/saved-stock-pools/' + encodeURIComponent(pid), {redirectOn401: false});
+    const d = await resp.json();
+    if (!resp.ok || !d.ok) return;
+    const stocks = (d.pool && d.pool.latest && d.pool.latest.stocks) || [];
+    if (!stocks.length) return;
+    const radio = document.querySelector('input[name="scope"][value="codes"]');
+    if (radio){ radio.checked = true; radio.dispatchEvent(new Event('change')); }
+    const codes = stocks.map(s => dispCode(s.ts_code)).filter(Boolean).join(',');
+    const box = $('#param-codes');
+    if (box){ box.value = codes; box.dispatchEvent(new Event('input')); }
+  } catch (e) { /* 401/网络/无快照：保持默认范围；提交仍走原代码规范化与权限/会员闸 */ }
+}
 async function loadStrategyFromQuery(){
   const q = new URLSearchParams(location.search);
+  await loadPoolFromQuery(q);
   const sid = q.get('strategy');
   if (!sid) return;
   window.__libBackfillOnce = true;  // 跳过因子目录就绪触发的首次向导重建

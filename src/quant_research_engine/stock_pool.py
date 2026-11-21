@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import io
+import json
 import math
 import re
 from typing import Any
@@ -40,6 +44,93 @@ def normalize_condition(raw: dict[str, Any]) -> dict[str, Any]:
         if not math.isfinite(right):
             raise ValueError("右侧数值必须有限")
     return {"left": left, "operator": operator, "right": right}
+
+
+def pool_definition_hash(kind: str, definition: dict[str, Any]) -> str:
+    """保存池定义指纹：定义变化后旧快照不再冒充本次结果。"""
+    payload = {"kind": kind, "definition": definition}
+    canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _snapshot_stock(stock: dict[str, Any]) -> dict[str, Any]:
+    values = stock.get("indicator_values")
+    return {
+        "ts_code": str(stock.get("ts_code") or ""),
+        "name": stock.get("name"),
+        "close": _number(stock.get("close")),
+        "indicator_values": dict(values) if isinstance(values, dict) else {},
+    }
+
+
+def build_pool_snapshot(result: dict[str, Any], previous: dict[str, Any] | None) -> dict[str, Any]:
+    """真实筛选结果 → 快照行；新增/移出相对上一交易日快照计算。"""
+    stocks = [_snapshot_stock(stock) for stock in result.get("stocks") or []]
+    current = {stock["ts_code"]: stock for stock in stocks}
+    prior = {
+        str(stock.get("ts_code")): stock
+        for stock in ((previous or {}).get("stocks") or [])
+        if stock.get("ts_code")
+    }
+    if previous is None:
+        added, removed = [], []
+    else:
+        added = [
+            {"ts_code": code, "name": current[code].get("name")}
+            for code in sorted(current) if code not in prior
+        ]
+        removed = [
+            {"ts_code": code, "name": prior[code].get("name")}
+            for code in sorted(prior) if code not in current
+        ]
+    return {
+        "trade_date": result.get("trade_date"),
+        "total_count": int(result.get("total_count") or 0),
+        "matched_count": int(result.get("matched_count") or len(stocks)),
+        "indicators": result.get("indicators") or [],
+        "stocks": stocks,
+        "added": added,
+        "removed": removed,
+    }
+
+
+def _csv_cell(value: Any) -> str:
+    """CSV 公式注入防护：文本单元格以 = + - @ 制表/回车开头时前置单引号。"""
+    text = "" if value is None else str(value)
+    dangerous = ("=", "+", "-", "@", "\t", "\r")
+    if text.startswith(dangerous) or text.lstrip().startswith(dangerous):
+        return "'" + text
+    return text
+
+
+def _csv_number(value: Any) -> str:
+    number = _number(value)
+    return "" if number is None else str(number)
+
+
+def saved_pool_csv(summary: dict[str, Any]) -> str:
+    """最新真实快照 → CSV；指标列来自实际引用的注册表字段。"""
+    indicators = summary.get("indicators") or []
+    seen: dict[str, int] = {}
+    labels: list[str] = []
+    for item in indicators:
+        label = str(item.get("label") or item.get("key") or "指标")
+        seen[label] = seen.get(label, 0) + 1
+        labels.append(label if seen[label] == 1 else f"{label}({seen[label]})")
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(["股票代码", "股票名称", "收盘价", *labels])
+    for stock in summary.get("stocks") or []:
+        values = stock.get("indicator_values") or {}
+        row = [
+            _csv_cell(stock.get("ts_code")),
+            _csv_cell(stock.get("name")),
+            _csv_number(stock.get("close")),
+        ]
+        for item in indicators:
+            row.append(_csv_number(values.get(item.get("key"))))
+        writer.writerow(row)
+    return "\ufeff" + buffer.getvalue()
 
 
 def _quoted_field(canonical: str, alias: str) -> tuple[str, str, str]:

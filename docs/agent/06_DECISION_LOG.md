@@ -1,3 +1,9 @@
+### 2026-11-21: 现阶段采用网站 ECS + 双家庭 Worker（QRE-HOME-DUAL-WORKER）
+
+- Decision: 取消现阶段RDS/worker ECS/OSS采购；网站留现有ECS，主力PC承担唯一行情/因子权威库、日更和Worker A，闲置8700+32G PC承担Worker B及机械盘结果冷存储/备份。
+- Rationale: 内测规模下RDS 1780–2760元/月过重；双家庭节点满足普通两路计算，机械盘可存产物但不适合高IO数据库。统一主库与ECS租约避免数据/任务双写。
+- Verification: 架构决策，未改运行拓扑；落地须验收LAN只读、全局并发、结果增量备份、断电恢复与主力离线告警，未验收前不宣称双worker已上线。
+
 ### 2026-11-20: 股票池三入口统一StrategySpec entry（QRE-STOCK-POOL-THREE-ENTRIES）
 
 - Decision: NL、向导、YAML与回测三入口一致；最终仅对最新截面求signal.entry。简单条件单SQL，通用YAML按400日面板逐股安全求值。

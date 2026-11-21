@@ -1,5 +1,16 @@
 # Task Handoff
 
+## 2026-11-21 保存股票池、CSV、回测范围与持续快照（DONE，已部署待验收/commit）
+
+- 主代理复核补齐：新表/序列 aguhuice 权限、删除改可访问 modal、懒建函数在 schema 已 apply 时不再执行 DDL。相关172 passed/14 skipped。
+- 生产临时pool1完成保存→真实快照447只→CSV→回测回填447只→modal删除，清理后保存池0；375px无横溢。证据`.tmp/stock-pool-ui-20261121/saved-pool-acceptance.json`，回滚`/tmp/qre-deploy-20261121T124106Z.bak`。
+
+- 新增 `saved_stock_pools`/`saved_stock_pool_snapshots`：保存归一化 condition 或完整 strategy_yaml 与 definition_hash；快照只在 worker 真实 summary 回传时写入，`(pool_id,trade_date)` 唯一 upsert，同日重算覆盖同条。
+- API 全部按 user_id 归属，列表/详情/删除/刷新/CSV 他人一律 404；刷新只建私有 `stock_pool` light 任务，活跃任务去重；不进入 `/api/results`、不扣回测次数/SU。
+- CSV 含代码/名称/收盘价/实际指标列，公式注入前置单引号；`/saas/new?pool=<id>` 仅回填最新真实快照代码，提交仍走 `/api/jobs` 原规范化、股票数上限、全量权限与会员闸。
+- 日更后触发：`POST /api/saas/internal/saved-stock-pools/refresh-all`（worker token，limit≤500）显式调用；不改现有调度、不声称自动日更。
+- 证据：`test_stock_pool.py` 19 passed；`test_gui_saas.py + test_stock_pool.py` 116 passed；inline JS 30 passed/14 skipped；静默失败 20 passed；unslop UI 3 passed。未跑真实回测、未部署/commit/push。
+
 ## 2026-11-21 股票池结果指标与页面体验（DONE，待验收/commit）
 
 - 三入口与最新截面语义不变；`summary.indicators`+逐股`indicator_values`统一向导/NL/YAML指标合同，中文名/精度来自注册表，保留旧left/right兼容字段。
