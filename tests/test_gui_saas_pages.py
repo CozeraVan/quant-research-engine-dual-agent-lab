@@ -2828,3 +2828,7 @@ class TestSecurityHardening:
             assert "function escH(" in html
             assert "escH(job.strategy_name" in html and "escH(s.name)" in html
             assert "escH(r.note" in html
+
+    def test_game_entry_is_in_header(self, client):
+        html = client.get('/saas/stock-pool').get_data(as_text=True)
+        assert '<a href="/game" data-nav="game">我不是股神</a>' in html

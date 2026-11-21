@@ -1,5 +1,10 @@
 # Coding Handoff
 
+## 2026-11-21 顶栏游戏入口
+
+- `saas/templates/base.html`主nav新增`/game`入口；`test_gui_saas_pages.py`锁定精确链接。
+- 130项通过/14 skipped；公网点击进入游戏，375px页面宽375、nav内部279/376滚动，入口可见。ECS已部署，未commit/push。
+
 ## 2026-11-21 保存股票池主代理复核
 
 - `cloud_schema.sql`补两表CRUD及两序列USAGE/SELECT；`_ensure_saved_stock_pool_tables`先查information_schema，已有两表时仅一次查询，不再要求owner建索引。

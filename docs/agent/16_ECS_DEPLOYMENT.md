@@ -1,5 +1,7 @@
 > 2026-11-20 股票池三入口：NL/向导/YAML统一StrategySpec entry，通用400日逐股求值；公网job383/384/385三入口均447/5572，388项通过/14 skipped。回滚`/tmp/qre-deploy-20261120T124449Z.bak`与`/tmp/qre-deploy-20261120T125147Z.bak`，无回测，未commit/push。
 
+> 2026-11-21 全站顶栏新增《我不是股神》`/game`入口，130项通过；公网点击及375px验收通过。回滚`/tmp/qre-deploy-20261121T143410Z.bak`，未commit/push。
+
 > 2026-11-21 现阶段拓扑定稿：网站保留现有ECS；主力PC为唯一主库/日更/Worker A，闲置8700+32G为Worker B和结果冷存储/备份。暂不购RDS/worker ECS/OSS；双worker部署尚未实施，详见32号§0A。
 
 > 2026-11-21 保存股票池与持续快照：两表schema和CRUD/序列授权已apply；保存/CSV/回测回填/快照/删除modal已上线，172项通过。生产pool1全链447只验收后清理为0。回滚`/tmp/qre-deploy-20261121T124106Z.bak`，schema备份`/tmp/qre-saved-pool-schema-pre-20261121.sql`。无真实回测，未commit/push。

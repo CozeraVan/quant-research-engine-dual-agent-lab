@@ -19,6 +19,15 @@ This file is the source of truth for single-agent workflow recovery.
 > 32 项远期/挂起任务（来自 §7、§8 N1–N4、§11.4/§11.7 与 19/20/21/22 专项文档）。
 > 只报 A–E 会让用户误以为「挂起任务又不见了」——已因此被质疑多次，禁止再犯。
 
+### 2026-11-21 顶栏《我不是股神》入口（DONE，待commit）
+
+- base全站主导航新增`/game`；130 passed/14 skipped。公网点击成功，375px页面无横溢，nav内部滚动可见。回滚`/tmp/qre-deploy-20261121T143410Z.bak`。
+
+### 2026-11-21 七组MACD参数全期全量（RUNNING）
+
+- 金叉6/13/5、15/35/10、24/52/18；死叉上述三组+12/26/9。真实穿越，默认20日/T+1开盘/batch10万，2009-01-05~2026-11-20。
+- 首job390因驱动漏evaluation失败；补齐并加worker同源StrategySpec预检后，冒烟391–397全completed，全量首项job398 running。后台`bash-sy2smrn2`，证据`.tmp/macd-param-grid-20261121/`。
+
 ### 2026-11-21 现阶段双家庭 Worker 架构（用户定稿）
 
 - 网站ECS+主力PC唯一主库/日更/Worker A+闲置8700+32G Worker B/机械盘冷存储备份；普通全局2、高换手1，闲置worker 20–24G。结果先传ECS再增量同步，LAN只读，不开家庭入站。

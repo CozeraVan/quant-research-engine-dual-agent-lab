@@ -1,5 +1,16 @@
 # Task Handoff
 
+## 2026-11-21 顶栏《我不是股神》入口（DONE，待commit）
+
+- base主导航新增`我不是股神→/game`，全站可见；不改游戏本体。相关130 passed/14 skipped。
+- 公网点击到游戏页成功，375px页面无横溢、主导航内部横滚可显示入口。回滚`/tmp/qre-deploy-20261121T143410Z.bak`，未commit/push。
+
+## 2026-11-21 七组MACD参数全期全量（RUNNING）
+
+- 用户授权3组非标准金叉+4组全参数死叉；真实T/T-1穿越，默认20日、T+1开盘、batch10万/股，全市场全期。
+- 首job390因自定义驱动漏evaluation失败；补齐并换v2幂等键后，冒烟391–397全completed。驱动submit增加与worker同源StrategySpec.from_mapping预检，7组全过。
+- 后台`bash-sy2smrn2`已进入全量，首项golden6/13/5=job398 running。日志`.tmp/macd-param-grid-20261121/driver.log`。未改引擎/数据。
+
 ## 2026-11-21 保存股票池、CSV、回测范围与持续快照（DONE，已部署待验收/commit）
 
 - 主代理复核补齐：新表/序列 aguhuice 权限、删除改可访问 modal、懒建函数在 schema 已 apply 时不再执行 DDL。相关172 passed/14 skipped。

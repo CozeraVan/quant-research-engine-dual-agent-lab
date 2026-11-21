@@ -1,5 +1,7 @@
 2026-11-21 保存股票池与持续快照已实现待复核：新增命名保存池（condition/strategy_yaml 可重算定义）、按交易日唯一真实快照（命中/候选/新增/移出）、CSV（实际指标列+公式注入防护）、刷新与日更后显式触发接口，以及 `/saas/new?pool=<id>` 最新快照代码回填；保存池走既有 light stock_pool，不进回测历史、不占回测次数。相关116 passed、模板JS 30 passed/14 skipped、静默20 passed、unslop 3 passed；未跑回测、未部署/commit/push。
 
+2026-11-21 全站顶栏新增《我不是股神》入口`/game`，相关130 passed/14 skipped；公网点击与375px导航内部滚动验收通过。回滚`/tmp/qre-deploy-20261121T143410Z.bak`，未commit/push。
+
 2026-11-21 用户定现阶段架构：网站ECS+主力PC唯一主库/日更/Worker A+闲置8700+32G Worker B/机械盘结果冷存储与备份。普通heavy全局2、高换手1，闲置worker 20–24G；日更仅主力，结果先传ECS再增量备份。暂不购RDS/worker ECS/OSS，云上方案保留后续备选；决策已入06/32，尚未实施双worker部署。
 
 2026-11-21 保存股票池与持续快照已上线：命名保存、CSV、回测范围回填、同日幂等快照、新增/移出和refresh-all内部触发接口完成。主代理修复新表/序列授权、重复DDL和删除modal，相关172 passed/14 skipped；生产临时pool1保存→447只快照→CSV→回测回填447只→删除全过，清理后0，375px无横溢。未接自动日更调度、无真实回测，未commit/push。

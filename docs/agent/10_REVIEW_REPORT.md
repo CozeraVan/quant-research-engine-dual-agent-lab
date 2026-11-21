@@ -1,5 +1,10 @@
 # Review Report
 
+## 2026-11-21 顶栏游戏入口自审
+
+- Review Status：PASS，无Required Fixes。只改共享导航和一项测试，未改游戏、路由或权限；使用无尾斜杠`/game`避免既有404。
+- 130项通过/14 skipped；公网点击和375px导航内部滚动通过，无页面横溢。已部署，未commit/push。
+
 ## 2026-11-21 保存股票池主代理复核
 
 - Review Status：PASS，无Required Fixes。子代理基础上补三处生产缺陷：应用角色表/序列授权、已有schema重复DDL、原生confirm替换为可访问modal。
