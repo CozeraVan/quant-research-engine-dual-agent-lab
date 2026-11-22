@@ -93,6 +93,7 @@
 - 页面头 `.page-head`：衬线 H1 + 灰字说明段（14.5px、`--grey`、max-width 46em，`lab-theme.css:45-46`）；详情页 H1 降 22px。
 - 卡片 `.card` / `.panel`：白底、1px `--line` 边框、圆角 10px、`padding:20px 22px`、`--shadow-1`、卡片间距 20px（`lab-theme.css:47,384`）。
 - 图表卡 `.chart-box`：同卡片规范，`padding:16px 18px`（`lab-theme.css:192`）。
+- 策略与个股收益图共用 `.equity-chart-viewport`：桌面 `clamp(480px,calc(100dvh - 300px),1200px)`，≤640px 为 `clamp(360px,calc(100dvh - 340px),900px)`；预留高度包含标题、基准、缩放与区间卡。不得恢复420/480px固定内联高度。
 - 响应式断点 960px：多列 grid 降为 2 列 / 1 列（`lab-theme.css:310-316`）。
 - 使用说明页（2026-10-26 用户批准方向）：桌面 `.help-layout` = 190px 侧栏 + 自适应内容，`.help-side` sticky top 76px；卡片 h2=20px。≤760px 侧栏转静态顶部双列导航，禁止横向溢出。结果页不重复堆「问号 + 说明链接」，仅保留问号悬停提示；结果合同与新旧口径标签不向用户展示。
 

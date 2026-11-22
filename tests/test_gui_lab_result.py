@@ -575,6 +575,21 @@ def test_symbol_detail_factor_basis_marker(lab_client):
     assert d["factor_basis"] == "qfq_anchor_v1"
 
 
+def test_symbol_output_dir_uses_nested_artifact_manifest(tmp_path):
+    """run/output_dir 隔离后，个股目录以 manifest 真实路径为准。"""
+    from quant_research_engine.gui.lab_result import _symbol_output_dir
+
+    nested = tmp_path / "artifacts" / "run-1" / "000001.SZ"
+    nested.mkdir(parents=True)
+    orders = nested / "orders.csv"
+    orders.write_text("symbol,side\n000001.SZ,buy\n", encoding="utf-8")
+    record = {
+        "output_dir": str(tmp_path / "artifacts"),
+        "artifacts": {"000001.SZ/orders.csv": str(orders)},
+    }
+    assert _symbol_output_dir(record, "000001.SZ") == nested
+
+
 def test_symbol_detail_fallback_round_trips(monkeypatch, tmp_path):
     """无个股产物目录：trades 退到 round_trips 过滤，orders/equity 为 None。"""
     import shutil

@@ -1,3 +1,7 @@
+> 2026-11-22 公网旧详情补建完成：1147/1147 gzip均orders/equity非空；唯一002208.SZ回传超时由任务1552补传完成。公网002208.SZ收益1005px、买/卖36点，job404/000020.SZ收益949px、买36/卖35点。证据`.tmp/symbol-detail-repair-20261122/final.json`；无回测/行情改写，未commit/push。
+
+> 2026-11-22 策略与个股收益图单屏自适应：共享CSS与job/symbol模板已部署ECS及8081；公网1249视口图949、整卡1239/1237，K线749与重播正常。回滚`/tmp/qre-deploy-20261122T101849Z.bak`及最终CSS`/tmp/qre-deploy-20261122T102032Z.bak`，无回测，未commit/push。
+
 > 2026-11-20 股票池三入口：NL/向导/YAML统一StrategySpec entry，通用400日逐股求值；公网job383/384/385三入口均447/5572，388项通过/14 skipped。回滚`/tmp/qre-deploy-20261120T124449Z.bak`与`/tmp/qre-deploy-20261120T125147Z.bak`，无回测，未commit/push。
 
 > 2026-11-21 全站顶栏新增《我不是股神》`/game`入口，130项通过；公网点击及375px验收通过。回滚`/tmp/qre-deploy-20261121T143410Z.bak`，未commit/push。

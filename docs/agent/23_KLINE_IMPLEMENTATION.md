@@ -68,10 +68,11 @@
 
 1. 无 `d.kline.dates` 时整块隐藏，保留空壳错误信息的规则不适用于此处。
 2. `QREFactorLayout.plan(factors, chipStates())` 生成 overlays、panes、chips。
-3. 动态高度：有副图时 `420 + 160 * paneCount`，无副图时 `460px`。
-4. 销毁旧 ECharts 实例，避免 chip 切换时残留配置。
-5. 创建主 K 线与成交量，再追加 overlay、订单点和副图。
-6. `echarts.init` 之后、第一次 `setOption` 之前调用 `QRETheme.themeChart(chart)` 应用当前主题。
+3. 动态高度由 `QREReplay.klineHeightForPanes()` 统一提供：无副图 `620px`，有副图 `560 + 180 * paneCount`；桌面再取至少 `60vh`，静态图与重播共用公式。
+4. 个股目录由 manifest 真实文件路径定位（兼容 run_id 嵌套与旧平铺布局），保证 orders 与 equity 不会因 output_dir 隔离而误为空。
+5. 销毁旧 ECharts 实例，避免 chip 切换时残留配置。
+6. 创建主 K 线与成交量，再追加 overlay、订单点和副图。
+7. `echarts.init` 之后、第一次 `setOption` 之前调用 `QRETheme.themeChart(chart)` 应用当前主题。
 
 ### 2.2 主图组成
 

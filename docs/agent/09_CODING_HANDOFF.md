@@ -1,5 +1,23 @@
 # Coding Handoff
 
+## 2026-11-22 公网旧个股详情补建
+
+- 无新代码：双域名线上HTML均含`equity-chart-viewport`、CSS含300px视口公式，ECS三文件SHA256与本地一致。用户看到无高度的根因是未重建gzip令收益卡隐藏。
+- 远程只读审计脚本及前后证据在`.tmp/symbol-detail-repair-20261122/`。job399/000021.SZ任务406已完成，耗时7.124s、271订单/4307净值，公网买/卖36点、收益949px。
+- 剩余1145只通过jobs标准symbol_detail任务低优先级补建，任务406及批量均为INSERT新任务，无UPDATE/DELETE。批量1144完成、1310回传超时，1552补传002208.SZ完成；最终`final.json`=1147/1147非空。公网002208.SZ与job404/000020.SZ买卖点及自适应高度复验通过。不是回测，不改行情/因子。
+
+## 2026-11-22 策略与个股收益图视口高度
+
+- `lab-theme.css`新增`.equity-chart-viewport`：桌面`clamp(480px,calc(100dvh - 300px),1200px)`，≤640px为`clamp(360px,calc(100dvh - 340px),900px)`；job/symbol共用该class，移除480/420px内联固定值。
+- 新`test_equity_chart_viewport.py`先RED后GREEN；浏览器发现首版200px预留导致整卡超高，再改测试RED→300px GREEN。相关258 passed/14 skipped、最终51 passed/14 skipped，TV_CHECK_ALL DONE、pageerror=0。
+- 公网job399策略/300033.SZ个股均949px图高、整卡1239/1237≤1249，K线749px不变；重播949px、退出静态恢复。8081同949px。ECS与8081已部署，回滚见16号；未commit/push。
+
+## 2026-11-22 个股订单与净值产物路径修复
+
+- `_symbol_output_dir()`优先通过manifest的`<symbol>/orders.csv|equity_curve.csv|trades.csv`真实路径定位父目录，保留旧`<output_dir>/<symbol>`平铺回退；解决run/output_dir隔离后多一层run_id导致orders/equity恒null。
+- 新测试先RED（None≠nested）后GREEN；真实job399/300033.SZ由0订单/0净值恢复为260订单、4084净值点。相关191 passed/14 skipped，TV_CHECK_ALL全绿。
+- 本机worker/8081与ECS qre-saas已部署，回滚`/tmp/qre-symbol-detail-path-pre-20261122/`及ECS`/tmp/lab_result.py.pre-symbol-fix-20261122`。按需任务405重建该头部个股，公网静态36买/36卖聚合圆环、收益420px、K线749px、重播740px，零浏览器错误。其他旧个股打开后可用“刷新详情”按需重建，未批量回传、未重跑回测。
+
 ## 2026-11-21 顶栏游戏入口
 
 - `saas/templates/base.html`主nav新增`/game`入口；`test_gui_saas_pages.py`锁定精确链接。

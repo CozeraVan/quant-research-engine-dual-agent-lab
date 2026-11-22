@@ -697,6 +697,11 @@ def _read_csv_rounded(path: Path) -> list[dict[str, Any]]:
 
 
 def _symbol_output_dir(record: dict[str, Any], ts_code: str) -> Path | None:
+    # run/output_dir 隔离后 manifest 才是真实位置：个股目录可能多一层 run_id。
+    for fname in ("orders.csv", "equity_curve.csv", "trades.csv"):
+        path = _find_output_file(record, f"{ts_code}/{fname}")
+        if path is not None and path.parent.is_dir():
+            return path.parent
     output_dir = record.get("output_dir")
     if not output_dir:
         return None
