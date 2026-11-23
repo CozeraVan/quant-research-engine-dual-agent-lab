@@ -1,5 +1,11 @@
 # Coding Handoff
 
+## 2026-11-23 8081历史记录刷新超时
+
+- `_excess_return_of`在SSE null回补成功后，以PID临时文件+`os.replace`原子写回`excess_return_vs_benchmark`；OSError不阻塞当次返回，数值快路径和旧口径边界不变。
+- 新测试验证首次持久化及第二次禁止重算，先RED后GREEN；相关217 passed/14 skipped。现有12份JSON备份后一次性回补，API由>45s降1.558s，浏览器刷新328行。
+- 8081/ECS已部署，回滚`/tmp/qre-deploy-20261123T145443Z.bak`，未commit/push。
+
 ## 2026-11-22 公网旧个股详情补建
 
 - 无新代码：双域名线上HTML均含`equity-chart-viewport`、CSS含300px视口公式，ECS三文件SHA256与本地一致。用户看到无高度的根因是未重建gzip令收益卡隐藏。

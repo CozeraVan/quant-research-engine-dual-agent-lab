@@ -1,5 +1,10 @@
 # Review Report
 
+## 2026-11-23 8081历史刷新超时自审
+
+- Review Status：PASS，无Required Fixes。仅修改SSE null回补分支，数值快路径/旧口径/交易与图表逻辑不变；回写失败不阻断读取，原子替换避免半文件。
+- TDD覆盖首次持久化和第二次不重算，相关217 passed/14 skipped。12份原文件有备份，一次性回补后API 1.558s、浏览器328行，未把服务active误当成接口可用。ECS/8081已部署，未commit/push。
+
 ## 2026-11-22 公网旧详情补建复核
 
 - Review Status：PASS，无Required Fixes。上轮验收只覆盖300033.SZ，不能代表398–404其他已上传详情；用户反馈成立。

@@ -1561,7 +1561,16 @@ def _excess_return_of(record: dict[str, Any]) -> float | None:
     if perf.get("benchmark_code") == "000001.SH" and "excess_return_vs_benchmark" in perf:
         metrics = build_lab_chart_data(record).get("metrics") or {}
         recovered = metrics.get("excess_return")
-        return round(recovered, 6) if isinstance(recovered, (int, float)) else None
+        if isinstance(recovered, (int, float)):
+            value = round(recovered, 6)
+            perf["excess_return_vs_benchmark"] = value
+            tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+            try:
+                tmp_path.write_text(json.dumps(perf, ensure_ascii=False, indent=2), encoding="utf-8")
+                os.replace(tmp_path, path)
+            except OSError:
+                pass  # 回写缓存失败不阻塞本次只读结果返回
+            return value
     return None
 
 

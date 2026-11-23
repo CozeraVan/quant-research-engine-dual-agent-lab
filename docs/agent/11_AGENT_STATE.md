@@ -23,6 +23,11 @@ This file is the source of truth for single-agent workflow recovery.
 
 - base全站主导航新增`/game`；130 passed/14 skipped。公网点击成功，375px页面无横溢，nav内部滚动可见。回滚`/tmp/qre-deploy-20261121T143410Z.bak`。
 
+### 2026-11-23 8081历史记录刷新超时（DONE，本次提交）
+
+- 12份SSE超额null产物每次列表刷新重复构建完整曲线/指数，API>45s。现首次回补原子写回数值，后续走快路径；相关217 passed/14 skipped。
+- 原JSON备份`.tmp/lab-runs-null-excess-backup-20261123/`；一次性回补43.726s，第二次1.502s，API 200/1.558s/328条，浏览器刷新328行。ECS/8081已部署，回滚`/tmp/qre-deploy-20261123T145443Z.bak`，无回测，本次提交并推送。
+
 ### 2026-11-22 公网旧个股详情补建（DONE，本次提交）
 
 - 用户反馈成立：上轮只验399/300033.SZ过窄。双域名CSS/模板与ECS哈希已同步，但旧gzip空orders/equity令收益卡隐藏。小样本406恢复000021.SZ后，批量低优先级补建1144/1145；002208.SZ任务1310回传超时，1552补传完成。

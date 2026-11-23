@@ -1,5 +1,11 @@
 # Task Handoff
 
+## 2026-11-23 8081历史记录刷新超时（DONE，待人工验收/commit）
+
+- 根因不是WSL或服务未启动：`/api/lab/runs`超过45s，12份SSE超额为null的产物每次列表刷新都重复构建完整曲线与指数，最近7条单项2.5–9.8s，合计超过前端30s超时。
+- `_excess_return_of`首次回补后原子写回`excess_return_vs_benchmark`，后续走数值快路径；失败仍返回本次结果。新测试先RED后GREEN，相关217 passed/14 skipped。
+- 12份原JSON已备份并一次性回补43.726s；第二次构建1.502s，API HTTP200/1.558s/328条，浏览器“回测记录→刷新”328行正常。8081与ECS已部署，备份`.tmp/lab-runs-null-excess-backup-20261123/`，ECS回滚`/tmp/qre-deploy-20261123T145443Z.bak`；无回测/行情改写，未commit/push。
+
 ## 2026-11-22 公网旧详情补建（DONE）
 
 - 用户指出公网仍无买卖点/高度未增强；上轮仅验job399/300033.SZ，验收范围过窄。双域名与ECS模板/CSS哈希实际一致；新复现job399/000021.SZ仍是旧gzip空orders/equity，收益卡因此display:none。

@@ -1501,3 +1501,27 @@ def test_run_list_recovers_sse_excess_when_perf_file_has_null(tmp_path):
     expected = build_lab_chart_data(record)["metrics"]["excess_return"]
     assert expected is not None
     assert _excess_return_of(record) == round(expected, 6)
+
+
+def test_run_list_persists_recovered_sse_excess(tmp_path, monkeypatch):
+    """首次回补后写回数值，后续列表刷新不得再次构建全量图表。"""
+    from quant_research_engine.gui import lab_result
+
+    run_dir = _make_run(tmp_path)
+    record = json.loads((run_dir / "status.json").read_text())
+    perf_path = Path(record["artifacts"]["strategy_performance.json"])
+    perf = json.loads(perf_path.read_text())
+    perf["benchmark_code"] = "000001.SH"
+    perf["excess_return_vs_benchmark"] = None
+    perf_path.write_text(json.dumps(perf))
+    expected = lab_result.build_lab_chart_data(record)["metrics"]["excess_return"]
+
+    assert lab_result._excess_return_of(record) == round(expected, 6)
+    persisted = json.loads(perf_path.read_text())
+    assert persisted["excess_return_vs_benchmark"] == round(expected, 6)
+
+    def must_not_recompute(_record):
+        raise AssertionError("已有回补值时不应重复构建图表")
+
+    monkeypatch.setattr(lab_result, "build_lab_chart_data", must_not_recompute)
+    assert lab_result._excess_return_of(record) == round(expected, 6)

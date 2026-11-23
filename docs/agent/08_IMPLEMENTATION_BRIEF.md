@@ -1,5 +1,12 @@
 # Implementation Brief
 
+## 2026-11-23 8081历史记录刷新超时
+
+1. 已复现`/api/lab/runs`45秒无响应，页面与静态接口正常。逐run计时发现332条中最近7条`_excess_return_of`因SSE值为null重复调用`build_lab_chart_data`，单条2.5–9.8秒，合计超过前端30秒超时；全量扫描另有5条旧run同类，共12条。
+2. 保持既有回补口径；数值型快路径不变。首次成功回补后原子写回同一`strategy_performance.json`的`excess_return_vs_benchmark`，后续刷新直接读数值，不再重复加载全量曲线和指数。
+3. 先补“首次回补持久化、第二次禁止重算”失败测试，再跑lab结果/模板回归；对现有12条只执行一次性回补并备份原JSON，重启8081验证API耗时与浏览器刷新，不重跑回测、不改行情或因子。
+4. 完成：相关217 passed/14 skipped；一次性回补43.726s，第二次构建1.502s，HTTP 200/1.558s/328条，浏览器刷新328行。备份`.tmp/lab-runs-null-excess-backup-20261123/`，ECS回滚`/tmp/qre-deploy-20261123T145443Z.bak`。
+
 ## 2026-11-22 公网旧个股详情批量修复
 
 1. 用户反馈公网仍无买卖点/高度未增强。双域名模板、CSS及ECS哈希均已同步；复现job399/000021.SZ为旧gzip `orders/equity=null`，收益卡display:none，因此并非CSS未部署。上轮只验300033.SZ，范围不足。
