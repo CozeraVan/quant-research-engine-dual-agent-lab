@@ -1,3 +1,7 @@
+2026-11-23 Google收录改造已部署：verified showcase SSR/API/sitemap共用来源，公开job SSR唯一标题和真实指标，动态sitemap含133 URL，新增同权限report JSON/CSV。相关345 passed/14 skipped及robots聚焦73 passed；无JS和浏览器验收通过，私有job370仍401且不收录。首次实时测试软404，原因是robots阻断JS轮询并替换SSR；仅开放/api/results后复测“可编入索引”，job399已入优先抓取队列。sitemap已提交，控制台仍“无法抓取/0”待刷新。ECS回滚`/tmp/qre-deploy-20261123T151550Z.bak`、robots`/tmp/qre-deploy-20261123T152246Z.bak`，未commit/push。
+
+2026-11-23 Google收录诊断完成：公开job虽200，但初始HTML只有加载中，实际结果依赖robots禁止的API；showcase 126项靠JS，sitemap仅6个通用URL。已记录白名单SSR+动态sitemap+公开JSON/CSV方案，未实施，私有结果权限不变。
+
 2026-11-23 8081历史刷新超时已修复：12份SSE超额null产物每次刷新重复全量曲线回补，API>45s。现首次回补原子写回数值，后续直接读取；相关217 passed/14 skipped。原JSON已备份，一次性回补43.726s，第二次1.502s，API 200/1.558s/328条，浏览器按钮刷新328行。ECS/8081已部署，回滚`/tmp/qre-deploy-20261123T145443Z.bak`，无回测，未commit/push。
 
 2026-11-22 公网旧个股详情补建完成：用户反馈后确认双域名CSS/模板与ECS哈希均已同步，但上轮只验job399/300033.SZ范围过窄；旧gzip空orders/equity令收益卡隐藏。小样本406恢复000021.SZ后，低优先级批量1144/1145完成，002208.SZ任务1310回传超时，由1552补传完成。最终1147/1147份均orders/equity非空、needs_refresh=0；公网复验002208.SZ收益1005px、买/卖36点，job404/000020.SZ收益949px、买36/卖35点。证据`.tmp/symbol-detail-repair-20261122/final.json`，未重跑回测/改行情。

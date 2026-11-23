@@ -23,6 +23,11 @@ This file is the source of truth for single-agent workflow recovery.
 
 - base全站主导航新增`/game`；130 passed/14 skipped。公网点击成功，375px页面无横溢，nav内部滚动可见。回滚`/tmp/qre-deploy-20261121T143410Z.bak`。
 
+### 2026-11-23 回测结果Google收录（已部署，优先抓取队列中，本次提交）
+
+- verified白名单SSR真实指标/链接、动态sitemap和同权限report JSON/CSV已上线；相关345 passed/14 skipped。sitemap133 URL，私有job370仍401且不收录，ECS回滚`/tmp/qre-deploy-20261123T151550Z.bak`。
+- 首次软404系robots阻断JS轮询并替换SSR；仅放开/api/results后复测“可编入索引”，job399已入优先抓取队列。robots回滚`/tmp/qre-deploy-20261123T152246Z.bak`；sitemap控制台仍无法抓取/0待刷新，本次提交并推送。
+
 ### 2026-11-23 8081历史记录刷新超时（DONE，本次提交）
 
 - 12份SSE超额null产物每次列表刷新重复构建完整曲线/指数，API>45s。现首次回补原子写回数值，后续走快路径；相关217 passed/14 skipped。

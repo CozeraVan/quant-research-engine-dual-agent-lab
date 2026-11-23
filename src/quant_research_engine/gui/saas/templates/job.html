@@ -1,10 +1,29 @@
 {% extends "saas/templates/base.html" %}
-{% block title %}回测结果 · A股回测台{% endblock %}
+{% block title %}{{ seo_result.strategy_name ~ ' 回测结果 · A股回测台' if seo_result else '回测结果 · A股回测台' }}{% endblock %}
+{% if seo_result %}
+{% block description %}{{ seo_result.strategy_name }}全市场历史回测：总收益{{ seo_result.total_return }}，超额收益{{ seo_result.excess_return }}，最大回撤{{ seo_result.max_drawdown }}，胜率{{ seo_result.win_rate }}。{% endblock %}
+{% block og_title %}{{ seo_result.strategy_name }}回测结果{% endblock %}
+{% block og_description %}总收益{{ seo_result.total_return }}，超额收益{{ seo_result.excess_return }}，最大回撤{{ seo_result.max_drawdown }}。{% endblock %}
+{% endif %}
 {% block body %}
 <div class="container">
   <h1>回测结果 <span class="opt">任务 #{{ job_id }}</span></h1>
   <p class="brief-line" style="font-size:15.5px;color:var(--ink);margin:12px 0 16px">📄 <span id="brief-text">加载中…</span></p>
   <div class="meta-chips" id="meta-chips"></div>
+
+  {% if seo_result %}
+  <section class="chart-box" id="public-result-summary">
+    <h2>{{ seo_result.strategy_name }}</h2>
+    <p>{{ seo_result.date_start }} ~ {{ seo_result.data_until or seo_result.date_end }} · 交易 {{ seo_result.total_trade_count }} 笔</p>
+    <div class="metric-strip">
+      <div class="metric-card"><div class="m-label">总收益率</div><div class="m-value">{{ seo_result.total_return }}</div></div>
+      <div class="metric-card"><div class="m-label">超额收益</div><div class="m-value">{{ seo_result.excess_return }}</div></div>
+      <div class="metric-card"><div class="m-label">最大回撤</div><div class="m-value">{{ seo_result.max_drawdown }}</div></div>
+      <div class="metric-card"><div class="m-label">胜率</div><div class="m-value">{{ seo_result.win_rate }}</div></div>
+    </div>
+    <p><a class="inl" href="/saas/jobs/{{ job_id }}/report.json">下载完整 JSON</a>　<a class="inl" href="/saas/jobs/{{ job_id }}/report.csv">下载摘要 CSV</a>　<a class="inl" href="/saas/showcase">返回经典策略</a></p>
+  </section>
+  {% endif %}
 
   <div class="panel hidden" id="guest-note" style="border-color:#d97706;background:#fef9ec">
     <span style="color:#92400e;font-size:15px">游客模式：本次回测结果<strong>次日清空</strong>。<a href="/saas/login">注册会员</a>后可永久保存记录、不限次数全市场回测。</span>

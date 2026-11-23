@@ -1682,9 +1682,29 @@ def create_saas_app() -> Flask:
 
     @app.get("/sitemap.xml")
     def seo_sitemap() -> Any:
-        from flask import send_from_directory
+        """静态通用页 + verified showcase 白名单；私有/分享任务永不进入。"""
+        from xml.etree import ElementTree as ET
 
-        return send_from_directory(str(SHARED_STATIC_DIR), "sitemap.xml", mimetype="application/xml")
+        namespace = "http://www.sitemaps.org/schemas/sitemap/0.9"
+        ET.register_namespace("", namespace)
+        tree = ET.parse(SHARED_STATIC_DIR / "sitemap.xml")
+        root = tree.getroot()
+        urls = {element.findtext(f"{{{namespace}}}loc") for element in root}
+        for loc, lastmod in [("https://www.aguhuice.com/saas/showcase", None)] + [
+            (f"https://www.aguhuice.com/saas/jobs/{item['job_id']}", item["data_until"])
+            for item in _showcase_items_or_empty()
+        ]:
+            if loc in urls:
+                continue
+            element = ET.SubElement(root, f"{{{namespace}}}url")
+            ET.SubElement(element, f"{{{namespace}}}loc").text = loc
+            if lastmod:
+                ET.SubElement(element, f"{{{namespace}}}lastmod").text = str(lastmod)
+            urls.add(loc)
+        return app.response_class(
+            ET.tostring(root, encoding="utf-8", xml_declaration=True),
+            mimetype="application/xml",
+        )
 
     # 百度站长文件验证（QRE-SAAS-SEO）：验证文件必须挂根路径
     @app.get("/baidu_verify_codeva-gDNoSKn1Mp.html")
@@ -1733,10 +1753,74 @@ def create_saas_app() -> Flask:
     def saas_new_page() -> str:
         return render_template("new.html")
 
+    def _showcase_items_or_empty() -> list[dict[str, Any]]:
+        """无数据库配置的纯模板测试保持页面可渲染；API行为不变。"""
+        if not (app.config.get("SAAS_DB_URL") or os.environ.get("SAAS_DB_URL")):
+            return []
+        return _showcase_items()
+
+    def _showcase_items() -> list[dict[str, Any]]:
+        """verified showcase 唯一读取路径：SSR、API 与 sitemap 共用。"""
+        engine = _get_engine(app)
+        _ensure_signal_tables(engine)
+        contract_col = (", r.result_contract AS result_result_contract"
+                        if _ensure_result_contract_column(engine) else "")
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT sc.job_id, sc.title, sc.subtitle, sc.sort_order, "
+                    "s.name AS strategy_name, j.created_at, j.params, "
+                    "r.summary, r.chart_data->'metrics' AS chart_metrics, r.data_until" + contract_col +
+                    " FROM showcase sc "
+                    "JOIN jobs j ON j.id = sc.job_id "
+                    "JOIN strategies s ON s.id = j.strategy_id "
+                    "LEFT JOIN results r ON r.job_id = j.id "
+                    "WHERE sc.is_active AND j.status = 'completed' "
+                    "ORDER BY sc.sort_order, sc.job_id"
+                )
+            ).mappings().all()
+            items = []
+            for row in rows:
+                contract = contract_view(row["job_id"], row.get("result_result_contract"),
+                                         row["data_until"])
+                if not contract["verified"]:
+                    continue
+                metrics = (row["chart_metrics"] or {})
+                summary = row["summary"] or {}
+                params = row["params"] or {}
+                daily_rows = conn.execute(
+                    text("SELECT trade_date, daily_return FROM showcase_daily "
+                         "WHERE job_id = :id ORDER BY trade_date"),
+                    {"id": row["job_id"]},
+                ).mappings().all()
+                total_return = summary.get("strategy_total_return")
+                tracking_since = None
+                if daily_rows:
+                    ext = 1.0 + (total_return or 0.0)
+                    for d in daily_rows:
+                        ext *= 1.0 + float(d["daily_return"])
+                    total_return = ext - 1.0
+                    tracking_since = _jsonable(daily_rows[0]["trade_date"])
+                    data_until = _jsonable(daily_rows[-1]["trade_date"])
+                else:
+                    data_until = _jsonable(row["data_until"])
+                items.append({
+                    "job_id": row["job_id"], "title": row["title"], "subtitle": row["subtitle"],
+                    "strategy_name": row["strategy_name"],
+                    "date_start": params.get("start"), "date_end": params.get("end"),
+                    "total_return": total_return, "excess_return": metrics.get("excess_return"),
+                    "max_drawdown": summary.get("max_drawdown"), "win_rate": summary.get("win_rate"),
+                    "total_trade_count": summary.get("total_trade_count"),
+                    "sharpe": metrics.get("sharpe"), "data_until": data_until,
+                    "tracking_since": tracking_since, "tracking_days": len(daily_rows),
+                    "result_contract": dict(contract, data_until=data_until),
+                })
+        return items
+
     # QRE-SAAS-SHOWCASE：经典策略展示页（游客可见、全站只读、无操作入口）
     @app.get("/saas/showcase")
     def saas_showcase_page() -> str:
-        return render_template("showcase.html")
+        return render_template("showcase.html", showcase_items=_showcase_items_or_empty())
 
     # QRE-SAAS-RESULT-UNDERSTANDING：公开「使用说明」集中帮助页。游客与登录用户
     # 均可访问（不新增 API / 表 / 鉴权门槛）；结果合同两种收益口径文案由
@@ -1759,76 +1843,8 @@ def create_saas_app() -> Flask:
 
     @app.get("/api/saas/showcase")
     def api_showcase_list() -> Any:
-        """经典策略公开展示列表（无需登录）。返回白名单 job 的摘要指标。
-
-        QRE-SAAS-RESULT-CONTRACT-001：只公开**结果合同 verified** 的条目；
-        未验证条目仅从公开列表消失——showcase 白名单行、job 与产物一律不动
-        （管理台 /api/saas/console/showcase 仍可见并带未验证原因）。
-        """
-        engine = _get_engine(app)
-        _ensure_signal_tables(engine)
-        contract_col = (", r.result_contract AS result_result_contract"
-                        if _ensure_result_contract_column(engine) else "")
-        with engine.connect() as conn:
-            rows = conn.execute(
-                text(
-                    "SELECT sc.job_id, sc.title, sc.subtitle, sc.sort_order, "
-                    "s.name AS strategy_name, j.created_at, j.params, "
-                    "r.summary, r.chart_data->'metrics' AS chart_metrics, r.data_until" + contract_col +
-                    " FROM showcase sc "
-                    "JOIN jobs j ON j.id = sc.job_id "
-                    "JOIN strategies s ON s.id = j.strategy_id "
-                    "LEFT JOIN results r ON r.job_id = j.id "
-                    "WHERE sc.is_active AND j.status = 'completed' "
-                    "ORDER BY sc.sort_order, sc.job_id"
-                )
-            ).mappings().all()
-            items = []
-            for row in rows:
-                # 显式合同 / 例外表判定；未验证直接跳过（不删白名单行、不删产物）
-                contract = contract_view(row["job_id"], row.get("result_result_contract"),
-                                         row["data_until"])
-                if not contract["verified"]:
-                    continue
-                metrics = (row["chart_metrics"] or {})
-                summary = row["summary"] or {}
-                params = row["params"] or {}
-                # 阶段二持续跟踪：冻结点之后的逐日收益复利延伸到最新交易日
-                daily_rows = conn.execute(
-                    text("SELECT trade_date, daily_return FROM showcase_daily "
-                         "WHERE job_id = :id ORDER BY trade_date"),
-                    {"id": row["job_id"]},
-                ).mappings().all()
-                total_return = summary.get("strategy_total_return")
-                tracking_since = None
-                if daily_rows:
-                    ext = 1.0 + (total_return or 0.0)
-                    for d in daily_rows:
-                        ext *= 1.0 + float(d["daily_return"])
-                    total_return = ext - 1.0
-                    tracking_since = _jsonable(daily_rows[0]["trade_date"])
-                    data_until = _jsonable(daily_rows[-1]["trade_date"])
-                else:
-                    data_until = _jsonable(row["data_until"])
-                items.append({
-                    "job_id": row["job_id"],
-                    "title": row["title"],
-                    "subtitle": row["subtitle"],
-                    "strategy_name": row["strategy_name"],
-                    "date_start": params.get("start"),
-                    "date_end": params.get("end"),
-                    "total_return": total_return,
-                    "excess_return": metrics.get("excess_return"),
-                    "max_drawdown": summary.get("max_drawdown"),
-                    "win_rate": summary.get("win_rate"),
-                    "total_trade_count": summary.get("total_trade_count"),
-                    "sharpe": metrics.get("sharpe"),
-                    "data_until": data_until,
-                    "tracking_since": tracking_since,
-                    "tracking_days": len(daily_rows),
-                    "result_contract": dict(contract, data_until=data_until),
-                })
-        return jsonify({"ok": True, "items": items})
+        """经典策略公开展示列表（无需登录），只返回 verified 白名单摘要。"""
+        return jsonify({"ok": True, "items": _showcase_items()})
 
     # QRE-SAAS-FEEDBACK-FACTOR-REQ：意见反馈 / 申请新因子独立页（侧边栏入口，
     # 仅登录用户可提交——游客不可，决策见 06 日志）
@@ -1840,9 +1856,75 @@ def create_saas_app() -> Flask:
     def saas_factor_request_page() -> str:
         return render_template("factor_request.html")
 
+    def _result_seo(row: Any) -> dict[str, Any]:
+        """公开job的服务端正文；只放白名单摘要，不含用户或会话信息。"""
+        summary = row["result_summary"] or {}
+        metrics = (row["result_chart_data"] or {}).get("metrics") or {}
+        params = row["params"] or {}
+
+        def pct(value: Any) -> str:
+            return f"{value:+.2%}" if isinstance(value, (int, float)) else "—"
+
+        return {
+            "strategy_name": row["strategy_name"],
+            "date_start": params.get("start"), "date_end": params.get("end"),
+            "data_until": _jsonable(row["result_data_until"]),
+            "total_return": pct(summary.get("strategy_total_return")),
+            "excess_return": pct(metrics.get("excess_return")),
+            "max_drawdown": pct(summary.get("max_drawdown")),
+            "win_rate": pct(summary.get("win_rate")),
+            "total_trade_count": summary.get("total_trade_count") or 0,
+        }
+
     @app.get("/saas/jobs/<int:job_id>")
     def saas_job_page(job_id: int) -> str:
-        return render_template("job.html", job_id=job_id)
+        seo_result = None
+        if (app.config.get("SAAS_DB_URL") or os.environ.get("SAAS_DB_URL")) and _is_showcase_job(job_id):
+            row, err = _require_completed_result(job_id)
+            if err is None and _public_readonly_kind() == "showcase":
+                seo_result = _result_seo(row)
+        return render_template("job.html", job_id=job_id, seo_result=seo_result)
+
+    @app.get("/saas/jobs/<int:job_id>/report.json")
+    def saas_job_report_json(job_id: int) -> Any:
+        """同一权限闸下的机器可读报告，便于不执行JS的搜索/研究agent。"""
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        return jsonify(_jsonable({
+            "ok": True, "job_id": job_id,
+            "strategy": {"name": row["strategy_name"], "yaml": row["strategy_yaml"]},
+            "params": row["params"], "summary": row["result_summary"],
+            "chart_data": row["result_chart_data"], "data_until": row["result_data_until"],
+            "result_contract": _contract_of(row),
+        }))
+
+    @app.get("/saas/jobs/<int:job_id>/report.csv")
+    def saas_job_report_csv(job_id: int) -> Any:
+        import csv
+        import io
+
+        row, err = _require_completed_result(job_id)
+        if err:
+            return err
+        summary = row["result_summary"] or {}
+        metrics = (row["result_chart_data"] or {}).get("metrics") or {}
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["metric", "value"])
+        for key, value in {
+            "job_id": job_id, "strategy_name": row["strategy_name"],
+            "data_until": _jsonable(row["result_data_until"]),
+            "strategy_total_return": summary.get("strategy_total_return"),
+            "excess_return": metrics.get("excess_return"),
+            "max_drawdown": summary.get("max_drawdown"), "win_rate": summary.get("win_rate"),
+            "total_trade_count": summary.get("total_trade_count"),
+        }.items():
+            writer.writerow([key, "" if value is None else value])
+        return app.response_class(
+            "\ufeff" + output.getvalue(), mimetype="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=qre-job-{job_id}.csv"},
+        )
 
     # C5：个股明细列表 / 个股详情页（数据走 /api/results/<id>/symbols*）
     @app.get("/saas/jobs/<int:job_id>/symbols")

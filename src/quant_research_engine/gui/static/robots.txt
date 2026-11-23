@@ -1,5 +1,6 @@
 User-agent: *
 Allow: /
+Allow: /api/results/
 Disallow: /api/
 Disallow: /saas/console
 

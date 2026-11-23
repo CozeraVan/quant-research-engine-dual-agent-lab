@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-23 Google收录改造自审
+
+- Review Status：PASS（代码与部署），无Required Fixes。白名单判断仍由服务端contract+active执行；sitemap/SSR/API共用查询，不读整列chart_data。下载复用原权限，无私有数据扩展。
+- 普通用户与爬虫看到同一SSR正文，不cloaking；私有页面不新增SSR/索引。无DB模板降级不影响API行为，静态OOM测试仅随函数提取调整定位。
+- TDD与345项回归通过，线上无JS内容、133条sitemap、私有370 401及普通浏览器均核实。首次软404已定位为robots阻断JS轮询并替换SSR，现仅允许/api/results，聚焦73 passed；Google复测可索引，job399已入优先抓取队列。sitemap控制台状态未刷新，不宣称已收录；未commit/push。
+
 ## 2026-11-23 8081历史刷新超时自审
 
 - Review Status：PASS，无Required Fixes。仅修改SSE null回补分支，数值快路径/旧口径/交易与图表逻辑不变；回写失败不阻断读取，原子替换避免半文件。

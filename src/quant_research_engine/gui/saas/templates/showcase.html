@@ -27,7 +27,18 @@
         <th>日更状态</th>
         <th aria-sort="none"><button type="button" class="seg-btn" data-sc-sort="data_until">数据截至</button></th>
       </tr></thead>
-      <tbody id="sc-tbody"><tr><td colspan="10" class="muted">加载中…</td></tr></tbody>
+      <tbody id="sc-tbody">{% for item in showcase_items %}<tr>
+        <td><input type="checkbox" class="sc-check" data-id="{{ item.job_id }}" aria-label="选择{{ item.title }}"></td>
+        <td><a class="inl" href="/saas/jobs/{{ item.job_id }}">{{ item.title }}</a></td>
+        <td>{{ item.date_start }} ~ {{ item.data_until or item.date_end }}</td>
+        <td class="num {{ 'pos' if item.total_return > 0 else 'neg' if item.total_return < 0 else 'flat' }}">{{ '%+.2f%%'|format(item.total_return * 100) if item.total_return is not none else '—' }}</td>
+        <td class="num {{ 'pos' if item.excess_return > 0 else 'neg' if item.excess_return < 0 else 'flat' }}">{{ '%+.2f%%'|format(item.excess_return * 100) if item.excess_return is not none else '—' }}</td>
+        <td class="num">{{ '%+.2f%%'|format(item.max_drawdown * 100) if item.max_drawdown is not none else '—' }}</td>
+        <td class="num">{{ '%+.2f%%'|format(item.win_rate * 100) if item.win_rate is not none else '—' }}</td>
+        <td class="num">{{ item.total_trade_count or 0 }}</td>
+        <td>{{ '跟踪中' if item.tracking_days else '—' }}</td>
+        <td>{{ item.data_until or '—' }}</td>
+      </tr>{% endfor %}</tbody>
     </table>
     </div>
     <div class="profile-pager">

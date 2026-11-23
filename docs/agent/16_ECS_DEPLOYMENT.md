@@ -1,3 +1,5 @@
+> 2026-11-23 Google收录改造：showcase/job SSR、动态sitemap和同权限report JSON/CSV已部署。相关345 passed/14 skipped；线上133 URL、私有370=401。首次软404后robots仅放开/api/results，复测可索引，job399已入优先抓取队列；sitemap控制台无法抓取/0待刷新。回滚`/tmp/qre-deploy-20261123T151550Z.bak`与`/tmp/qre-deploy-20261123T152246Z.bak`，未commit/push。
+
 > 2026-11-23 8081历史刷新超时：SSE null回补值现原子写回，避免每次列表刷新重复全量计算。相关217 passed/14 skipped，API 200/1.558s/328条，浏览器刷新正常。ECS/8081已部署，回滚`/tmp/qre-deploy-20261123T145443Z.bak`，无回测，未commit/push。
 
 > 2026-11-22 公网旧详情补建完成：1147/1147 gzip均orders/equity非空；唯一002208.SZ回传超时由任务1552补传完成。公网002208.SZ收益1005px、买/卖36点，job404/000020.SZ收益949px、买36/卖35点。证据`.tmp/symbol-detail-repair-20261122/final.json`；无回测/行情改写，未commit/push。

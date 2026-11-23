@@ -1,5 +1,14 @@
 # Task Handoff
 
+## 2026-11-23 回测结果Google收录改造（已部署，索引处理中）
+
+- `_showcase_items()`成为SSR/API/sitemap唯一verified白名单来源；showcase初始HTML输出真实指标和job链接。公开job初始HTML含唯一title/description、策略/区间/收益/超额/回撤/胜率及JSON/CSV链接；私有页面原行为不变。
+- `/sitemap.xml`动态加入showcase与白名单job及lastmod；新`/saas/jobs/<id>/report.json|csv`复用`_require_completed_result`，不放开整个API，不收录私有/分享任务。
+- TDD 4项先RED后GREEN；兼容无DB模板与静态OOM守卫后，相关345 passed/14 skipped。ECS已部署，回滚`/tmp/qre-deploy-20261123T151550Z.bak`。
+- 无JS实测job399含+41.14%/+32.19%，showcase有真实链接，sitemap133 URL，report JSON/CSV 200；私有job370 report=401且不进入sitemap。普通浏览器SSR卡与主图正常。
+- 首次实时测试因robots阻断JS轮询、错误页替换SSR而报软404；已仅新增`Allow:/api/results/`（其余API仍禁），私有summary仍401。复测转为“网址可编入Google索引”，job399已成功加入优先抓取队列。
+- sitemap.xml已提交；Search Console当前列表仍显示“无法抓取/0”，线上XML可200访问，状态待后续刷新，不声称全部收录。robots回滚`/tmp/qre-deploy-20261123T152246Z.bak`；未commit/push。
+
 ## 2026-11-23 8081历史记录刷新超时（DONE，待人工验收/commit）
 
 - 根因不是WSL或服务未启动：`/api/lab/runs`超过45s，12份SSE超额为null的产物每次列表刷新都重复构建完整曲线与指数，最近7条单项2.5–9.8s，合计超过前端30s超时。

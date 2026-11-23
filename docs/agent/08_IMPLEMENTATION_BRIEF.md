@@ -1,5 +1,12 @@
 # Implementation Brief
 
+## 2026-11-23 回测结果Google收录改造（已部署，索引队列中）
+
+1. 实测公开job 399和个股页均200，但初始HTML只有“加载中”，收益与策略数据依赖`/api/results/*`；robots又`Disallow:/api/`，Google无法经JS取得内容。showcase同样客户端加载126项，sitemap仅6个通用URL且不含showcase/job。
+2. 仅对active+verified showcase白名单做服务端渲染：列表真实策略链接、job唯一title/description、策略名、区间、收益/超额/回撤/胜率等正文；爬虫与普通用户看到同一内容，不做cloaking。私有/分享任务不进入sitemap，保持原401权限。
+3. sitemap按白名单动态生成showcase及job URL与真实lastmod；页面提供公开JSON/CSV下载供不支持JS的agent读取，不能只放开全部API或暴露私有任务。
+4. Google Search Console提交sitemap、URL检查“已呈现HTML”并申请收录；以curl初始HTML直接含结果为验收，不以HTTP 200冒充可收录。结构化数据可后续补Dataset。
+
 ## 2026-11-23 8081历史记录刷新超时
 
 1. 已复现`/api/lab/runs`45秒无响应，页面与静态接口正常。逐run计时发现332条中最近7条`_excess_return_of`因SSE值为null重复调用`build_lab_chart_data`，单条2.5–9.8秒，合计超过前端30秒超时；全量扫描另有5条旧run同类，共12条。

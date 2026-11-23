@@ -1352,6 +1352,63 @@ class TestShowcase:
         assert "/saas/showcase" in client.get("/saas/new").get_data(as_text=True)
 
 
+class TestShowcaseSeo:
+    """公开经典策略 SSR、sitemap 与下载；私有结果权限不变。"""
+
+    def _public_job(self, client, app):
+        job_id = TestShowcase._completed_job(self, client)
+        TestShowcase._pin_showcase(self, app, job_id)
+        return job_id
+
+    def test_showcase_initial_html_contains_real_results_and_links(self, client, app):
+        job_id = self._public_job(client, app)
+        html = client.get("/saas/showcase").get_data(as_text=True)
+        assert "EMA 金叉" in html
+        assert "+20.00%" in html and "+5.00%" in html
+        assert f'href="/saas/jobs/{job_id}"' in html
+
+    def test_public_job_initial_html_contains_metrics_and_downloads(self, client, app):
+        job_id = self._public_job(client, app)
+        html = client.get(f"/saas/jobs/{job_id}").get_data(as_text=True)
+        assert 'id="public-result-summary"' in html
+        assert "EMA 金叉" in html or "classic" in html
+        assert "+20.00%" in html and "+5.00%" in html
+        assert "-10.00%" in html and "50.00%" in html
+        assert f'/saas/jobs/{job_id}/report.json' in html
+        assert f'/saas/jobs/{job_id}/report.csv' in html
+
+    def test_sitemap_contains_only_public_result_urls(self, client, app):
+        public_id = self._public_job(client, app)
+        private_id = TestShowcase._completed_job(self, client)
+        xml = client.get("/sitemap.xml").get_data(as_text=True)
+        assert "https://www.aguhuice.com/saas/showcase" in xml
+        assert f"https://www.aguhuice.com/saas/jobs/{public_id}" in xml
+        assert f"https://www.aguhuice.com/saas/jobs/{private_id}" not in xml
+        assert "<lastmod>2026-02-27</lastmod>" in xml
+
+    def test_robots_allows_permission_checked_result_reads(self, client):
+        robots = client.get("/robots.txt").get_data(as_text=True)
+        assert "Allow: /api/results/" in robots
+        assert robots.index("Allow: /api/results/") < robots.index("Disallow: /api/")
+        assert "Disallow: /api/" in robots
+
+    def test_public_report_download_and_private_boundary(self, client, app):
+        private_id = TestShowcase._completed_job(self, client)
+        assert client.get(f"/saas/jobs/{private_id}/report.json").status_code == 401
+        assert client.get(f"/saas/jobs/{private_id}/report.csv").status_code == 401
+        job_id = self._public_job(client, app)
+        payload = client.get(f"/saas/jobs/{job_id}/report.json").get_json()
+        assert payload["ok"] is True
+        assert payload["summary"]["strategy_total_return"] == 0.2
+        assert payload["chart_data"]["metrics"]["excess_return"] == 0.05
+        response = client.get(f"/saas/jobs/{job_id}/report.csv")
+        text = response.get_data(as_text=True)
+        assert response.status_code == 200
+        assert response.mimetype == "text/csv"
+        assert "strategy_total_return" in text and "0.2" in text
+        assert "excess_return" in text and "0.05" in text
+
+
 class TestShowcaseDailyAndConsole:
     """QRE-SAAS-SHOWCASE 阶段二：worker 推拉端点 + 公开展示延伸 + console CRUD。"""
 
@@ -1737,8 +1794,8 @@ def test_showcase_list_does_not_load_full_chart_data():
 
     src = (Path(__file__).resolve().parents[1]
            / "src/quant_research_engine/gui/saas/app.py").read_text()
-    start = src.index("def api_showcase_list")
-    end = src.index('return jsonify({"ok": True, "items": items})', start)
+    start = src.index("def _showcase_items")
+    end = src.index('return items', start)
     block = src[start:end]
     assert "chart_data->'metrics'" in block, "必须只取 chart_data 的 metrics 子树"
     assert "r.chart_data," not in block, "不得整列读 chart_data（会 OOM）"

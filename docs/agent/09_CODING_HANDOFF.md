@@ -1,5 +1,12 @@
 # Coding Handoff
 
+## 2026-11-23 Google收录SSR与动态sitemap
+
+- `app.py::_showcase_items`提取原API逻辑供SSR/API/sitemap复用，SQL仍只取`chart_data->'metrics'`防OOM；无DB配置仅页面/sitemap降级空列表，API原行为不变。
+- `job.html`公开showcase请求输出SSR卡及唯一meta；`showcase.html`初始tbody输出真实行。`/sitemap.xml`保留通用静态URL并追加白名单job/lastmod。
+- `report.json`输出策略/params/summary/chart_data，`report.csv`输出摘要；均走原结果权限，私有401。新增4项SEO测试，兼容修正后345 passed/14 skipped。
+- ECS部署与无JS证据`.tmp/seo-{job399-ssr.html,showcase-ssr.html,sitemap-dynamic.xml,job399-report.json,job399-report.csv}`；回滚`/tmp/qre-deploy-20261123T151550Z.bak`。首次软404后robots仅放开权限保护的`/api/results/`，聚焦73 passed；复测可索引且job399已入优先抓取队列。sitemap控制台“无法抓取/0”待刷新，robots回滚`/tmp/qre-deploy-20261123T152246Z.bak`。
+
 ## 2026-11-23 8081历史记录刷新超时
 
 - `_excess_return_of`在SSE null回补成功后，以PID临时文件+`os.replace`原子写回`excess_return_vs_benchmark`；OSError不阻塞当次返回，数值快路径和旧口径边界不变。
