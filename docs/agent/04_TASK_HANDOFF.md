@@ -1,5 +1,23 @@
 # Task Handoff
 
+## 2026-11-25 公开结果页重复摘要卡修正（已部署，待人工验收）
+
+- 用户指出顶部SSR摘要与正式结果重复、UI不统一，反馈成立。删除`#public-result-summary`，四项SEO指标直接复用正式结果原`#metric-strip`，策略名复用`#brief-text`；底部统一样式下载卡保留。
+- 相关113 passed/14 skipped；公网job399和8081均200，初始HTML无重复摘要，公网底部下载仍在、本地无公开下载卡。证据`.tmp/public-download-20261125/`，ECS回滚`/tmp/qre-deploy-20261125T042204Z.bak`。未commit/push。
+
+## 2026-11-24 行情与因子缺口补齐（DONE）
+
+- 初始日线/全部因子停于11-20；11-23开机补跑时PG尚未ready导致多管线失败，随后worker两槽长期持共享锁阻塞日更。确认无在跑回测后重启worker释放锁；最终补算期间暂停worker，完成后已恢复active/success。
+- 既有幂等管线依次补齐11-23与11-24行情（各5570条）、除权修复、reference/derivatives、技术因子、Alpha191、panel、聚类、barometer与refresh；未直接UPDATE生产表、未跑回测。
+- 最终`/api/admin/factor-status`：daily_watermark=2026-11-24，green=1093、lagging/red/stale/yellow全0，滞后表空；refresh last_data_date=2026-11-24。证据`.tmp/public-download-20261124/factors-final.json`。
+- 分钟线仍停2026-10-21，源CSV未提供，不能补造；showcase roller仍因本地experiment.name与ECS CF-*映射校验失败，未绕过，与行情/因子入库分开待修。未改代码、未commit/push。
+
+## 2026-11-24 公开结果页底部下载区（已部署，待人工验收/commit）
+
+- 公开SSR摘要卡不再展示下载链接；JSON/CSV/返回经典策略移至页面最底部`#public-result-download`，复用`chart-box/chart-title/result-action-buttons/btn btn-ghost`，未新增CSS、灰色小字或功能。
+- 实测8081发现既有`seo_result`未定义导致500；模板统一`default(none)`，本地私有结果恢复200且不渲染公开下载卡。
+- 相关113 passed/14 skipped；公网job399初始HTML摘要下载链接0、底部3个ghost按钮，8081操作卡保留。证据`.tmp/public-download-20261124/`；ECS最终回滚`/tmp/qre-deploy-20261124T031310Z.bak`。未commit/push。
+
 ## 2026-11-23 回测结果Google收录改造（已部署，索引处理中）
 
 - `_showcase_items()`成为SSR/API/sitemap唯一verified白名单来源；showcase初始HTML输出真实指标和job链接。公开job初始HTML含唯一title/description、策略/区间/收益/超额/回撤/胜率及JSON/CSV链接；私有页面原行为不变。

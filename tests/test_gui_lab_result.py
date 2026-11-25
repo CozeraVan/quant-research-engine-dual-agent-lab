@@ -163,6 +163,7 @@ def test_lab_result_page_200(lab_client):
     assert "treemap" in html and "个股贡献" in html
     # QRE-GUI-LAB-RESULT-025：月度热力图与个股 Top10 区块已删除
     assert "chart-monthly" not in html and "chart-symbols" not in html
+    assert 'id="public-result-download"' not in html
     assert lab_client.get("/lab/runs/ghost").status_code == 404
 
 

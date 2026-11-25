@@ -23,6 +23,21 @@ This file is the source of truth for single-agent workflow recovery.
 
 - base全站主导航新增`/game`；130 passed/14 skipped。公网点击成功，375px页面无横溢，nav内部滚动可见。回滚`/tmp/qre-deploy-20261121T143410Z.bak`。
 
+### 2026-11-24 行情与因子缺口补齐（DONE）
+
+- 11-23开机PG未ready致日更失败，worker又长期持锁；释放锁后按既有幂等管线补齐11-23/11-24行情与全部受管因子，最终watermark=2026-11-24、green=1093、lagging/red/stale/yellow=0，worker已恢复active。
+- 证据`.tmp/public-download-20261124/factors-final.json`。分钟线无新CSV仍停2026-10-21；showcase roller的CF名称映射失败未绕过，另列待修。未改代码/未commit/push。
+
+### 2026-11-25 公开结果页重复摘要卡修正（已部署，待人工验收/commit）
+
+- 删除顶部重复SSR卡，SEO指标并入正式结果原指标区，策略名复用原摘要行；底部ghost按钮下载区保留。113 passed/14 skipped，公网job399与8081均200且无重复卡。
+- 证据`.tmp/public-download-20261125/`，ECS回滚`/tmp/qre-deploy-20261125T042204Z.bak`，未commit/push。
+
+### 2026-11-24 公开结果页底部下载区（已部署，待人工验收/commit）
+
+- 公开摘要顶部下载/返回链接移至页面最底部，统一复用chart-box与3个ghost按钮；URL、权限和SEO正文不变。113 passed/14 skipped，公网job399及8081线上DOM通过。
+- 同轮修复8081既有`seo_result`未定义500；证据`.tmp/public-download-20261124/`，ECS回滚`/tmp/qre-deploy-20261124T031310Z.bak`，未commit/push。
+
 ### 2026-11-23 回测结果Google收录（已部署，优先抓取队列中，本次提交）
 
 - verified白名单SSR真实指标/链接、动态sitemap和同权限report JSON/CSV已上线；相关345 passed/14 skipped。sitemap133 URL，私有job370仍401且不收录，ECS回滚`/tmp/qre-deploy-20261123T151550Z.bak`。

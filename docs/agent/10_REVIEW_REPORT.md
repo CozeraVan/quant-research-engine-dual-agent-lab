@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-24 公开结果页底部下载区自审
+
+- Review Status：PASS，无Required Fixes。改动限于共享结果模板与两项测试，下载URL、公开白名单和私有权限均未改变；无新增CSS或灰色小字。
+- 真实8081验收发现既有`seo_result`未定义500，先补失败测试后用`default(none)`修复；未将公网200误当作本地可用。最终113 passed/14 skipped，公网job399与8081线上DOM均通过。已部署ECS和8081，未commit/push，待人工验收。
+- 2026-11-25人工验收指出顶部SSR卡重复且不符合统一UI，反馈成立；已删除该卡，SSR内容复用正式指标区，不另造组件。回归113 passed/14 skipped，公网/8081重新部署并核验无重复卡，仍未commit/push。
+
 ## 2026-11-23 Google收录改造自审
 
 - Review Status：PASS（代码与部署），无Required Fixes。白名单判断仍由服务端contract+active执行；sitemap/SSR/API共用查询，不读整列chart_data。下载复用原权限，无私有数据扩展。

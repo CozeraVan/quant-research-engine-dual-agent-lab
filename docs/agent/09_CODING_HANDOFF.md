@@ -1,5 +1,12 @@
 # Coding Handoff
 
+## 2026-11-24 公开结果页底部下载区
+
+- `job.html`删除`#public-result-summary`内三条行内链接，在`#result-area`后新增仅供`seo_result`使用的`#public-result-download`；按钮URL、公开只读权限不变，样式完全复用现有组件。
+- 增加`seo_result|default(none)`兼容8081未传该变量的调用；修复的是本轮实测暴露的既有SEO模板500，非下载功能改动。
+- `test_gui_saas.py`锁定摘要无下载、下载区位于结果区之后、3个ghost按钮且无灰色备注；`test_gui_lab_result.py`锁定本地不出现公开卡。113 passed/14 skipped，公网/8081线上DOM通过，未commit/push。
+- 2026-11-25按人工验收删除重复的`#public-result-summary`；SSR指标并入正式结果原`#metric-strip`，策略名进入原`#brief-text`，JS加载后仍由真实结果重绘。再次113 passed/14 skipped，公网job399及8081初始HTML核验通过；ECS回滚`/tmp/qre-deploy-20261125T042204Z.bak`。
+
 ## 2026-11-23 Google收录SSR与动态sitemap
 
 - `app.py::_showcase_items`提取原API逻辑供SSR/API/sitemap复用，SQL仍只取`chart_data->'metrics'`防OOM；无DB配置仅页面/sitemap降级空列表，API原行为不变。

@@ -1370,12 +1370,23 @@ class TestShowcaseSeo:
     def test_public_job_initial_html_contains_metrics_and_downloads(self, client, app):
         job_id = self._public_job(client, app)
         html = client.get(f"/saas/jobs/{job_id}").get_data(as_text=True)
-        assert 'id="public-result-summary"' in html
+        assert 'id="public-result-summary"' not in html
         assert "EMA 金叉" in html or "classic" in html
         assert "+20.00%" in html and "+5.00%" in html
         assert "-10.00%" in html and "50.00%" in html
         assert f'/saas/jobs/{job_id}/report.json' in html
         assert f'/saas/jobs/{job_id}/report.csv' in html
+        metric_start = html.index('id="metric-strip"')
+        metrics = html[metric_start:html.index('id="ra-strip"', metric_start)]
+        assert metrics.count('class="metric-card"') == 4
+        assert "+20.00%" in metrics and "+5.00%" in metrics
+        download_start = html.index('id="public-result-download"')
+        download = html[download_start:html.index('</section>', download_start)]
+        assert html.index('id="result-area"') < download_start
+        assert 'class="chart-title">下载回测结果</div>' in download
+        assert download.count('class="btn btn-ghost"') == 3
+        assert 'class="result-action-buttons"' in download
+        assert "class=\"opt\"" not in download and "--faint" not in download
 
     def test_sitemap_contains_only_public_result_urls(self, client, app):
         public_id = self._public_job(client, app)

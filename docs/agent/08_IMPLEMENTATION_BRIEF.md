@@ -1,5 +1,12 @@
 # Implementation Brief
 
+## 2026-11-24 公开结果页底部下载区
+
+1. 将公开 SSR 摘要卡内的 JSON/CSV/返回经典策略链接移到结果页最底部，保持下载 URL、只读权限与 SEO 可读正文不变。
+2. 下载区复用 `chart-box`、`chart-title`、`result-action-buttons` 与 `btn btn-ghost`，不新增配色、灰色小字备注或独立 CSS。
+3. 先补 DOM 位置与按钮层级测试，再跑公开结果/权限/模板 JS 回归；备份后部署 ECS 与 8081，等待人工验收，不自行提交。
+4. 2026-11-25 人工验收否决顶部重复摘要卡：删除`#public-result-summary`，将SSR四项指标直接放入正式结果原有的`#metric-strip`，策略名复用`#brief-text`；不新增第二套卡片，SEO正文与下载功能保留。
+
 ## 2026-11-23 回测结果Google收录改造（已部署，索引队列中）
 
 1. 实测公开job 399和个股页均200，但初始HTML只有“加载中”，收益与策略数据依赖`/api/results/*`；robots又`Disallow:/api/`，Google无法经JS取得内容。showcase同样客户端加载126项，sitemap仅6个通用URL且不含showcase/job。

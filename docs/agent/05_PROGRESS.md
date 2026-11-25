@@ -1,3 +1,9 @@
+2026-11-25 公开结果页顶部重复SSR摘要卡已按人工反馈删除；SEO四项指标并入正式结果原`#metric-strip`，策略名复用`#brief-text`，底部下载区不变。相关113 passed/14 skipped，公网job399与8081重新部署并核验，证据`.tmp/public-download-20261125/`，ECS回滚`/tmp/qre-deploy-20261125T042204Z.bak`，未commit/push。
+
+2026-11-24 数据库缺口已补齐：定位开机PG未ready导致11-23日更失败，及worker共享锁长期未释放；无在跑回测时重启释放，后续补算暂停worker并最终恢复active。经既有幂等管线补齐11-23/11-24行情各5570条、除权/reference/derivatives、技术/Alpha191/panel因子、聚类/barometer/refresh。最终受管因子green=1093、lagging/red/stale/yellow=0，watermark=2026-11-24；证据`.tmp/public-download-20261124/factors-final.json`。分钟线因无新源CSV仍停2026-10-21；showcase roller的CF名称映射失败单列待修，未绕安全校验。无代码改动/commit/push。
+
+2026-11-24 公开结果页下载区已移到底部并统一为现有ghost按钮卡：公开SSR摘要不再含下载链接，底部提供JSON/CSV/返回经典策略，功能与权限不变。同步修复8081既有`seo_result`未定义500；相关113 passed/14 skipped，公网job399底部3按钮、8081私有结果200且无公开下载卡。证据`.tmp/public-download-20261124/`，ECS回滚`/tmp/qre-deploy-20261124T031310Z.bak`，未commit/push。
+
 2026-11-23 Google收录改造已部署：verified showcase SSR/API/sitemap共用来源，公开job SSR唯一标题和真实指标，动态sitemap含133 URL，新增同权限report JSON/CSV。相关345 passed/14 skipped及robots聚焦73 passed；无JS和浏览器验收通过，私有job370仍401且不收录。首次实时测试软404，原因是robots阻断JS轮询并替换SSR；仅开放/api/results后复测“可编入索引”，job399已入优先抓取队列。sitemap已提交，控制台仍“无法抓取/0”待刷新。ECS回滚`/tmp/qre-deploy-20261123T151550Z.bak`、robots`/tmp/qre-deploy-20261123T152246Z.bak`，未commit/push。
 
 2026-11-23 Google收录诊断完成：公开job虽200，但初始HTML只有加载中，实际结果依赖robots禁止的API；showcase 126项靠JS，sitemap仅6个通用URL。已记录白名单SSR+动态sitemap+公开JSON/CSV方案，未实施，私有结果权限不变。
