@@ -716,8 +716,8 @@
   function renderMain(d) {
     DATA = d;
     var dates = d.dates;
-    // 优先 chart_data.cumret（小数，交集口径日收益累乘，faf9629 起写入，
-    // 剔除新股注资影响）；旧数据无 cumret 时回退 equity/base−1 水平值口径
+    // 优先 chart_data.cumret（预留初始资金账户累计收益，与总指标同源）；
+    // 旧数据无 cumret 时回退 equity/base−1。
     var stratRet = (d.cumret && d.cumret.length)
       ? d.cumret.map(function(v) { return v == null ? null : v * 100; })
       : toRet(d.equity);

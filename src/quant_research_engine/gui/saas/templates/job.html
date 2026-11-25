@@ -110,7 +110,7 @@
     <div class="metric-strip" id="ra-strip" style="display:none"></div>
 
     <div class="chart-box" id="box-main">
-      <div class="chart-title">策略收益 vs 指数 <button type="button" class="tip-trigger" id="curve-tip" data-tip="曲线为日收益累乘口径（交集口径、剔除新股注资）的累计收益率，起点 0%；超额收益固定使用上证指数。与上方「总收益率」（初始资金加权）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
+      <div class="chart-title">策略收益 vs 指数 <button type="button" class="tip-trigger" id="curve-tip" data-tip="统一采用初始资金账户口径：每只股票从回测起点即预留初始资金；新股上市前持有现金，在市期间计入真实权益，期末结转最终权益。组合累计收益率 = Σ账户权益 ÷ Σ初始资金 − 1；区间收益率 = 区间末累计净值 ÷ 区间初累计净值 − 1；超额收益 = 策略区间收益率 − 同期上证指数区间收益率。总指标、收益曲线、区间卡与重播均使用同一序列。拖动滑块或滚轮缩放区间。" aria-label="收益曲线说明">?</button>
         <button class="btn-sm" id="btn-replay" style="float:right">▶ 重播</button>
         <button class="btn-sm hidden" id="btn-replay-exit" style="float:right;margin-right:6px">退出重播 ✕</button></div>
       <div class="bench-bar" id="bench-bar">基准：</div>
@@ -242,9 +242,8 @@ function toRet(arr){  // 归一化为起点 0% 的累计收益率%
   const base = arr.find(v => v !== null && v !== undefined);
   return arr.map(v => (v === null || v === undefined || !base) ? null : (v / base - 1) * 100);
 }
-// 策略累计收益率%：优先 chart_data.cumret（小数，交集口径日收益累乘，
-// faf9629 起写入，剔除新股注资影响）；旧数据无 cumret 时回退 equity/base−1
-//（水平值口径，全市场回测会因新股注资虚高）
+// 策略累计收益率%：chart_data.cumret 为预留初始资金账户累计净值−1，
+// 与上方总收益、下方区间卡及重播严格同源。
 function stratRet(d){
   if (d && d.cumret && d.cumret.length){
     return d.cumret.map(v => (v === null || v === undefined) ? null : v * 100);
@@ -310,10 +309,11 @@ function renderRiskAdjusted(d){
 function renderContract(c){
   if (!c) return;
   const curveTip = document.getElementById('curve-tip');
-  if (curveTip && c.daily_return_basis && c.total_return_basis){
+  if (curveTip){
     curveTip.setAttribute('data-tip',
-      '曲线为' + c.daily_return_basis + '的累计收益率，起点 0%；与上方「总收益率」（' +
-      c.total_return_basis + '）口径不同，数值可有差、方向应一致。拖动滑块或滚轮缩放区间。');
+      '统一采用初始资金账户口径：组合累计收益率 = Σ账户权益 ÷ Σ初始资金 − 1；' +
+      '区间收益率 = 区间末累计净值 ÷ 区间初累计净值 − 1；超额收益 = 策略区间收益率 − 同期上证指数区间收益率。' +
+      '总指标、收益曲线、区间卡与重播均使用同一序列。拖动滑块或滚轮缩放区间。');
   }
 }
 function renderMeta(meta, dataUntil){
@@ -460,7 +460,7 @@ function renderMain(d){
     let i1 = dz.endValue != null ? dz.endValue : Math.ceil((dz.end != null ? dz.end : 100) / 100 * (n - 1));
     i0 = Math.max(0, Math.min(i0, n - 1)); i1 = Math.max(i0, Math.min(i1, n - 1));
     const eq = DATA.equity || [];
-    // 区间策略收益：优先 cumret（交集口径，剔除注资影响），旧数据回退 equity 水平值
+    // 区间策略收益与总指标、主曲线共用预留初始资金账户累计净值。
     const cum = (DATA.cumret && DATA.cumret.length) ? DATA.cumret : null;
     const sRet = cum ? sliceRetPct(cum.map(v => v == null ? null : v * 100), i0, i1)
                      : sliceRet(eq, i0, i1);

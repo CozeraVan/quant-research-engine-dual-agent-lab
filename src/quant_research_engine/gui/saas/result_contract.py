@@ -1,11 +1,8 @@
 """QRE-SAAS-RESULT-CONTRACT-001：结果合同（版本 / 数据快照 / 收益口径 / 验证状态）。
 
 背景（`docs/agent/08_IMPLEMENTATION_BRIEF.md` P0-1B）：
-同一页面长期并存两种都已剔除新股注资、但加权方式不同的收益口径——
-① 收益曲线：日收益累乘（交集口径，cumret）；
-② 总收益率：初始资金加权（Σfinal/Σinitial−1，与成交净盈亏/profit_factor 勾稽）。
-数值可以有差，历史上被误读成「曲线和总收益矛盾」。同时 faf9629 修正前的大部分
-历史产物数值不可信，P0-1A 又只排除了 price_basis 疑点，并未验证收益口径。
+历史页面曾并存交集日收益累乘与初始资金加权两套收益，导致同一结果数值分裂。
+2026-11-25 起统一为预留初始资金账户：总指标、曲线、区间卡与重播严格同源。
 
 本模块是唯一权威：每个结果都必须能回答「哪个合同版本、数据截止到哪天、
 两种口径分别是什么、验证状态如何」。分类只认**显式合同**与**显式例外表**，
@@ -17,10 +14,10 @@ from __future__ import annotations
 from typing import Any
 
 # 当前结果合同版本。口径或验证规则变化时递增，历史行保持原版本号不变。
-RESULT_CONTRACT_VERSION = "2026-10-25.1"
+RESULT_CONTRACT_VERSION = "2026-11-25.1"
 
-# 两种收益口径的权威文案（页面标签 / data-tip / API 同源，避免多处措辞漂移）
-DAILY_RETURN_BASIS = "日收益累乘（交集口径，剔除新股注资）"
+# 页面唯一的收益口径：总指标、曲线、区间卡与重播共用同一账户净值序列。
+DAILY_RETURN_BASIS = "初始资金账户净值（Σ账户权益/Σ初始资金）"
 TOTAL_RETURN_BASIS = "初始资金加权总收益（Σ期末权益/Σ初始资金−1）"
 
 VERIFICATION_VERIFIED = "verified"
@@ -51,11 +48,11 @@ LABELS = {
     VERIFICATION_UNVERIFIED: "旧口径·未验证",
 }
 
-# 徽标 data-tip：一次讲清两种口径为什么可以不一致（页面与 API 同源）
+# 徽标 data-tip：明确总指标与曲线使用同一初始资金账户口径。
 CONTRACT_TIP_TEMPLATE = (
     "收益曲线 = {daily}；总收益率 = {total}。"
-    "两者都已剔除新股注资，但加权方式不同（曲线按日复利、总收益按初始资金加权），"
-    "数值可以有差，方向应一致。数据截止 {data_until}。"
+    "每只股票从回测起点预留初始资金，上市前持有现金，期末结转最终权益；"
+    "总指标、曲线、区间卡与重播同源。数据截止 {data_until}。"
 )
 
 
@@ -90,8 +87,9 @@ def resolve_result_contract(
     """
     if isinstance(stored, dict) and stored.get("version"):
         contract = dict(stored)
-        contract.setdefault("daily_return_basis", DAILY_RETURN_BASIS)
-        contract.setdefault("total_return_basis", TOTAL_RETURN_BASIS)
+        # 旧合同可能携带已废弃的交集口径；展示层统一使用当前同源口径。
+        contract["daily_return_basis"] = DAILY_RETURN_BASIS
+        contract["total_return_basis"] = TOTAL_RETURN_BASIS
         verification = contract.get("verification")
         if verification not in (VERIFICATION_VERIFIED, VERIFICATION_UNVERIFIED):
             verification = VERIFICATION_UNVERIFIED

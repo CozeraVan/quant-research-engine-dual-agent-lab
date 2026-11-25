@@ -25,13 +25,13 @@
     <div class="help-content">
   <div class="card help-sec" id="contract">
     <h2>收益口径与数据截止</h2>
-    <p style="font-size:15.5px;line-height:1.7">收益曲线与总收益率采用不同的加权方式，数据截止则标记本次回测实际使用的最后交易日。</p>
+    <p style="font-size:15.5px;line-height:1.7">收益曲线与总收益率统一采用初始资金账户口径，数据截止标记本次回测实际使用的最后交易日。</p>
     <table class="tbl">
       <thead><tr><th style="width:160px">项目</th><th>含义</th></tr></thead>
       <tbody>
         <tr><td>收益曲线口径</td><td>{{ daily_return_basis }}</td></tr>
         <tr><td>总收益率口径</td><td>{{ total_return_basis }}</td></tr>
-        <tr><td>两者关系</td><td>都已剔除新股注资，但加权方式不同：曲线按日复利，总收益按初始资金加权。数值可以有差，方向应一致。</td></tr>
+        <tr><td>两者关系</td><td>每只股票从回测起点预留初始资金，上市前持有现金，在市期间使用真实权益，期末结转最终权益。曲线为Σ账户权益/Σ初始资金−1，终点与总收益率严格一致；区间卡和重播使用同一序列。</td></tr>
         <tr><td>数据截止</td><td>本次回测实际使用的行情最后交易日；截止日之后的数据不参与回测。</td></tr>
       </tbody>
     </table>

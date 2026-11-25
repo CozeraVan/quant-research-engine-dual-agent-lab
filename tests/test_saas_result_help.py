@@ -204,7 +204,8 @@ class TestHelpPage:
         assert html.count(DAILY_RETURN_BASIS) >= 1
         assert html.count(TOTAL_RETURN_BASIS) >= 1
         # 模板不硬编码另一种措辞
-        assert "日收益累乘（交集口径，剔除新股注资）" in html  # 即 DAILY_RETURN_BASIS 本身
+        assert DAILY_RETURN_BASIS in html
+        assert "曲线为Σ账户权益/Σ初始资金−1，终点与总收益率严格一致" in html
 
 
 # ---------------------------------------------------------------- 帮助页布局与结果页精简
@@ -271,15 +272,12 @@ class TestContractDrivenCurveTip:
         _run_job_help_js(html, r"(function renderContract\(c\)\{[\s\S]*?\n\})", r"""
 const h = createJobHelpHarness();
 vm.runInContext(source, h.context);
-const c = {verified: true, label: '已验证口径', version: '2026-10-25.1',
-  data_until: '2026-02-27', note: '已人工复核',
-  daily_return_basis: '日收益累乘（交集口径，剔除新股注资）',
-  total_return_basis: '初始资金加权总收益（Σ期末权益/Σ初始资金−1）',
-  tip: '收益曲线 = 日收益累乘；总收益率 = 初始资金加权总收益'};
+const c = {verified: true, label: '已验证口径', version: '2026-11-25.1',
+  data_until: '2026-02-27', note: '已人工复核'};
 vm.runInContext('renderContract(' + JSON.stringify(c) + ')', h.context);
 const tip = h.elements['curve-tip'].getAttribute('data-tip');
-assert.ok(tip.includes(c.daily_return_basis), '曲线 tip 必须用合同日收益口径：' + tip);
-assert.ok(tip.includes(c.total_return_basis), '曲线 tip 必须用合同总收益口径：' + tip);
+assert.ok(tip.includes('Σ账户权益 ÷ Σ初始资金 − 1'), '曲线 tip 必须说明统一账户公式：' + tip);
+assert.ok(tip.includes('总指标、收益曲线、区间卡与重播均使用同一序列'), '曲线 tip 必须锁定同源：' + tip);
 // 无合同：曲线 tip 保留静态安全回退，不写空
 h.elements['curve-tip'].setAttribute('data-tip', '静态回退口径文案');
 vm.runInContext('renderContract(null)', h.context);

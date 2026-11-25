@@ -2237,7 +2237,7 @@ class TestJobPageRuntimeAndCancel:
         assert 'id="box-contract"' not in html
         assert 'id="contract-badge"' not in html
         assert 'id="contract-note"' not in html
-        assert "日收益累乘" in html and "初始资金加权" in html
+        assert "初始资金账户" in html and "初始资金加权" in html
         assert "function renderContract(c)" in html
 
     def test_job_completed_resource_failures_pause_after_three_rounds(self, client):

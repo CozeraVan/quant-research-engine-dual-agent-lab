@@ -109,9 +109,8 @@ def _equity_series(
 ) -> tuple[list[str], list[float | None], list[float | None] | None] | None:
     """返回 (dates, total_equity 序列, cumulative_return 序列|None)。
 
-    cumulative_return 口径（faf9629 起由引擎写入）：交集口径日收益累乘的
-    累计收益率（小数，如 0.15 = +15%），与 dates 等长；新股注资不贡献收益。
-    旧产物缺该列时第三项为 None（调用方不落 cumret 键，前端回退旧口径）。
+    cumulative_return 为预留初始资金账户口径：Σ账户权益/Σ初始资金−1，
+    与总指标、区间卡和重播同源。旧产物缺该列时第三项为 None。
     """
     path = _find_output_file(record, "equity_curve.csv")
     if path is None:
@@ -358,7 +357,7 @@ def build_lab_chart_data(record: dict[str, Any]) -> dict[str, Any]:
         dates, equity, cumret = eq
         data["dates"] = dates
         data["equity"] = equity
-        # cumret：交集口径累计收益率（小数，与 dates 等长），faf9629 后产物才有；
+        # cumret：预留初始资金账户累计收益，与总指标、区间卡和重播同源；
         # 旧产物（无 cumulative_return 列）不落键，前端回退 equity/base−1 旧口径
         if cumret is not None:
             data["cumret"] = cumret

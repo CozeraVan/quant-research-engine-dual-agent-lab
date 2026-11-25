@@ -385,7 +385,7 @@ class TestPageLabels:
         assert "contract-note" not in html
         assert 'id="box-contract"' not in html
         # 曲线与总收益口径仍通过原有悬停提示解释
-        assert "日收益累乘" in html
+        assert "初始资金账户" in html
         assert "初始资金加权" in html
 
     def test_showcase_page_hides_contract_labels_and_versions(self, client):

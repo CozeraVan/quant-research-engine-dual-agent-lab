@@ -183,6 +183,25 @@ class TestBuildFullMarketEquityCurve:
         assert df["total_equity"].iloc[0] == pytest.approx(20000.0)  # 2 × 10000
         assert df["position_count"].iloc[0] == 2
 
+    def test_summary_only_account_keeps_reserved_cash(self):
+        traded = _make_single_result("000001.SZ")
+        empty = SimpleNamespace(
+            equity_curve=pd.DataFrame(),
+            summary={"initial_cash": 10000.0, "final_equity": 10000.0},
+        )
+        df = build_full_market_equity_curve({"000001.SZ": traded, "000002.SZ": empty})
+        assert df["total_equity"].iloc[0] == pytest.approx(20000.0)
+        assert df["cumulative_return"].iloc[-1] == pytest.approx(21800.0 / 20000.0 - 1.0)
+        assert df["position_count"].iloc[0] == 1
+
+    def test_shared_cash_cumulative_return_is_pointwise(self):
+        source = pd.DataFrame({
+            "trade_date": pd.date_range("2026-01-05", periods=3, freq="B"),
+            "total_equity": [100.0, 110.0, 99.0],
+        })
+        df = build_full_market_equity_curve(source, engine_mode="shared_cash")
+        assert df["cumulative_return"].tolist() == pytest.approx([0.0, 0.10, -0.01])
+
 
 def _make_equity_only_result(symbol: str, equities: list[float], start: str) -> SingleSymbolBacktestResult:
     """仅含净值曲线的最小 batch 个股结果（equities[0] 即 initial_cash 首日净值）。"""
@@ -224,24 +243,20 @@ class TestBatchEquityCurveIpoInjection:
         ])
         return dates, results, summary
 
-    def test_entry_day_daily_return_excludes_injection(self):
+    def test_entry_day_uses_reserved_initial_capital_account(self):
         dates, results, _ = self._fixtures()
         eq = build_full_market_equity_curve(results)
         assert pd.isna(eq["daily_return"].iloc[0])
-        # 进入日（index 4）：只有 A 的权益变动计入收益，B 的 10 万注入不计
+        # B尚未上市，但其10万元初始资金从回测起点已作为预留现金计入账户。
+        assert eq["total_equity"].iloc[0] == pytest.approx(200000.0)
         entry_day_return = eq["daily_return"].iloc[4]
-        assert entry_day_return == pytest.approx(104000.0 / 103000.0 - 1.0)
-        # 旧口径会是 (104000+100000)/103000-1 ≈ 0.98，显式排除
-        assert entry_day_return < 0.02
-        # 次日两只均在市，正常共同贡献
-        assert eq["daily_return"].iloc[5] == pytest.approx(
-            (105000.0 + 99500.0) / (104000.0 + 100000.0) - 1.0
-        )
-        # total_equity 水平值仍含注入（真实资金口径）
-        assert eq["total_equity"].iloc[4] == pytest.approx(104000.0 + 100000.0)
-        # cumulative_return 为 daily_return 累乘
-        expected_cum = float((1.0 + eq["daily_return"].fillna(0.0)).prod() - 1.0)
-        assert eq["cumulative_return"].iloc[-1] == pytest.approx(expected_cum)
+        assert entry_day_return == pytest.approx(204000.0 / 203000.0 - 1.0)
+        assert eq["daily_return"].iloc[5] == pytest.approx(204500.0 / 204000.0 - 1.0)
+        assert eq["total_equity"].iloc[4] == pytest.approx(204000.0)
+        # 曲线终点与Σfinal/Σinitial−1严格一致，不再存在第二套交集累乘收益。
+        assert eq["cumulative_return"].iloc[-1] == pytest.approx(206500.0 / 200000.0 - 1.0)
+        expected_cum = eq["total_equity"] / 200000.0 - 1.0
+        pd.testing.assert_series_equal(eq["cumulative_return"], expected_cum, check_names=False)
 
     def test_strategy_total_return_uses_aggregate_cash_flow(self):
         _, results, summary = self._fixtures()
@@ -1282,29 +1297,6 @@ class TestChunkedFullMarketEquityCurve:
             "600002.SH": SimpleNamespace(equity_curve=pd.DataFrame({"total_equity": [1.0, 2.0]})),
         }
         return dates, results
-
-    def test_chunked_matches_legacy_reference(self, monkeypatch):
-        _, results = self._fixtures()
-        monkeypatch.setattr(
-            "quant_research_engine.portfolio.full_market_report._REPORT_CHUNK_SYMBOLS", 2
-        )
-        new = build_full_market_equity_curve(results)
-        legacy = _legacy_full_market_equity_curve(results)
-
-        assert list(new.columns) == list(legacy.columns)
-        pd.testing.assert_index_equal(
-            pd.DatetimeIndex(new["trade_date"]), pd.DatetimeIndex(legacy["trade_date"])
-        )
-        assert new["position_count"].tolist() == legacy["position_count"].tolist()
-        for column in ("cash", "market_value", "total_equity", "daily_return", "cumulative_return"):
-            np.testing.assert_allclose(
-                new[column].to_numpy(dtype=float),
-                legacy[column].to_numpy(dtype=float),
-                rtol=1e-12,
-                atol=1e-6,
-                equal_nan=True,
-            )
-        assert new["turnover"].isna().all()
 
     def test_single_chunk_matches_multi_chunk(self, monkeypatch):
         _, results = self._fixtures()

@@ -1,5 +1,11 @@
 # Review Report
 
+## 2026-11-25 收益口径统一自审
+
+- Review Status：PASS（已完成范围），无Required Fixes。新曲线与初始资金账本严格勾稽；无净值行、晚上市、最后净值日、shared_cash逐点累计均有回归。个股原为首末权益同源，无需另造公式。
+- 307 passed/14 skipped；job340及227/261/399/404公网抽查与个股本地/公网一致。云端1414条迁移总指标vs曲线错配0，118/118公开CF通过。
+- 34条非公开旧结果因缺本地产物未迁移，清单`.tmp/benchmark-unification-20261125/unmigrated.txt`，不冒充全历史已修。生产备份表1414行，代码回滚`/tmp/qre-deploy-20261125T064253Z.bak`；未commit/push。
+
 ## 2026-11-24 公开结果页底部下载区自审
 
 - Review Status：PASS，无Required Fixes。改动限于共享结果模板与两项测试，下载URL、公开白名单和私有权限均未改变；无新增CSS或灰色小字。

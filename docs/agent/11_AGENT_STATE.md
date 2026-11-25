@@ -28,6 +28,11 @@ This file is the source of truth for single-agent workflow recovery.
 - 11-23开机PG未ready致日更失败，worker又长期持锁；释放锁后按既有幂等管线补齐11-23/11-24行情与全部受管因子，最终watermark=2026-11-24、green=1093、lagging/red/stale/yellow=0，worker已恢复active。
 - 证据`.tmp/public-download-20261124/factors-final.json`。分钟线无新CSV仍停2026-10-21；showcase roller的CF名称映射失败未绕过，另列待修。未改代码/未commit/push。
 
+### 2026-11-25 基准补数与收益口径统一（已部署，待人工验收/commit）
+
+- 四大基准2009年已补齐并校对；统一预留初始资金账户口径，策略三处与重播同源，个股首末权益同源。job340总指标/曲线/区间14.7074%，上证91.3642%、超额−76.6568%。
+- 307 passed/14 skipped；云端1414条迁移错配0，118/118公开CF通过；34条非公开缺产物旧结果未迁移。生产备份表`results_curve_backup_20261125`，回滚`/tmp/qre-deploy-20261125T064253Z.bak`，未commit/push。
+
 ### 2026-11-25 公开结果页重复摘要卡修正（已部署，待人工验收/commit）
 
 - 删除顶部重复SSR卡，SEO指标并入正式结果原指标区，策略名复用原摘要行；底部ghost按钮下载区保留。113 passed/14 skipped，公网job399与8081均200且无重复卡。
